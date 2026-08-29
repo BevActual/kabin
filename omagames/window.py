@@ -24,10 +24,13 @@ _SOURCE_BADGE_CANDIDATES = {
 
 _SIDEBAR_ICON_CANDIDATES = {
     "all": ["view-grid-symbolic", "applications-games-symbolic"],
+    "favorites": ["starred-symbolic", "emblem-favorite-symbolic", "applications-games-symbolic"],
     "steam": ["steam-symbolic", "steam", "applications-games-symbolic"],
     "desktop": ["application-x-executable-symbolic", "applications-symbolic"],
     "roms": ["media-removable-symbolic", "applications-games-symbolic"],
 }
+
+CATEGORY_FAVORITES = ("favorite", None)
 
 
 @lru_cache(maxsize=None)
@@ -186,6 +189,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._games = []
         self._has_recent = False
         self._selected_game = None
+        self._sort_mode = "title"
 
         self.set_title("Games")
         self.set_default_size(1100, 720)
@@ -226,6 +230,12 @@ class MainWindow(Adw.ApplicationWindow):
         refresh_button.add_css_class("flat")
         refresh_button.connect("clicked", lambda *_: self.refresh())
         header.pack_start(refresh_button)
+
+        self.sort_dropdown = Gtk.DropDown.new_from_strings(["Title", "Recently Played"])
+        self.sort_dropdown.set_tooltip_text("Sort by")
+        self.sort_dropdown.add_css_class("omagames-sort")
+        self.sort_dropdown.connect("notify::selected", self._on_sort_changed)
+        header.pack_end(self.sort_dropdown)
 
         settings_button = Gtk.Button(icon_name="emblem-system-symbolic", tooltip_text="Settings")
         settings_button.add_css_class("omagames-icon-button")
@@ -271,6 +281,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.flow_box.set_selection_mode(Gtk.SelectionMode.BROWSE)
         self.flow_box.set_activate_on_single_click(False)
         self.flow_box.set_filter_func(self._filter_tile)
+        self.flow_box.set_sort_func(self._sort_tiles)
         self.flow_box.connect("selected-children-changed", self._on_tile_selected)
         self.flow_box.connect("child-activated", self._on_tile_activated)
 
@@ -361,9 +372,19 @@ class MainWindow(Adw.ApplicationWindow):
         self.details_play_button = Gtk.Button(label="Play")
         self.details_play_button.add_css_class("suggested-action")
         self.details_play_button.add_css_class("pill")
-        self.details_play_button.set_halign(Gtk.Align.START)
         self.details_play_button.connect("clicked", lambda *_: self._launch_selected())
-        content.append(self.details_play_button)
+
+        self.details_favorite_icon = Gtk.Image.new_from_icon_name("non-starred-symbolic")
+        self.details_favorite_button = Gtk.Button()
+        self.details_favorite_button.set_child(self.details_favorite_icon)
+        self.details_favorite_button.add_css_class("omagames-icon-button")
+        self.details_favorite_button.add_css_class("flat")
+        self.details_favorite_button.connect("clicked", lambda *_: self._toggle_favorite_selected())
+
+        action_row = Gtk.Box(spacing=8, halign=Gtk.Align.START)
+        action_row.append(self.details_play_button)
+        action_row.append(self.details_favorite_button)
+        content.append(action_row)
 
         self.details_description = Gtk.Label(xalign=0, wrap=True)
         self.details_description.add_css_class("omagames-details-description")
@@ -420,15 +441,18 @@ class MainWindow(Adw.ApplicationWindow):
         self.sidebar_list.append(row)
         self._sidebar_rows[row] = category
 
-    def _rebuild_sidebar(self, games):
+    def _rebuild_sidebar(self, games, preserve_category=None):
         self.sidebar_list.remove_all()
         self._sidebar_rows = {}
 
+        favorite_count = sum(1 for g in games if self.config.is_favorite(g.id))
         steam_count = sum(1 for g in games if g.source == "steam")
         desktop_count = sum(1 for g in games if g.source == "desktop")
         systems = sorted({g.subtitle for g in games if g.source == "roms" and g.subtitle})
 
         self._add_sidebar_row("All Games", "all", len(games), CATEGORY_ALL)
+        if favorite_count:
+            self._add_sidebar_row("Favorites", "favorites", favorite_count, CATEGORY_FAVORITES)
         if steam_count:
             self._add_sidebar_row("Steam", "steam", steam_count, ("source", "steam"))
         if desktop_count:
@@ -439,9 +463,12 @@ class MainWindow(Adw.ApplicationWindow):
                 count = sum(1 for g in games if g.source == "roms" and g.subtitle == system)
                 self._add_sidebar_row(system, "roms", count, ("system", system))
 
-        first_row = self.sidebar_list.get_row_at_index(0)
-        if first_row:
-            self.sidebar_list.select_row(first_row)
+        target_category = preserve_category if preserve_category is not None else CATEGORY_ALL
+        target_row = next(
+            (row for row, category in self._sidebar_rows.items() if category == target_category),
+            None,
+        )
+        self.sidebar_list.select_row(target_row or self.sidebar_list.get_row_at_index(0))
 
     # -- data loading -----------------------------------------------------
 
@@ -456,7 +483,7 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_games_loaded(self, games):
         self._games = games
-        self._rebuild_sidebar(games)
+        self._rebuild_sidebar(games, preserve_category=self._category)
         while (child := self.flow_box.get_first_child()) is not None:
             self.flow_box.remove(child)
         for game in games:
@@ -497,6 +524,8 @@ class MainWindow(Adw.ApplicationWindow):
         kind, value = self._category
         if kind == "all":
             return True
+        if kind == "favorite":
+            return self.config.is_favorite(game.id)
         if kind == "source":
             return game.source == value
         if kind == "system":
@@ -505,6 +534,20 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _filter_tile(self, child: GameTile) -> bool:
         return self._matches(child.game)
+
+    def _sort_tiles(self, child_a: GameTile, child_b: GameTile) -> int:
+        if self._sort_mode == "recent":
+            recent = self.config.recent
+            time_a = recent.get(child_a.game.id, 0)
+            time_b = recent.get(child_b.game.id, 0)
+            if time_a != time_b:
+                return -1 if time_a > time_b else 1
+        key_a, key_b = child_a.game.sort_key, child_b.game.sort_key
+        return -1 if key_a < key_b else (1 if key_a > key_b else 0)
+
+    def _on_sort_changed(self, dropdown, _pspec):
+        self._sort_mode = "recent" if dropdown.get_selected() == 1 else "title"
+        self.flow_box.invalidate_sort()
 
     def _update_stack_visibility(self):
         if not self._games:
@@ -545,6 +588,24 @@ class MainWindow(Adw.ApplicationWindow):
         if self._selected_game:
             self._launch_game(self._selected_game)
 
+    def _toggle_favorite_selected(self):
+        if not self._selected_game:
+            return
+        self.config.toggle_favorite(self._selected_game.id)
+        self._update_favorite_button()
+        self._rebuild_sidebar(self._games, preserve_category=self._category)
+
+    def _update_favorite_button(self):
+        if not self._selected_game:
+            return
+        is_favorite = self.config.is_favorite(self._selected_game.id)
+        self.details_favorite_icon.set_from_icon_name(
+            "starred-symbolic" if is_favorite else "non-starred-symbolic"
+        )
+        self.details_favorite_button.set_tooltip_text(
+            "Remove from Favorites" if is_favorite else "Add to Favorites"
+        )
+
     def _show_details(self, game):
         self._selected_game = game
         if game is None:
@@ -574,6 +635,7 @@ class MainWindow(Adw.ApplicationWindow):
                     self.details_description.set_label(metadata["description"])
 
         self.details_meta.set_label(" · ".join(meta_parts))
+        self._update_favorite_button()
 
     def _open_settings(self):
         settings_window = SettingsWindow(self.config, transient_for=self)

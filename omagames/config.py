@@ -10,6 +10,7 @@ DEFAULT_CONFIG = {
     "sources": {"steam": True, "desktop": True, "roms": True},
     "steam_root": None,
     "recent": {},  # game id -> unix timestamp of last launch through omagames
+    "favorites": [],
 }
 
 
@@ -84,3 +85,21 @@ class Config:
     def recent_ids(self, limit: int = 8) -> list:
         ordered = sorted(self.recent.items(), key=lambda kv: kv[1], reverse=True)
         return [game_id for game_id, _timestamp in ordered[:limit]]
+
+    @property
+    def favorites(self) -> list:
+        return self.data.setdefault("favorites", [])
+
+    def is_favorite(self, game_id: str) -> bool:
+        return game_id in self.favorites
+
+    def toggle_favorite(self, game_id: str) -> bool:
+        """Flips favorite state for game_id and returns the new state."""
+        if game_id in self.favorites:
+            self.favorites.remove(game_id)
+            is_favorite = False
+        else:
+            self.favorites.append(game_id)
+            is_favorite = True
+        self.save()
+        return is_favorite

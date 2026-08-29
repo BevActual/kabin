@@ -72,6 +72,28 @@ class TestConfig(unittest.TestCase):
             reloaded = Config(path=path)
             self.assertEqual(reloaded.recent_ids(), ["steam:553850"])
 
+    def test_is_favorite_defaults_false(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            self.assertFalse(config.is_favorite("steam:553850"))
+
+    def test_toggle_favorite_flips_state_and_returns_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            self.assertTrue(config.toggle_favorite("steam:553850"))
+            self.assertTrue(config.is_favorite("steam:553850"))
+            self.assertFalse(config.toggle_favorite("steam:553850"))
+            self.assertFalse(config.is_favorite("steam:553850"))
+
+    def test_favorite_persists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            config = Config(path=path)
+            config.toggle_favorite("steam:553850")
+
+            reloaded = Config(path=path)
+            self.assertTrue(reloaded.is_favorite("steam:553850"))
+
 
 if __name__ == "__main__":
     unittest.main()
