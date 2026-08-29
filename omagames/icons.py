@@ -7,36 +7,53 @@ from typing import Callable, Optional
 
 from gi.repository import GLib
 
-_CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "omagames" / "steam"
+_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "omagames" / "steam"
 
-_URL_TEMPLATES = [
-    "https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_600x900.jpg",
-    "https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg",
-]
+_ASSET_SPECS = {
+    "cover": {
+        "ext": "jpg",
+        "urls": [
+            "https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_600x900.jpg",
+            "https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg",
+        ],
+    },
+    "logo": {
+        "ext": "png",
+        "urls": [
+            "https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/logo.png",
+        ],
+    },
+}
 
 _inflight = set()
 
 
-def cached_path(appid: str) -> Optional[Path]:
-    p = _CACHE_DIR / f"{appid}.jpg"
+def cached_path(appid: str, kind: str = "cover") -> Optional[Path]:
+    spec = _ASSET_SPECS[kind]
+    p = _CACHE_ROOT / kind / f"{appid}.{spec['ext']}"
     return p if p.exists() else None
 
 
-def fetch_async(appid: str, on_done: Callable[[Optional[Path]], None]) -> None:
-    """Downloads Steam grid artwork in a background thread.
+def fetch_async(appid: str, on_done: Callable[[Optional[Path]], None], kind: str = "cover") -> None:
+    """Downloads Steam grid/logo artwork in a background thread.
 
-    `on_done(path_or_None)` is invoked on the GLib main loop thread.
+    `on_done(path_or_None)` is invoked on the GLib main loop thread. `kind`
+    is "cover" (portrait library art) or "logo" (transparent clear-logo).
     """
-    if appid in _inflight:
+    key = (kind, appid)
+    if key in _inflight:
         return
-    _inflight.add(appid)
+    _inflight.add(key)
+
+    spec = _ASSET_SPECS[kind]
+    cache_dir = _CACHE_ROOT / kind
 
     def worker():
-        dest = _CACHE_DIR / f"{appid}.jpg"
+        dest = cache_dir / f"{appid}.{spec['ext']}"
         result = None
         try:
-            _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            for template in _URL_TEMPLATES:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            for template in spec["urls"]:
                 url = template.format(appid=appid)
                 try:
                     request = urllib.request.Request(url, headers={"User-Agent": "omagames/0.1"})
@@ -50,7 +67,7 @@ def fetch_async(appid: str, on_done: Callable[[Optional[Path]], None]) -> None:
                 except (urllib.error.URLError, OSError, TimeoutError):
                     continue
         finally:
-            _inflight.discard(appid)
+            _inflight.discard(key)
             GLib.idle_add(on_done, result)
 
     threading.Thread(target=worker, daemon=True).start()

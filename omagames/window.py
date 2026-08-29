@@ -39,60 +39,44 @@ def _resolve_icon_name(candidates: tuple) -> str:
     return candidates[-1]
 
 
-class GameTile(Gtk.FlowBoxChild):
-    def __init__(self, game):
-        super().__init__()
+class _TileArt:
+    """Loads cover art (or an icon-plate fallback) and, for Steam games, a
+    transparent clear-logo that replaces the plain text title once it's in.
+    Shared between grid tiles and shelf tiles so both look identical."""
+
+    def __init__(self, game, overlay, picture, scrim, title_label):
         self.game = game
-        self.set_focusable(True)
-        self.add_css_class("omagames-tile")
+        self.overlay = overlay
+        self.picture = picture
+        self.scrim = scrim
+        self.title_label = title_label
 
-        self.overlay = Gtk.Overlay()
-        self.overlay.set_size_request(170, 226)
-
-        self.picture = Gtk.Picture()
-        self.picture.set_content_fit(Gtk.ContentFit.COVER)
-        self.overlay.set_child(self.picture)
-
-        scrim = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.END)
-        scrim.add_css_class("omagames-tile-scrim")
-        title_label = Gtk.Label(label=game.title, xalign=0)
-        title_label.add_css_class("omagames-tile-title")
-        title_label.set_wrap(True)
-        title_label.set_lines(2)
-        title_label.set_ellipsize(Pango.EllipsizeMode.END)
-        scrim.append(title_label)
-        self.overlay.add_overlay(scrim)
-
-        badge_icon_name = _resolve_icon_name(
-            tuple(_SOURCE_BADGE_CANDIDATES.get(game.source, ["applications-games-symbolic"]))
-        )
-        badge = Gtk.Box(halign=Gtk.Align.END, valign=Gtk.Align.START)
-        badge.add_css_class("omagames-tile-badge")
-        badge_image = Gtk.Image.new_from_icon_name(badge_icon_name)
-        badge_image.set_pixel_size(12)
-        badge.append(badge_image)
-        self.overlay.add_overlay(badge)
-
-        self.set_child(self.overlay)
-        self._load_art()
-
-    def _load_art(self):
+    def load(self):
         game = self.game
         if game.icon_path:
             self.picture.set_filename(game.icon_path)
             return
         if game.source == "steam":
             appid = game.extra.get("appid")
-            cached = icons.cached_path(appid) if appid else None
-            if cached:
-                self.picture.set_filename(str(cached))
-            elif appid:
-                icons.fetch_async(appid, self._on_art_ready)
-            else:
+            if not appid:
                 self._show_icon_plate(None)
+                return
+            cached_cover = icons.cached_path(appid)
+            if cached_cover:
+                self.picture.set_filename(str(cached_cover))
+            else:
+                icons.fetch_async(appid, self._on_cover_ready)
+            self._load_logo(appid)
             return
         gicon = game.gicon or (Gio.ThemedIcon.new(game.icon_name) if game.icon_name else None)
         self._show_icon_plate(gicon)
+
+    def _load_logo(self, appid):
+        cached_logo = icons.cached_path(appid, kind="logo")
+        if cached_logo:
+            self._show_logo(cached_logo)
+        else:
+            icons.fetch_async(appid, self._on_logo_ready, kind="logo")
 
     def _show_icon_plate(self, gicon):
         plate = Gtk.Box(hexpand=True, vexpand=True)
@@ -110,12 +94,85 @@ class GameTile(Gtk.FlowBoxChild):
         plate.append(image)
         self.overlay.set_child(plate)
 
-    def _on_art_ready(self, path):
+    def _show_logo(self, path):
+        if self.title_label.get_parent() is self.scrim:
+            self.scrim.remove(self.title_label)
+        logo_picture = Gtk.Picture.new_for_filename(str(path))
+        logo_picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+        logo_picture.set_can_shrink(True)
+        logo_picture.set_halign(Gtk.Align.START)
+        logo_picture.set_size_request(-1, 40)
+        logo_picture.add_css_class("omagames-tile-logo")
+        self.scrim.append(logo_picture)
+
+    def _on_cover_ready(self, path):
         if path:
             self.picture.set_filename(str(path))
         else:
             self._show_icon_plate(Gio.ThemedIcon.new("applications-games-symbolic"))
         return False
+
+    def _on_logo_ready(self, path):
+        if path:
+            self._show_logo(path)
+        return False
+
+
+def _build_tile_overlay(game):
+    """A poster-style card: cover art (or icon plate), a bottom gradient
+    scrim with the title/logo, and a small source badge in the corner."""
+    overlay = Gtk.Overlay()
+    overlay.set_size_request(170, 226)
+
+    picture = Gtk.Picture()
+    picture.set_content_fit(Gtk.ContentFit.COVER)
+    overlay.set_child(picture)
+
+    scrim = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.END)
+    scrim.add_css_class("omagames-tile-scrim")
+    title_label = Gtk.Label(label=game.title, xalign=0)
+    title_label.add_css_class("omagames-tile-title")
+    title_label.set_wrap(True)
+    title_label.set_lines(2)
+    title_label.set_ellipsize(Pango.EllipsizeMode.END)
+    scrim.append(title_label)
+    overlay.add_overlay(scrim)
+
+    badge_icon_name = _resolve_icon_name(
+        tuple(_SOURCE_BADGE_CANDIDATES.get(game.source, ["applications-games-symbolic"]))
+    )
+    badge = Gtk.Box(halign=Gtk.Align.END, valign=Gtk.Align.START)
+    badge.add_css_class("omagames-tile-badge")
+    badge_image = Gtk.Image.new_from_icon_name(badge_icon_name)
+    badge_image.set_pixel_size(12)
+    badge.append(badge_image)
+    overlay.add_overlay(badge)
+
+    art = _TileArt(game, overlay, picture, scrim, title_label)
+    art.load()
+    return overlay, art
+
+
+class GameTile(Gtk.FlowBoxChild):
+    def __init__(self, game):
+        super().__init__()
+        self.game = game
+        self.set_focusable(True)
+        self.set_overflow(Gtk.Overflow.HIDDEN)
+        self.add_css_class("omagames-tile")
+        overlay, self._art = _build_tile_overlay(game)
+        self.set_child(overlay)
+
+
+def _build_shelf_button(game, on_activate):
+    overlay, _art = _build_tile_overlay(game)
+    button = Gtk.Button()
+    button.set_overflow(Gtk.Overflow.HIDDEN)
+    button.add_css_class("omagames-tile")
+    button.add_css_class("flat")
+    button.set_child(overlay)
+    button.connect("clicked", lambda *_: on_activate(game))
+    return button
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -126,6 +183,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._search_text = ""
         self._sidebar_rows = {}
         self._games = []
+        self._has_recent = False
 
         self.set_title("Games")
         self.set_default_size(1100, 720)
@@ -186,6 +244,18 @@ class MainWindow(Adw.ApplicationWindow):
         sidebar_page = Adw.NavigationPage(title="Library", child=sidebar_scroller)
         split_view.set_sidebar(sidebar_page)
 
+        self.recent_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        recent_header = Gtk.Label(label="Recently Played", xalign=0)
+        recent_header.add_css_class("omagames-shelf-header")
+        self.recent_section.append(recent_header)
+        recent_scroller = Gtk.ScrolledWindow()
+        recent_scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
+        recent_scroller.set_min_content_height(226)
+        self.recent_shelf = Gtk.Box(spacing=16)
+        recent_scroller.set_child(self.recent_shelf)
+        self.recent_section.append(recent_scroller)
+        self.recent_section.set_visible(False)
+
         self.flow_box = Gtk.FlowBox()
         self.flow_box.set_valign(Gtk.Align.START)
         self.flow_box.set_max_children_per_line(12)
@@ -196,12 +266,16 @@ class MainWindow(Adw.ApplicationWindow):
         self.flow_box.set_activate_on_single_click(True)
         self.flow_box.set_filter_func(self._filter_tile)
         self.flow_box.connect("child-activated", self._on_tile_activated)
-        self.flow_box.set_margin_top(20)
-        self.flow_box.set_margin_bottom(20)
-        self.flow_box.set_margin_start(20)
-        self.flow_box.set_margin_end(20)
 
-        content_scroller = Gtk.ScrolledWindow(child=self.flow_box)
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
+        content_box.set_margin_top(20)
+        content_box.set_margin_bottom(20)
+        content_box.set_margin_start(20)
+        content_box.set_margin_end(20)
+        content_box.append(self.recent_section)
+        content_box.append(self.flow_box)
+
+        content_scroller = Gtk.ScrolledWindow(child=content_box)
         content_scroller.add_css_class("omagames-content")
         content_scroller.set_hexpand(True)
         content_scroller.set_vexpand(True)
@@ -310,8 +384,27 @@ class MainWindow(Adw.ApplicationWindow):
             self.flow_box.remove(child)
         for game in games:
             self.flow_box.append(GameTile(game))
+        self._rebuild_recent_shelf(games)
         self._update_stack_visibility()
         return False
+
+    def _rebuild_recent_shelf(self, games):
+        while (child := self.recent_shelf.get_first_child()) is not None:
+            self.recent_shelf.remove(child)
+
+        games_by_id = {g.id: g for g in games}
+        recent_games = [
+            games_by_id[gid] for gid in self.config.recent_ids(limit=8) if gid in games_by_id
+        ]
+        for game in recent_games:
+            self.recent_shelf.append(_build_shelf_button(game, self._launch_game))
+
+        self._has_recent = bool(recent_games)
+        self._update_recent_visibility()
+
+    def _update_recent_visibility(self):
+        show = self._has_recent and not self._search_text and self._category == CATEGORY_ALL
+        self.recent_section.set_visible(show)
 
     # -- filtering & interaction -------------------------------------------
 
@@ -342,6 +435,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._search_text = entry.get_text().strip().casefold()
         self.flow_box.invalidate_filter()
         self._update_stack_visibility()
+        self._update_recent_visibility()
 
     def _on_sidebar_selected(self, listbox, row):
         if row is None:
@@ -350,10 +444,15 @@ class MainWindow(Adw.ApplicationWindow):
             self._category = self._sidebar_rows.get(row, CATEGORY_ALL)
         self.flow_box.invalidate_filter()
         self._update_stack_visibility()
+        self._update_recent_visibility()
+
+    def _launch_game(self, game):
+        if game.launch:
+            self.config.record_played(game.id)
+            game.launch()
 
     def _on_tile_activated(self, flow_box, child: GameTile):
-        if child.game.launch:
-            child.game.launch()
+        self._launch_game(child.game)
 
     def _open_settings(self):
         settings_window = SettingsWindow(self.config, transient_for=self)

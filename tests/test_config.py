@@ -48,6 +48,30 @@ class TestConfig(unittest.TestCase):
             config = Config(path=path)
             self.assertEqual(config.rom_dirs, [])
 
+    def test_recent_ids_ordered_most_recent_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            config.recent["steam:1"] = 100
+            config.recent["steam:2"] = 300
+            config.recent["steam:3"] = 200
+            self.assertEqual(config.recent_ids(), ["steam:2", "steam:3", "steam:1"])
+
+    def test_recent_ids_respects_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            for i in range(5):
+                config.recent[f"steam:{i}"] = i
+            self.assertEqual(len(config.recent_ids(limit=2)), 2)
+
+    def test_record_played_persists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            config = Config(path=path)
+            config.record_played("steam:553850")
+
+            reloaded = Config(path=path)
+            self.assertEqual(reloaded.recent_ids(), ["steam:553850"])
+
 
 if __name__ == "__main__":
     unittest.main()

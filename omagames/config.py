@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 
 DEFAULT_CONFIG = {
@@ -8,6 +9,7 @@ DEFAULT_CONFIG = {
     "hidden": [],
     "sources": {"steam": True, "desktop": True, "roms": True},
     "steam_root": None,
+    "recent": {},  # game id -> unix timestamp of last launch through omagames
 }
 
 
@@ -70,3 +72,15 @@ class Config:
         if 0 <= index < len(self.rom_dirs):
             self.rom_dirs.pop(index)
             self.save()
+
+    @property
+    def recent(self) -> dict:
+        return self.data.setdefault("recent", {})
+
+    def record_played(self, game_id: str):
+        self.recent[game_id] = time.time()
+        self.save()
+
+    def recent_ids(self, limit: int = 8) -> list:
+        ordered = sorted(self.recent.items(), key=lambda kv: kv[1], reverse=True)
+        return [game_id for game_id, _timestamp in ordered[:limit]]

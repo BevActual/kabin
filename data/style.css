@@ -94,7 +94,6 @@ row:selected .omagames-sidebar-count {
   background-color: @bg_light_color;
   box-shadow: 0 1px 3px alpha(black, 0.35);
   transition: box-shadow 150ms ease, background-color 150ms ease;
-  overflow: hidden;
 }
 
 .omagames-tile:hover,
@@ -121,6 +120,16 @@ row:selected .omagames-sidebar-count {
   color: white;
   font-weight: 700;
   font-size: 13px;
+}
+
+.omagames-tile-logo {
+  margin-bottom: 2px;
+}
+
+.omagames-shelf-header {
+  font-size: 15px;
+  font-weight: 800;
+  color: @fg_color;
 }
 
 .omagames-tile-badge {
