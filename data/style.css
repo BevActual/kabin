@@ -1,0 +1,139 @@
+/* Omagames — layered on top of dynamically generated @define-color tokens
+   (see omagames/style.py), which are pulled from the active Omarchy theme. */
+
+.omagames-window {
+  background-color: @bg_darker_color;
+}
+
+.omagames-topbar {
+  background-color: @bg_dark_color;
+}
+
+.omagames-brand {
+  margin-left: 4px;
+  margin-right: 4px;
+}
+
+.omagames-brand-mark {
+  color: @accent_color;
+  -gtk-icon-size: 20px;
+}
+
+.omagames-brand-word {
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: @fg_color;
+}
+
+.omagames-search {
+  min-width: 380px;
+}
+
+.omagames-icon-button {
+  border-radius: 999px;
+}
+
+.omagames-sidebar {
+  background-color: @bg_darker_color;
+  padding: 8px 6px;
+}
+
+.omagames-sidebar-header {
+  color: @fg_dim_color;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 14px 12px 4px 12px;
+}
+
+.omagames-sidebar-row {
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 1px 4px;
+}
+
+.omagames-sidebar-row:hover {
+  background-color: alpha(@fg_color, 0.06);
+}
+
+row:selected .omagames-sidebar-row {
+  background-color: alpha(@accent_color, 0.16);
+}
+
+row:selected .omagames-sidebar-icon {
+  color: @accent_color;
+}
+
+row:selected .omagames-sidebar-label {
+  color: @accent_color;
+  font-weight: 700;
+}
+
+.omagames-sidebar-count {
+  background-color: @muted_color;
+  color: @fg_dim_color;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+row:selected .omagames-sidebar-count {
+  background-color: @accent_color;
+  color: @bg_darker_color;
+}
+
+.omagames-content {
+  background-color: @bg_color;
+}
+
+.omagames-tile {
+  border-radius: 12px;
+  padding: 0;
+  background-color: @bg_light_color;
+  box-shadow: 0 1px 3px alpha(black, 0.35);
+  transition: box-shadow 150ms ease, background-color 150ms ease;
+  overflow: hidden;
+}
+
+.omagames-tile:hover,
+.omagames-tile:focus {
+  box-shadow: 0 0 0 3px @accent_color, 0 6px 18px alpha(black, 0.5);
+  background-color: @muted_color;
+}
+
+.omagames-tile-plate {
+  background-color: @muted_color;
+}
+
+.omagames-tile-scrim {
+  background-image: linear-gradient(
+    to top,
+    alpha(black, 0.92) 0%,
+    alpha(black, 0.55) 60%,
+    transparent 100%
+  );
+  padding: 26px 10px 8px 10px;
+}
+
+.omagames-tile-title {
+  color: white;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.omagames-tile-badge {
+  background-color: alpha(black, 0.55);
+  border-radius: 999px;
+  padding: 4px;
+  margin: 6px;
+}
+
+.omagames-tile-badge image {
+  color: white;
+}
+
+.omagames-empty-cta {
+  margin-top: 8px;
+}

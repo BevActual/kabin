@@ -6,6 +6,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio  # noqa: E402
 
+from . import style  # noqa: E402
 from .window import MainWindow  # noqa: E402
 
 APP_ID = "com.andrewbevington.Omagames"
@@ -30,6 +31,7 @@ class OmagamesApplication(Adw.Application):
 
     def do_activate(self):
         if not self.window:
+            style.apply()
             self.window = MainWindow(application=self)
         self.window.present()
 
