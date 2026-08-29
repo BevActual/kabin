@@ -97,7 +97,8 @@ row:selected .omagames-sidebar-count {
 }
 
 .omagames-tile:hover,
-.omagames-tile:focus {
+.omagames-tile:focus,
+.omagames-tile:selected {
   box-shadow: 0 0 0 3px @accent_color, 0 6px 18px alpha(black, 0.5);
   background-color: @muted_color;
 }
@@ -145,4 +146,30 @@ row:selected .omagames-sidebar-count {
 
 .omagames-empty-cta {
   margin-top: 8px;
+}
+
+.omagames-details {
+  background-color: @bg_dark_color;
+  border-left: 1px solid @muted_color;
+}
+
+.omagames-details-art-frame {
+  border-radius: 10px;
+  background-color: @bg_light_color;
+}
+
+.omagames-details-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: @fg_color;
+}
+
+.omagames-details-meta {
+  color: @fg_dim_color;
+  font-size: 12px;
+}
+
+.omagames-details-description {
+  color: @fg_color;
+  font-size: 13px;
 }

@@ -1,3 +1,4 @@
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -6,6 +7,12 @@ from typing import Optional
 from ..models import Game
 
 _TOKEN_RE = re.compile(r'"((?:[^"\\]|\\.)*)"|([{}])')
+
+# Strips Steam's store-description markup (a BBCode-like dialect: [h2], [b],
+# [list], [imgvid ...][/imgvid] video embeds, etc.) down to plain text.
+_IMGVID_RE = re.compile(r"\[imgvid.*?\[/imgvid\]", re.DOTALL | re.IGNORECASE)
+_BBCODE_TAG_RE = re.compile(r"\[/?[a-zA-Z0-9_]+(?:=[^\]]*)?\]")
+_MULTI_NEWLINE_RE = re.compile(r"\n{3,}")
 
 # Steam installs these as regular "apps" alongside real games. They have no
 # store page and nothing to launch, so they'd otherwise show up as broken tiles.
@@ -136,3 +143,48 @@ def _make_launcher(appid: str):
         subprocess.Popen(["steam", f"steam://rungameid/{appid}"])
 
     return launch
+
+
+def clean_description(text: str) -> str:
+    if not text:
+        return ""
+    text = _IMGVID_RE.sub("", text)
+    text = _BBCODE_TAG_RE.sub("", text)
+    text = text.replace("\r\n", "\n")
+    text = _MULTI_NEWLINE_RE.sub("\n\n", text)
+    return text.strip()
+
+
+def load_local_metadata(appid: str, steam_root_override: Optional[str] = None) -> dict:
+    """Description/developer/publisher from Steam's own local library cache
+    (~/.local/share/Steam/userdata/<id>/config/librarycache/<appid>.json) -
+    already synced to disk for every owned game, no network call needed."""
+    steam_root = find_steam_root(steam_root_override)
+    if steam_root is None:
+        return {}
+
+    userdata = steam_root / "userdata"
+    if not userdata.is_dir():
+        return {}
+
+    for user_dir in userdata.iterdir():
+        json_path = user_dir / "config" / "librarycache" / f"{appid}.json"
+        if not json_path.is_file():
+            continue
+        try:
+            raw = json.loads(json_path.read_text(errors="replace"))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        sections = dict(raw) if isinstance(raw, list) else raw
+        descriptions = sections.get("descriptions", {}).get("data", {})
+        associations = sections.get("associations", {}).get("data", {})
+
+        result = {
+            "description": clean_description(descriptions.get("strFullDescription", "")),
+            "developers": [d.get("strName") for d in associations.get("rgDevelopers", []) if d.get("strName")],
+            "publishers": [p.get("strName") for p in associations.get("rgPublishers", []) if p.get("strName")],
+        }
+        if result["description"] or result["developers"] or result["publishers"]:
+            return result
+    return {}

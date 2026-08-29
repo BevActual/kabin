@@ -12,6 +12,7 @@ from . import icons  # noqa: E402
 from .config import Config  # noqa: E402
 from .settings import SettingsWindow  # noqa: E402
 from .sources import discover_all  # noqa: E402
+from .sources import steam as steam_source  # noqa: E402
 
 CATEGORY_ALL = ("all", None)
 
@@ -184,6 +185,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._sidebar_rows = {}
         self._games = []
         self._has_recent = False
+        self._selected_game = None
 
         self.set_title("Games")
         self.set_default_size(1100, 720)
@@ -263,8 +265,13 @@ class MainWindow(Adw.ApplicationWindow):
         self.flow_box.set_row_spacing(16)
         self.flow_box.set_column_spacing(16)
         self.flow_box.set_homogeneous(True)
-        self.flow_box.set_activate_on_single_click(True)
+        # Single click selects (updates the details panel); Enter or a
+        # double-click activates (launches) - browsing shouldn't risk an
+        # accidental launch the way single-click-to-activate did.
+        self.flow_box.set_selection_mode(Gtk.SelectionMode.BROWSE)
+        self.flow_box.set_activate_on_single_click(False)
         self.flow_box.set_filter_func(self._filter_tile)
+        self.flow_box.connect("selected-children-changed", self._on_tile_selected)
         self.flow_box.connect("child-activated", self._on_tile_activated)
 
         content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
@@ -304,11 +311,81 @@ class MainWindow(Adw.ApplicationWindow):
         self.content_stack.add_named(self.empty_status, "empty")
         self.content_stack.add_named(self.no_matches_status, "no-matches")
 
-        content_page = Adw.NavigationPage(title="Games", child=self.content_stack)
+        details_widget = self._build_details_panel()
+
+        body_paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
+        body_paned.set_start_child(self.content_stack)
+        body_paned.set_resize_start_child(True)
+        body_paned.set_shrink_start_child(False)
+        body_paned.set_end_child(details_widget)
+        body_paned.set_resize_end_child(False)
+        body_paned.set_shrink_end_child(False)
+
+        content_page = Adw.NavigationPage(title="Games", child=body_paned)
         split_view.set_content(content_page)
 
         toolbar_view.set_content(split_view)
         self.set_content(toolbar_view)
+
+    def _build_details_panel(self):
+        panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        panel.add_css_class("omagames-details")
+
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_vexpand(True)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        content.set_margin_top(20)
+        content.set_margin_bottom(20)
+        content.set_margin_start(20)
+        content.set_margin_end(20)
+
+        art_frame = Gtk.Box()
+        art_frame.set_overflow(Gtk.Overflow.HIDDEN)
+        art_frame.add_css_class("omagames-details-art-frame")
+        art_frame.set_size_request(-1, 180)
+        self.details_picture = Gtk.Picture()
+        self.details_picture.set_content_fit(Gtk.ContentFit.COVER)
+        art_frame.append(self.details_picture)
+        content.append(art_frame)
+
+        self.details_title = Gtk.Label(xalign=0, wrap=True)
+        self.details_title.add_css_class("omagames-details-title")
+        content.append(self.details_title)
+
+        self.details_meta = Gtk.Label(xalign=0, wrap=True)
+        self.details_meta.add_css_class("omagames-details-meta")
+        content.append(self.details_meta)
+
+        self.details_play_button = Gtk.Button(label="Play")
+        self.details_play_button.add_css_class("suggested-action")
+        self.details_play_button.add_css_class("pill")
+        self.details_play_button.set_halign(Gtk.Align.START)
+        self.details_play_button.connect("clicked", lambda *_: self._launch_selected())
+        content.append(self.details_play_button)
+
+        self.details_description = Gtk.Label(xalign=0, wrap=True)
+        self.details_description.add_css_class("omagames-details-description")
+        self.details_description.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        content.append(self.details_description)
+
+        scroller.set_child(content)
+        panel.append(scroller)
+
+        self.details_empty = Adw.StatusPage(
+            title="No game selected",
+            description="Choose a game to see its details here.",
+            icon_name="applications-games-symbolic",
+        )
+        self.details_empty.set_vexpand(True)
+
+        details_stack = Gtk.Stack()
+        details_stack.add_named(panel, "details")
+        details_stack.add_named(self.details_empty, "empty")
+        details_stack.set_size_request(320, -1)
+        self.details_stack = details_stack
+        return details_stack
 
     def _add_sidebar_header(self, text):
         row = Gtk.ListBoxRow()
@@ -386,6 +463,12 @@ class MainWindow(Adw.ApplicationWindow):
             self.flow_box.append(GameTile(game))
         self._rebuild_recent_shelf(games)
         self._update_stack_visibility()
+
+        first_child = self.flow_box.get_child_at_index(0)
+        if first_child:
+            self.flow_box.select_child(first_child)
+        else:
+            self._show_details(None)
         return False
 
     def _rebuild_recent_shelf(self, games):
@@ -453,6 +536,44 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_tile_activated(self, flow_box, child: GameTile):
         self._launch_game(child.game)
+
+    def _on_tile_selected(self, flow_box):
+        selected = flow_box.get_selected_children()
+        self._show_details(selected[0].game if selected else None)
+
+    def _launch_selected(self):
+        if self._selected_game:
+            self._launch_game(self._selected_game)
+
+    def _show_details(self, game):
+        self._selected_game = game
+        if game is None:
+            self.details_stack.set_visible_child_name("empty")
+            return
+        self.details_stack.set_visible_child_name("details")
+
+        self.details_title.set_label(game.title)
+        self.details_description.set_label("")
+        self.details_picture.set_paintable(None)
+
+        source_labels = {"steam": "Steam", "desktop": "Installed App"}
+        meta_parts = [source_labels.get(game.source, game.subtitle or game.source.title())]
+
+        if game.icon_path:
+            self.details_picture.set_filename(game.icon_path)
+        elif game.source == "steam":
+            appid = game.extra.get("appid")
+            if appid:
+                cached = icons.cached_path(appid)
+                if cached:
+                    self.details_picture.set_filename(str(cached))
+                metadata = steam_source.load_local_metadata(appid, self.config.data.get("steam_root"))
+                if metadata.get("developers"):
+                    meta_parts.append(", ".join(metadata["developers"][:2]))
+                if metadata.get("description"):
+                    self.details_description.set_label(metadata["description"])
+
+        self.details_meta.set_label(" · ".join(meta_parts))
 
     def _open_settings(self):
         settings_window = SettingsWindow(self.config, transient_for=self)
