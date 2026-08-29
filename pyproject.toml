@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omagames"
+version = "0.1.0"
+description = "A standalone game launcher for Omarchy — Steam, other apps, and ROMs in one grid"
+requires-python = ">=3.11"
+authors = [{ name = "Andrew" }]
+
+[project.scripts]
+omagames = "omagames.app:main"
+
+[tool.setuptools.packages.find]
+include = ["omagames*"]

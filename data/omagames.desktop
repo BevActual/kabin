@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Games
+GenericName=Game Launcher
+Comment=Launch Steam, other apps, and ROMs from one grid
+Exec=omagames
+Icon=applications-games
+Categories=Game;
+Terminal=false
+StartupNotify=true
