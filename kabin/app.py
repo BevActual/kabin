@@ -9,10 +9,10 @@ from gi.repository import Adw, Gio  # noqa: E402
 from . import style  # noqa: E402
 from .window import MainWindow  # noqa: E402
 
-APP_ID = "com.andrewbevington.Omagames"
+APP_ID = "com.andrewbevington.Kabin"
 
 
-class OmagamesApplication(Adw.Application):
+class KabinApplication(Adw.Application):
     def __init__(self):
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
         self.window = None
@@ -37,7 +37,7 @@ class OmagamesApplication(Adw.Application):
 
 
 def main():
-    app = OmagamesApplication()
+    app = KabinApplication()
     return app.run(sys.argv)
 
 

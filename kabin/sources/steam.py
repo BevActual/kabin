@@ -131,7 +131,7 @@ def get_games(steam_root_override: Optional[str] = None, hidden_ids=None) -> lis
                     title=name,
                     source="steam",
                     subtitle="Steam",
-                    extra={"appid": appid},
+                    extra={"appid": appid, "added_at": manifest.stat().st_mtime},
                     launch=_make_launcher(appid),
                 )
             )

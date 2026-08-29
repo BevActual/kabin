@@ -1,45 +1,45 @@
-/* Omagames — layered on top of dynamically generated @define-color tokens
-   (see omagames/style.py), which are pulled from the active Omarchy theme. */
+/* Kabin — layered on top of dynamically generated @define-color tokens
+   (see kabin/style.py), which are pulled from the active Omarchy theme. */
 
-.omagames-window {
+.kabin-window {
   background-color: @bg_darker_color;
 }
 
-.omagames-topbar {
+.kabin-topbar {
   background-color: @bg_dark_color;
 }
 
-.omagames-brand {
+.kabin-brand {
   margin-left: 4px;
   margin-right: 4px;
 }
 
-.omagames-brand-mark {
+.kabin-brand-mark {
   color: @accent_color;
   -gtk-icon-size: 20px;
 }
 
-.omagames-brand-word {
+.kabin-brand-word {
   font-weight: 800;
   font-size: 14px;
   letter-spacing: 2px;
   color: @fg_color;
 }
 
-.omagames-search {
+.kabin-search {
   min-width: 380px;
 }
 
-.omagames-icon-button {
+.kabin-icon-button {
   border-radius: 999px;
 }
 
-.omagames-sidebar {
+.kabin-sidebar {
   background-color: @bg_darker_color;
   padding: 8px 6px;
 }
 
-.omagames-sidebar-header {
+.kabin-sidebar-header {
   color: @fg_dim_color;
   font-size: 11px;
   font-weight: 700;
@@ -47,30 +47,30 @@
   padding: 14px 12px 4px 12px;
 }
 
-.omagames-sidebar-row {
+.kabin-sidebar-row {
   border-radius: 8px;
   padding: 8px 10px;
   margin: 1px 4px;
 }
 
-.omagames-sidebar-row:hover {
+.kabin-sidebar-row:hover {
   background-color: alpha(@fg_color, 0.06);
 }
 
-row:selected .omagames-sidebar-row {
+row:selected .kabin-sidebar-row {
   background-color: alpha(@accent_color, 0.16);
 }
 
-row:selected .omagames-sidebar-icon {
+row:selected .kabin-sidebar-icon {
   color: @accent_color;
 }
 
-row:selected .omagames-sidebar-label {
+row:selected .kabin-sidebar-label {
   color: @accent_color;
   font-weight: 700;
 }
 
-.omagames-sidebar-count {
+.kabin-sidebar-count {
   background-color: @muted_color;
   color: @fg_dim_color;
   border-radius: 999px;
@@ -79,41 +79,52 @@ row:selected .omagames-sidebar-label {
   font-weight: 600;
 }
 
-row:selected .omagames-sidebar-count {
+row:selected .kabin-sidebar-count {
   background-color: @accent_color;
   color: @bg_darker_color;
 }
 
-.omagames-content {
+.kabin-content {
   /* translucent so the backdrop (tinted by this same theme color) shows
-     through - see omagames-backdrop and MainWindow._update_backdrop */
-  background-color: alpha(@bg_color, 0.88);
+     through - see kabin-backdrop and MainWindow._update_backdrop */
+  background-color: alpha(@bg_color, 0.90);
 }
 
-.omagames-backdrop {
+.kabin-library-title {
+  color: @fg_color;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.kabin-library-subtitle {
+  color: @fg_dim_color;
+  font-size: 13px;
+}
+
+.kabin-backdrop {
   background-color: @bg_color;
 }
 
-.omagames-tile {
-  border-radius: 12px;
+.kabin-tile {
+  border-radius: 14px;
   padding: 0;
   background-color: @bg_light_color;
   box-shadow: 0 1px 3px alpha(black, 0.35);
   transition: box-shadow 150ms ease, background-color 150ms ease;
 }
 
-.omagames-tile:hover,
-.omagames-tile:focus,
-.omagames-tile:selected {
+.kabin-tile:hover,
+.kabin-tile:focus,
+.kabin-tile:selected {
   box-shadow: 0 0 0 3px @accent_color, 0 6px 18px alpha(black, 0.5);
   background-color: @muted_color;
 }
 
-.omagames-tile-plate {
+.kabin-tile-plate {
   background-color: @muted_color;
 }
 
-.omagames-tile-scrim {
+.kabin-tile-scrim {
   background-image: linear-gradient(
     to top,
     alpha(black, 0.92) 0%,
@@ -123,59 +134,76 @@ row:selected .omagames-sidebar-count {
   padding: 26px 10px 8px 10px;
 }
 
-.omagames-tile-title {
+.kabin-tile-title {
   color: white;
   font-weight: 700;
   font-size: 13px;
 }
 
-.omagames-tile-logo {
+.kabin-tile-logo {
   margin-bottom: 2px;
 }
 
-.omagames-shelf-header {
+.kabin-shelf-header {
   font-size: 15px;
   font-weight: 800;
   color: @fg_color;
 }
 
-.omagames-tile-badge {
+.kabin-tile-badge {
   background-color: alpha(black, 0.55);
   border-radius: 999px;
   padding: 4px;
   margin: 6px;
 }
 
-.omagames-tile-badge image {
+.kabin-tile-badge image {
   color: white;
 }
 
-.omagames-empty-cta {
+.kabin-empty-cta {
   margin-top: 8px;
 }
 
-.omagames-details {
-  background-color: @bg_dark_color;
-  border-left: 1px solid @muted_color;
+.kabin-shortcut-bar {
+  background-color: alpha(@bg_darker_color, 0.94);
+  border-top: 1px solid alpha(@fg_color, 0.08);
+  padding: 7px 16px;
 }
 
-.omagames-details-art-frame {
-  border-radius: 10px;
+.kabin-shortcut {
+  color: @fg_dim_color;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.kabin-details-page {
+  background-color: alpha(@bg_darker_color, 0.76);
+}
+
+.kabin-details-back {
+  margin: 16px 20px;
+  font-weight: 700;
+}
+
+.kabin-details-art-frame {
+  border-radius: 18px;
   background-color: @bg_light_color;
+  box-shadow: 0 18px 50px alpha(black, 0.55);
 }
 
-.omagames-details-title {
-  font-size: 20px;
+.kabin-details-title {
+  font-size: 36px;
   font-weight: 800;
   color: @fg_color;
 }
 
-.omagames-details-meta {
+.kabin-details-meta {
   color: @fg_dim_color;
-  font-size: 12px;
+  font-size: 14px;
 }
 
-.omagames-details-description {
+.kabin-details-description {
   color: @fg_color;
-  font-size: 13px;
+  font-size: 15px;
 }

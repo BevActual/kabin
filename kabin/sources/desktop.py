@@ -1,21 +1,40 @@
 import re
+from pathlib import Path
 
 import gi
 
 gi.require_version("Gio", "2.0")
 from gi.repository import Gio  # noqa: E402
 
+from ..artwork import resolve_cover  # noqa: E402
 from ..models import Game  # noqa: E402
 
 # Steam owns its own launch path via sources/steam.py; skip its launcher entry
-# and omagames' own launcher entry (Categories=Game, since it's a game
+# and kabin' own launcher entry (Categories=Game, since it's a game
 # launcher, would otherwise list itself) so they don't show up as "games".
-_EXCLUDED_IDS = {"steam.desktop", "omagames.desktop"}
+_EXCLUDED_IDS = {
+    "steam.desktop",
+    "kabin.desktop",
+    "omagames.desktop",
+    "io.mgba.mGBA.desktop",
+    "org.duckstation.DuckStation.desktop",
+    "net.pcsx2.PCSX2.desktop",
+    "org.ppsspp.PPSSPP.desktop",
+    "org.DolphinEmu.dolphin-emu.desktop",
+    "dolphin-emu.desktop",
+    "com.snes9x.Snes9x.desktop",
+    "org.mamedev.MAME.desktop",
+    "mame.desktop",
+    "com.libretro.RetroArch.desktop",
+    "com.github.Rosalie241.RMG.desktop",
+    "io.github.gopher64.gopher64.desktop",
+    "io.github.punesemu.puNES.desktop",
+}
 
 _STEAM_RUNGAME_RE = re.compile(r"steam://rungameid/(\d+)")
 
 
-def get_games(hidden_ids=None, steam_appids=None) -> list:
+def get_games(hidden_ids=None, steam_appids=None, artwork_config=None) -> list:
     """Scans installed .desktop entries categorized as games.
 
     `steam_appids` lets callers skip desktop shortcuts that just wrap
@@ -48,6 +67,12 @@ def get_games(hidden_ids=None, steam_appids=None) -> list:
             continue
 
         title = app_info.get_display_name() or app_info.get_name() or desktop_id
+        cover = resolve_cover(title, gid, artwork_config)
+        desktop_file = app_info.get_filename()
+        try:
+            added_at = Path(desktop_file).stat().st_mtime if desktop_file else 0
+        except OSError:
+            added_at = 0
 
         games.append(
             Game(
@@ -55,7 +80,9 @@ def get_games(hidden_ids=None, steam_appids=None) -> list:
                 title=title,
                 source="desktop",
                 subtitle="",
+                icon_path=str(cover) if cover else None,
                 gicon=app_info.get_icon(),
+                extra={"added_at": added_at},
                 launch=_make_launcher(app_info),
             )
         )

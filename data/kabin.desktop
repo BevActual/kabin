@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Games
+Name=Kabin
 GenericName=Game Launcher
 Comment=Launch Steam, other apps, and ROMs from one grid
-Exec=omagames
+Exec=kabin
 Icon=applications-games
 Categories=Game;
 Terminal=false

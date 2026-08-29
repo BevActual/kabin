@@ -7,7 +7,10 @@ from typing import Callable, Optional
 
 from gi.repository import GLib
 
-_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "omagames" / "steam"
+_CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "kabin" / "steam"
+_LEGACY_CACHE_ROOT = (
+    Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "omagames" / "steam"
+)
 
 _ASSET_SPECS = {
     "cover": {
@@ -31,7 +34,10 @@ _inflight = set()
 def cached_path(appid: str, kind: str = "cover") -> Optional[Path]:
     spec = _ASSET_SPECS[kind]
     p = _CACHE_ROOT / kind / f"{appid}.{spec['ext']}"
-    return p if p.exists() else None
+    if p.exists():
+        return p
+    legacy = _LEGACY_CACHE_ROOT / kind / f"{appid}.{spec['ext']}"
+    return legacy if legacy.exists() else None
 
 
 def fetch_async(appid: str, on_done: Callable[[Optional[Path]], None], kind: str = "cover") -> None:
@@ -56,7 +62,7 @@ def fetch_async(appid: str, on_done: Callable[[Optional[Path]], None], kind: str
             for template in spec["urls"]:
                 url = template.format(appid=appid)
                 try:
-                    request = urllib.request.Request(url, headers={"User-Agent": "omagames/0.1"})
+                    request = urllib.request.Request(url, headers={"User-Agent": "kabin/0.1"})
                     with urllib.request.urlopen(request, timeout=6) as resp:
                         data = resp.read()
                     tmp = dest.with_suffix(".tmp")

@@ -4,7 +4,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from omagames.sources import steam
+from kabin.sources import steam
 
 
 class TestParseVdf(unittest.TestCase):

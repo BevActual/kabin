@@ -1,8 +1,9 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
-from omagames.config import Config
+from kabin.config import Config
 
 
 class TestConfig(unittest.TestCase):
@@ -12,22 +13,45 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.rom_dirs, [])
             self.assertEqual(config.hidden, [])
             self.assertTrue(config.sources["steam"])
+            self.assertEqual(config.emulation["preset"], "balanced")
+            self.assertEqual(config.artwork["steamgriddb_api_key"], "")
 
     def test_round_trips_rom_dirs(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.json"
             config = Config(path=path)
-            config.add_rom_dir("/roms/snes", "SNES", ["sfc"], "retroarch {rom}")
+            config.add_rom_dir("/roms/snes", "SNES", ["sfc"], "echo {rom}")
 
             reloaded = Config(path=path)
             self.assertEqual(len(reloaded.rom_dirs), 1)
             self.assertEqual(reloaded.rom_dirs[0]["system"], "SNES")
 
+    def test_persists_bios_path_with_library(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            config = Config(path=path)
+            config.add_rom_dir(
+                "/games/ps2",
+                "ps2",
+                ["iso"],
+                {"id": "pcsx2", "runtime": "managed", "executable": "/runtime/pcsx2"},
+                "/firmware/ps2",
+            )
+            self.assertEqual(Config(path=path).rom_dirs[0]["bios_path"], "/firmware/ps2")
+
+    def test_saved_config_is_owner_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            config = Config(path=path)
+            config.artwork["steamgriddb_api_key"] = "secret"
+            config.save()
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
     def test_remove_rom_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.json"
             config = Config(path=path)
-            config.add_rom_dir("/roms/snes", "SNES", ["sfc"], "retroarch {rom}")
+            config.add_rom_dir("/roms/snes", "SNES", ["sfc"], "echo {rom}")
             config.add_rom_dir("/roms/gba", "GBA", ["gba"], "mgba {rom}")
             config.remove_rom_dir(0)
             self.assertEqual(len(config.rom_dirs), 1)
@@ -93,6 +117,22 @@ class TestConfig(unittest.TestCase):
 
             reloaded = Config(path=path)
             self.assertTrue(reloaded.is_favorite("steam:553850"))
+
+    def test_migrates_legacy_config_to_kabin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            legacy = base / "omagames" / "config.json"
+            legacy.parent.mkdir()
+            legacy.write_text('{"favorites": ["steam:553850"]}')
+
+            with patch.dict("os.environ", {"XDG_CONFIG_HOME": tmp}):
+                config = Config()
+
+            migrated = base / "kabin" / "config.json"
+            self.assertTrue(config.is_favorite("steam:553850"))
+            self.assertTrue(migrated.exists())
+            self.assertIn("steam:553850", migrated.read_text())
+            self.assertEqual(config._load_path, migrated)
 
 
 if __name__ == "__main__":
