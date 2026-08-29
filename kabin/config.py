@@ -1,5 +1,9 @@
 import json
 import os
+import secrets
+import socket
+import hashlib
+import hmac
 import time
 from pathlib import Path
 
@@ -9,12 +13,20 @@ DEFAULT_CONFIG = {
     # each: {"path": str, "system": str, "extensions": [str], "emulator": "cmd {rom}"}
     "rom_dirs": [],
     "hidden": [],
-    "sources": {"steam": True, "desktop": True, "roms": True},
+    "sources": {"steam": True, "desktop": True, "roms": True, "remote": True},
     "steam_root": None,
     "recent": {},  # game id -> unix timestamp of last launch through kabin
     "favorites": [],
     "emulation": DEFAULT_EMULATION_SETTINGS,
     "artwork": {"steamgriddb_api_key": ""},
+    "network": {
+        "host_enabled": False,
+        "host_name": "",
+        "port": 42424,
+        "token": "",
+        "paired_devices": [],
+        "remote_hosts": [],
+    },
 }
 
 
@@ -65,7 +77,10 @@ class Config:
 
     @property
     def sources(self) -> dict:
-        return self.data.setdefault("sources", dict(DEFAULT_CONFIG["sources"]))
+        sources = self.data.setdefault("sources", dict(DEFAULT_CONFIG["sources"]))
+        for key, value in DEFAULT_CONFIG["sources"].items():
+            sources.setdefault(key, value)
+        return sources
 
     def is_hidden(self, game_id: str) -> bool:
         return game_id in self.hidden
@@ -118,6 +133,67 @@ class Config:
     @property
     def artwork(self) -> dict:
         return self.data.setdefault("artwork", {"steamgriddb_api_key": ""})
+
+    @property
+    def network(self) -> dict:
+        settings = self.data.setdefault("network", dict(DEFAULT_CONFIG["network"]))
+        for key, value in DEFAULT_CONFIG["network"].items():
+            settings.setdefault(key, value)
+        if not settings["host_name"]:
+            settings["host_name"] = socket.gethostname()
+        return settings
+
+    def ensure_network_token(self) -> str:
+        if not self.network["token"]:
+            self.network["token"] = secrets.token_urlsafe(32)
+            self.save()
+        return self.network["token"]
+
+    def add_paired_device(self, name: str) -> str:
+        token = secrets.token_urlsafe(32)
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        devices = self.network.setdefault("paired_devices", [])
+        devices.append({"name": name, "token_hash": digest})
+        self.save()
+        return token
+
+    def network_token_valid(self, token: str) -> bool:
+        if not token:
+            return False
+        master = self.ensure_network_token()
+        if hmac.compare_digest(token, master):
+            return True
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        return any(
+            hmac.compare_digest(digest, device.get("token_hash", ""))
+            for device in self.network.get("paired_devices", [])
+        )
+
+    def save_remote_host(self, host: dict, token: str):
+        hosts = self.network.setdefault("remote_hosts", [])
+        hosts[:] = [item for item in hosts if item.get("name") != host.get("name")]
+        hosts.append(
+            {
+                "name": host["name"],
+                "address": host["address"],
+                "port": int(host["port"]),
+                "token": token,
+                "tls": bool(host.get("tls", False)),
+                "fingerprint": host.get("fingerprint", ""),
+            }
+        )
+        self.save()
+
+    def remove_paired_device(self, index: int):
+        devices = self.network.setdefault("paired_devices", [])
+        if 0 <= index < len(devices):
+            devices.pop(index)
+            self.save()
+
+    def remove_remote_host(self, name: str):
+        hosts = self.network.setdefault("remote_hosts", [])
+        hosts[:] = [host for host in hosts if host.get("name") != name]
+        self.save()
 
     def is_favorite(self, game_id: str) -> bool:
         return game_id in self.favorites

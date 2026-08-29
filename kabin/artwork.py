@@ -154,3 +154,46 @@ def resolve_cover(
         except (OSError, ValueError, KeyError):
             return None
     return cover
+
+
+def fetch_remote_cover(
+    host: dict,
+    token: str,
+    game_id: str,
+    root: Path | None = None,
+    opener=urllib.request.urlopen,
+) -> Path | None:
+    cache = root or (artwork_root().parent / "remote-art")
+    cache_id = f"{host.get('name', '')}:{game_id}"
+    existing = cached_cover(cache_id, cache)
+    if existing:
+        return existing
+    query = urllib.parse.urlencode({"id": game_id})
+    from .network import host_url, pinned_tls_context
+
+    request = urllib.request.Request(
+        host_url(host, f"/v1/artwork?{query}"),
+        headers={"Authorization": f"Bearer {token}", "User-Agent": "Kabin/0.1"},
+    )
+    kwargs = {"timeout": 15}
+    if opener is urllib.request.urlopen:
+        kwargs["context"] = pinned_tls_context(host, 15)
+    with opener(request, **kwargs) as response:
+        data = response.read(15 * 1024 * 1024 + 1)
+    if not data or len(data) > 15 * 1024 * 1024 or not _supported_image(data):
+        return None
+    if data.startswith(b"\x89PNG"):
+        suffix = ".png"
+    elif data.startswith(b"\xff\xd8\xff"):
+        suffix = ".jpg"
+    else:
+        suffix = ".webp"
+    cache.mkdir(parents=True, exist_ok=True)
+    destination = cache / f"{_cache_key(cache_id)}{suffix}"
+    temporary = destination.with_suffix(".download")
+    try:
+        temporary.write_bytes(data)
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return destination

@@ -54,6 +54,27 @@ console firmware.
 Any source can be toggled off in Settings. Hidden individual games are
 tracked by id in the config file.
 
+## Kabin Host
+
+Kabin can advertise its library to other Kabin devices on the local network.
+Enable **Kabin Host** in Settings → Network. Host mode exposes a versioned,
+authenticated TLS API on port `42424` and advertises `_kabin._tcp` through
+mDNS/Avahi. Kabin generates a local host certificate, advertises its SHA-256
+fingerprint during discovery, and pins that certificate before sending pairing
+codes or device tokens.
+
+The initial host protocol intentionally shares catalog metadata only. Local
+file paths, emulator commands, and credentials are never included in library
+responses. Remote pairing, artwork transfer, launching, save sync, and native
+GStreamer/WebRTC streaming build on this API in subsequent milestones.
+
+Native WebRTC SDP handling runs in the small Kabin-owned
+`kabin-media-helper`, keeping unstable GStreamer C objects out of the Python UI
+process. `scripts/install.sh` builds the helper automatically, and
+`scripts/build-media-helper.sh` can rebuild it directly during development.
+Kabin enables streaming only after the helper completes an isolated offer and
+answer loopback test successfully.
+
 ## Install
 
 ```bash

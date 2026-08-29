@@ -15,6 +15,44 @@ class TestConfig(unittest.TestCase):
             self.assertTrue(config.sources["steam"])
             self.assertEqual(config.emulation["preset"], "balanced")
             self.assertEqual(config.artwork["steamgriddb_api_key"], "")
+            self.assertFalse(config.network["host_enabled"])
+
+    def test_generates_and_persists_network_token(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            config = Config(path=path)
+            token = config.ensure_network_token()
+            self.assertGreater(len(token), 32)
+            self.assertEqual(Config(path=path).network["token"], token)
+
+    def test_saves_paired_remote_host(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            config = Config(path=path)
+            config.save_remote_host(
+                {"name": "Gaming PC", "address": "192.168.1.5", "port": 42424},
+                "device-token",
+            )
+            remote = Config(path=path).network["remote_hosts"][0]
+            self.assertEqual(remote["name"], "Gaming PC")
+            self.assertEqual(remote["token"], "device-token")
+
+    def test_removes_remote_host(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            config.save_remote_host(
+                {"name": "Host", "address": "10.0.0.2", "port": 42424}, "token"
+            )
+            config.remove_remote_host("Host")
+            self.assertEqual(config.network["remote_hosts"], [])
+
+    def test_revoked_device_token_stops_authenticating(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            token = config.add_paired_device("Living Room")
+            self.assertTrue(config.network_token_valid(token))
+            config.remove_paired_device(0)
+            self.assertFalse(config.network_token_valid(token))
 
     def test_round_trips_rom_dirs(self):
         with tempfile.TemporaryDirectory() as tmp:

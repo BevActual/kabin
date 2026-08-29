@@ -8,6 +8,7 @@ from kabin.artwork import (
     cached_cover,
     clean_game_title,
     fetch_steamgriddb_cover,
+    fetch_remote_cover,
     local_cover,
     resolve_cover,
 )
@@ -101,6 +102,24 @@ class TestArtwork(unittest.TestCase):
             self.assertIsNone(
                 fetch_steamgriddb_cover("Game", "roms:gba:Game.zip", "key", Path(tmp), opener)
             )
+
+    def test_fetches_authenticated_remote_cover_into_separate_cache(self):
+        requests = []
+
+        def opener(request, timeout=None):
+            requests.append(request)
+            return FakeResponse(b"\x89PNG\r\n\x1a\nremote-image")
+
+        host = {"name": "Gaming PC", "address": "10.0.0.2", "port": 42424}
+        with tempfile.TemporaryDirectory() as tmp:
+            cover = fetch_remote_cover(
+                host, "device-token", "roms:gba:test.gba", Path(tmp), opener
+            )
+            self.assertTrue(cover.is_file())
+            self.assertEqual(fetch_remote_cover(host, "device-token", "roms:gba:test.gba", Path(tmp), opener), cover)
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests[0].get_header("Authorization"), "Bearer device-token")
+        self.assertIn("id=roms%3Agba%3Atest.gba", requests[0].full_url)
 
     def test_resolve_cover_uses_cached_art_for_desktop_game(self):
         with tempfile.TemporaryDirectory() as tmp:

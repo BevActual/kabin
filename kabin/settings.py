@@ -10,7 +10,9 @@ from gi.repository import Adw, GLib, Gtk  # noqa: E402
 from .emulation import PRESETS, connected_controllers, settings_for_preset, system_readiness
 from .emulators import detect_emulators, emulator_command, launch_environment
 from .managed import ManagedRuntimeError, install_runtime, recommended_runtime
+from .network import discover_hosts, fetch_remote_library, pair_with_host
 from .systems import SYSTEMS, firmware_files, get_system
+from .streaming import media_capabilities
 
 
 class AddRomDirDialog(Adw.Window):
@@ -233,17 +235,106 @@ class AddRomDirDialog(Adw.Window):
         self.close()
 
 
-class SettingsWindow(Adw.Window):
-    def __init__(self, config, **kwargs):
+class SettingsWindow(Adw.PreferencesWindow):
+    def __init__(self, config, host_service=None, initial_page=None, **kwargs):
         super().__init__(**kwargs)
         self.config = config
-        self.set_title("Settings")
-        self.set_default_size(600, 500)
+        self.host_service = host_service
+        self.set_title("Kabin Settings")
+        self.set_default_size(820, 720)
+        self.set_search_enabled(True)
 
-        toolbar_view = Adw.ToolbarView()
-        toolbar_view.add_top_bar(Adw.HeaderBar())
+        self.network_page = Adw.PreferencesPage(
+            title="Network", icon_name="network-workgroup-symbolic"
+        )
+        self.emulation_page = Adw.PreferencesPage(
+            title="Emulation", icon_name="input-gaming-symbolic"
+        )
+        self.library_page = Adw.PreferencesPage(
+            title="Library", icon_name="view-grid-symbolic"
+        )
+        self.artwork_page = Adw.PreferencesPage(
+            title="Artwork", icon_name="image-x-generic-symbolic"
+        )
+        for page in (
+            self.network_page,
+            self.emulation_page,
+            self.library_page,
+            self.artwork_page,
+        ):
+            self.add(page)
+        page_by_name = {
+            "network": self.network_page,
+            "emulation": self.emulation_page,
+            "library": self.library_page,
+            "artwork": self.artwork_page,
+        }
+        if initial_page in page_by_name:
+            self.set_visible_page(page_by_name[initial_page])
 
-        self.page = Adw.PreferencesPage()
+        network_group = Adw.PreferencesGroup(
+            title="Network",
+            description="Host your Kabin library or discover another Kabin on this network.",
+        )
+        self.host_switch = Adw.SwitchRow(
+            title="Kabin Host",
+            subtitle="Share this library with paired Kabin devices on your local network.",
+        )
+        self.host_switch.set_active(bool(self.config.network["host_enabled"]))
+        self.host_switch.connect("notify::active", self._on_host_toggled)
+        network_group.add(self.host_switch)
+
+        self.host_name_row = Adw.EntryRow(title="Host name")
+        self.host_name_row.set_text(self.config.network["host_name"])
+        self.host_name_row.connect("changed", self._on_host_name_changed)
+        network_group.add(self.host_name_row)
+
+        self.host_status_row = Adw.ActionRow(title="Host status")
+        self._update_host_status()
+        network_group.add(self.host_status_row)
+
+        capabilities = media_capabilities()
+        encoder_names = ", ".join(item["encoder"] for item in capabilities["encoders"])
+        self.media_status_row = Adw.ActionRow(
+            title="Native streaming",
+            subtitle=(
+                f"Ready · {encoder_names}"
+                if capabilities["ready"]
+                else "WebRTC runtime missing · install gst-plugins-bad"
+            ),
+        )
+        self.media_status_row.set_icon_name(
+            "emblem-ok-symbolic" if capabilities["ready"] else "dialog-warning-symbolic"
+        )
+        network_group.add(self.media_status_row)
+
+        pairing_row = Adw.ButtonRow(title="Create Pairing Code")
+        pairing_row.connect("activated", self._on_create_pairing_code)
+        network_group.add(pairing_row)
+        self.pairing_status_row = Adw.ActionRow(
+            title="Pairing", subtitle="Create a one-time code on the host, then enter it on the client."
+        )
+        network_group.add(self.pairing_status_row)
+
+        discover_row = Adw.ButtonRow(title="Find Kabin Hosts")
+        discover_row.connect("activated", self._on_discover_hosts)
+        network_group.add(discover_row)
+        self.remote_code_row = Adw.EntryRow(title="Pairing code from host")
+        network_group.add(self.remote_code_row)
+        self.network_page.add(network_group)
+
+        self.discovered_group = Adw.PreferencesGroup(title="Available Hosts")
+        self.network_page.add(self.discovered_group)
+        self._discovered_rows = []
+        self._show_saved_remote_hosts()
+
+        self.devices_group = Adw.PreferencesGroup(
+            title="Paired Devices",
+            description="Devices allowed to browse this host and create streaming sessions.",
+        )
+        self.network_page.add(self.devices_group)
+        self._device_rows = []
+        self._refresh_paired_devices()
 
         play_group = Adw.PreferencesGroup(
             title="Play Defaults",
@@ -284,7 +375,7 @@ class SettingsWindow(Adw.Window):
             "input-gaming-symbolic" if controllers else "dialog-warning-symbolic"
         )
         play_group.add(controller_row)
-        self.page.add(play_group)
+        self.emulation_page.add(play_group)
 
         artwork_group = Adw.PreferencesGroup(
             title="Game Artwork",
@@ -316,25 +407,26 @@ class SettingsWindow(Adw.Window):
         key_link_row.add_suffix(key_link)
         key_link_row.set_activatable_widget(key_link)
         artwork_group.add(key_link_row)
-        self.page.add(artwork_group)
+        self.artwork_page.add(artwork_group)
 
         sources_group = Adw.PreferencesGroup(title="Sources")
         for source_id, label in (
             ("steam", "Steam"),
             ("desktop", "Other installed apps categorized as Games"),
             ("roms", "ROM directories"),
+            ("remote", "Paired Kabin hosts"),
         ):
             row = Adw.SwitchRow(title=label)
             row.set_active(self.config.sources.get(source_id, True))
             row.connect("notify::active", self._make_source_toggle_handler(source_id))
             sources_group.add(row)
-        self.page.add(sources_group)
+        self.library_page.add(sources_group)
 
         self.readiness_group = Adw.PreferencesGroup(
             title="Emulation Center",
             description="Every console's library, standalone emulator, and firmware status at a glance.",
         )
-        self.page.add(self.readiness_group)
+        self.emulation_page.add(self.readiness_group)
 
         self.roms_group = Adw.PreferencesGroup(
             title="Game Libraries",
@@ -343,14 +435,185 @@ class SettingsWindow(Adw.Window):
         add_row = Adw.ButtonRow(title="Add Game Library")
         add_row.connect("activated", self._on_add_rom_dir)
         self.roms_group.add(add_row)
-        self.page.add(self.roms_group)
-
-        toolbar_view.set_content(self.page)
-        self.set_content(toolbar_view)
+        self.library_page.add(self.roms_group)
 
         self._rom_dir_rows = []
         self._readiness_rows = []
         self._refresh_rom_dir_rows()
+
+    def _on_host_toggled(self, row, _pspec):
+        enabled = row.get_active()
+        self.config.network["host_enabled"] = enabled
+        self.config.save()
+        if self.host_service:
+            if enabled:
+                self.host_service.start()
+            else:
+                self.host_service.stop()
+        self._update_host_status()
+
+    def _on_host_name_changed(self, row):
+        name = row.get_text().strip()
+        if not name:
+            return
+        self.config.network["host_name"] = name
+        self.config.save()
+        if self.host_service and self.host_service.running:
+            self.host_service.stop()
+            self.host_service.start()
+        self._update_host_status()
+
+    def _on_create_pairing_code(self, _row):
+        if not self.host_service or not self.host_service.running:
+            self.pairing_status_row.set_subtitle("Enable Kabin Host before creating a code.")
+            self.pairing_status_row.set_icon_name("dialog-warning-symbolic")
+            return
+        code = self.host_service.create_pairing_code()
+        self.pairing_status_row.set_title(f"Pairing code · {code}")
+        self.pairing_status_row.set_subtitle("Valid for five minutes and one device.")
+        self.pairing_status_row.set_icon_name("channel-secure-symbolic")
+
+    def _show_saved_remote_hosts(self):
+        for row in self._discovered_rows:
+            self.discovered_group.remove(row)
+        self._discovered_rows = []
+        for host in self.config.network.get("remote_hosts", []):
+            row = Adw.ActionRow(
+                title=host["name"],
+                subtitle=f"Paired · {host['address']}:{host['port']}",
+            )
+            row.set_icon_name("emblem-ok-symbolic")
+            disconnect = Gtk.Button(label="Disconnect", valign=Gtk.Align.CENTER)
+            disconnect.add_css_class("destructive-action")
+            disconnect.add_css_class("pill")
+            disconnect.connect(
+                "clicked", lambda _button, name=host["name"]: self._disconnect_host(name)
+            )
+            row.add_suffix(disconnect)
+            self.discovered_group.add(row)
+            self._discovered_rows.append(row)
+
+    def _disconnect_host(self, name):
+        self.config.remove_remote_host(name)
+        self._show_saved_remote_hosts()
+
+    def _refresh_paired_devices(self):
+        for row in self._device_rows:
+            self.devices_group.remove(row)
+        self._device_rows = []
+        devices = self.config.network.get("paired_devices", [])
+        if not devices:
+            row = Adw.ActionRow(
+                title="No paired devices",
+                subtitle="Create a pairing code to authorize another Kabin device.",
+            )
+            row.set_icon_name("network-offline-symbolic")
+            self.devices_group.add(row)
+            self._device_rows.append(row)
+            return
+        for index, device in enumerate(devices):
+            row = Adw.ActionRow(title=device.get("name", "Kabin device"), subtitle="Authorized")
+            row.set_icon_name("channel-secure-symbolic")
+            revoke = Gtk.Button(label="Revoke", valign=Gtk.Align.CENTER)
+            revoke.add_css_class("destructive-action")
+            revoke.add_css_class("pill")
+            revoke.connect("clicked", lambda _button, target=index: self._revoke_device(target))
+            row.add_suffix(revoke)
+            self.devices_group.add(row)
+            self._device_rows.append(row)
+
+    def _revoke_device(self, index):
+        self.config.remove_paired_device(index)
+        self._refresh_paired_devices()
+
+    def _update_host_status(self):
+        if self.host_service and self.host_service.running:
+            self.host_status_row.set_subtitle(
+                f"Online · port {self.host_service.server.server_port} · authentication required"
+            )
+            self.host_status_row.set_icon_name("network-server-symbolic")
+        elif self.host_service and self.host_service.error:
+            self.host_status_row.set_subtitle(f"Could not start · {self.host_service.error}")
+            self.host_status_row.set_icon_name("dialog-error-symbolic")
+        else:
+            self.host_status_row.set_subtitle("Offline")
+            self.host_status_row.set_icon_name("network-offline-symbolic")
+
+    def _on_discover_hosts(self, row):
+        row.set_title("Searching…")
+
+        def worker():
+            hosts = discover_hosts()
+            GLib.idle_add(self._show_discovered_hosts, row, hosts)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _show_discovered_hosts(self, button_row, hosts):
+        button_row.set_title("Find Kabin Hosts")
+        for row in self._discovered_rows:
+            self.discovered_group.remove(row)
+        self._discovered_rows = []
+        if not hosts:
+            row = Adw.ActionRow(
+                title="No hosts found",
+                subtitle="Enable Kabin Host on another computer connected to this network.",
+            )
+            row.set_icon_name("network-offline-symbolic")
+            self.discovered_group.add(row)
+            self._discovered_rows.append(row)
+            return False
+        for host in hosts:
+            row = Adw.ActionRow(
+                title=host["name"], subtitle=f"{host['address']}:{host['port']}"
+            )
+            row.set_icon_name("network-server-symbolic")
+            pair_button = Gtk.Button(label="Pair", valign=Gtk.Align.CENTER)
+            pair_button.add_css_class("suggested-action")
+            pair_button.add_css_class("pill")
+            pair_button.connect(
+                "clicked", lambda _button, selected=host, target=row: self._pair_discovered_host(
+                    selected, target
+                )
+            )
+            row.add_suffix(pair_button)
+            self.discovered_group.add(row)
+            self._discovered_rows.append(row)
+        return False
+
+    def _pair_discovered_host(self, host, row):
+        code = self.remote_code_row.get_text().strip()
+        if len(code) != 6 or not code.isdigit():
+            row.set_subtitle("Enter the six-digit code shown on the host.")
+            row.set_icon_name("dialog-warning-symbolic")
+            return
+        row.set_subtitle("Pairing…")
+
+        def worker():
+            try:
+                result = pair_with_host(
+                    host, code, self.config.network["host_name"]
+                )
+                token = result["token"]
+                library = fetch_remote_library(host, token)
+                error = None
+            except Exception as exc:
+                token, library, error = None, None, str(exc)
+            GLib.idle_add(self._on_pairing_finished, host, row, token, library, error)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_pairing_finished(self, host, row, token, library, error):
+        if error:
+            row.set_subtitle(f"Pairing failed · {error}")
+            row.set_icon_name("dialog-error-symbolic")
+            return False
+        self.config.save_remote_host(host, token)
+        count = library.get("count", 0)
+        row.set_subtitle(f"Paired · {count} games available")
+        row.set_icon_name("emblem-ok-symbolic")
+        self.remote_code_row.set_text("")
+        self._show_saved_remote_hosts()
+        return False
 
     def _on_preset_changed(self, row, _pspec):
         preset_id = self._preset_ids[row.get_selected()]

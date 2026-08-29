@@ -1,4 +1,4 @@
-from . import desktop, roms, steam
+from . import desktop, remote, roms, steam
 
 
 def discover_all(config) -> list:
@@ -28,6 +28,8 @@ def discover_all(config) -> list:
                 emulation_settings=config.emulation,
             )
         )
+    if enabled.get("remote", True):
+        games.extend(remote.get_games(config.network.get("remote_hosts", []), hidden_ids=hidden))
 
     games.sort(key=lambda g: g.sort_key)
     return games

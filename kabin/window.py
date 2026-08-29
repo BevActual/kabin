@@ -10,7 +10,9 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Adw, Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from . import icons  # noqa: E402
+from .artwork import fetch_remote_cover  # noqa: E402
 from .config import Config  # noqa: E402
+from .network import HostService, prepare_remote_session  # noqa: E402
 from .settings import SettingsWindow  # noqa: E402
 from .sources import discover_all  # noqa: E402
 from .sources import steam as steam_source  # noqa: E402
@@ -23,6 +25,7 @@ _SOURCE_BADGE_CANDIDATES = {
     "steam": ["steam-symbolic", "steam", "applications-games-symbolic"],
     "desktop": ["application-x-executable-symbolic", "applications-symbolic"],
     "roms": ["media-removable-symbolic", "applications-games-symbolic"],
+    "remote": ["network-server-symbolic", "network-workgroup-symbolic"],
 }
 
 _SIDEBAR_ICON_CANDIDATES = {
@@ -32,6 +35,7 @@ _SIDEBAR_ICON_CANDIDATES = {
     "steam": ["steam-symbolic", "steam", "applications-games-symbolic"],
     "desktop": ["application-x-executable-symbolic", "applications-symbolic"],
     "roms": ["media-removable-symbolic", "applications-games-symbolic"],
+    "remote": ["network-server-symbolic", "network-workgroup-symbolic"],
 }
 
 CATEGORY_FAVORITES = ("favorite", None)
@@ -76,8 +80,30 @@ class _TileArt:
                 icons.fetch_async(appid, self._on_cover_ready)
             self._load_logo(appid)
             return
+        if game.source == "remote" and game.extra.get("has_artwork"):
+            self._show_icon_plate(Gio.ThemedIcon.new("network-server-symbolic"))
+            threading.Thread(target=self._load_remote_cover, daemon=True).start()
+            return
         gicon = game.gicon or (Gio.ThemedIcon.new(game.icon_name) if game.icon_name else None)
         self._show_icon_plate(gicon)
+
+    def _load_remote_cover(self):
+        game = self.game
+        try:
+            path = fetch_remote_cover(
+                game.extra["host"],
+                game.extra["host"].get("token", ""),
+                game.extra["remote_id"],
+            )
+        except Exception:
+            path = None
+        GLib.idle_add(self._on_remote_cover_ready, path)
+
+    def _on_remote_cover_ready(self, path):
+        if path:
+            self.overlay.set_child(self.picture)
+            self.picture.set_filename(str(path))
+        return False
 
     def _load_logo(self, appid):
         cached_logo = icons.cached_path(appid, kind="logo")
@@ -187,6 +213,7 @@ class MainWindow(Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.config = Config()
+        self.host_service = HostService(self.config, lambda: list(self._games))
         self._category = CATEGORY_HOME
         self._search_text = ""
         self._sidebar_rows = {}
@@ -204,6 +231,9 @@ class MainWindow(Adw.ApplicationWindow):
 
         self._build_ui()
         self.refresh()
+        if self.config.network["host_enabled"]:
+            self.host_service.start()
+        self.connect("close-request", self._on_close_request)
 
         key_controller = Gtk.EventControllerKey()
         key_controller.connect("key-pressed", self._on_key_pressed)
@@ -496,6 +526,12 @@ class MainWindow(Adw.ApplicationWindow):
         favorite_count = sum(1 for g in games if self.config.is_favorite(g.id))
         steam_count = sum(1 for g in games if g.source == "steam")
         desktop_count = sum(1 for g in games if g.source == "desktop")
+        remote_hosts = {g.subtitle for g in games if g.source == "remote" and g.subtitle}
+        remote_hosts.update(
+            host.get("name")
+            for host in self.config.network.get("remote_hosts", [])
+            if host.get("name")
+        )
         systems = {g.subtitle for g in games if g.source == "roms" and g.subtitle}
         for entry in self.config.rom_dirs:
             definition = get_system(entry.get("system", ""))
@@ -511,6 +547,11 @@ class MainWindow(Adw.ApplicationWindow):
             self._add_sidebar_row("Steam", "steam", steam_count, ("source", "steam"))
         if desktop_count:
             self._add_sidebar_row("Other Apps", "desktop", desktop_count, ("source", "desktop"))
+        if remote_hosts:
+            self._add_sidebar_header("KABIN HOSTS")
+            for host in sorted(remote_hosts):
+                count = sum(1 for game in games if game.source == "remote" and game.subtitle == host)
+                self._add_sidebar_row(host, "remote", count, ("host", host))
         if systems:
             self._add_sidebar_header("CONSOLES")
             for system in sorted(systems):
@@ -518,7 +559,8 @@ class MainWindow(Adw.ApplicationWindow):
                 self._add_sidebar_row(system, "roms", count, ("system", system))
 
         self._add_sidebar_header("MANAGE")
-        self._add_sidebar_row("Emulation & Settings", "all", None, ("action", "settings"))
+        self._add_sidebar_row("Network & Hosts", "remote", None, ("action", "network"))
+        self._add_sidebar_row("Emulation Center", "roms", None, ("action", "emulation"))
 
         target_category = preserve_category if preserve_category is not None else CATEGORY_HOME
         target_row = next(
@@ -614,6 +656,8 @@ class MainWindow(Adw.ApplicationWindow):
             return game.source == value
         if kind == "system":
             return game.source == "roms" and game.subtitle == value
+        if kind == "host":
+            return game.source == "remote" and game.subtitle == value
         return True
 
     def _filter_tile(self, child: GameTile) -> bool:
@@ -646,6 +690,8 @@ class MainWindow(Adw.ApplicationWindow):
         if kind == "system":
             title = value
             context = "Console library"
+        elif kind == "host":
+            title, context = value, "Remote Kabin library"
         elif kind == "source" and value == "steam":
             title, context = "Steam", "PC library"
         elif kind == "source" and value == "desktop":
@@ -679,8 +725,8 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_sidebar_selected(self, listbox, row):
         category = self._sidebar_rows.get(row, CATEGORY_HOME) if row else CATEGORY_HOME
-        if category == ("action", "settings"):
-            self._open_settings()
+        if category[0] == "action":
+            self._open_settings(category[1])
             current_row = next(
                 (item for item, value in self._sidebar_rows.items() if value == self._category),
                 None,
@@ -726,7 +772,46 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _launch_selected(self):
         if self._selected_game:
+            if self._selected_game.source == "remote":
+                self._prepare_remote_selected()
+                return
             self._launch_game(self._selected_game)
+
+    def _prepare_remote_selected(self):
+        game = self._selected_game
+        if not game or game.source != "remote":
+            return
+        host = game.extra.get("host", {})
+        token = host.get("token", "")
+        remote_id = game.extra.get("remote_id", "")
+        self.details_play_button.set_label("Preparing…")
+        self.details_play_button.set_sensitive(False)
+
+        def worker():
+            try:
+                session = prepare_remote_session(host, token, remote_id)
+                error = None
+            except Exception as exc:
+                session, error = None, str(exc)
+            GLib.idle_add(self._on_remote_session_prepared, game, session, error)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_remote_session_prepared(self, game, session, error):
+        if self._selected_game is not game:
+            return False
+        if error:
+            self.details_play_button.set_label("Retry Stream")
+            self.details_play_button.set_sensitive(True)
+            self.details_description.set_label(f"Could not prepare the host session · {error}")
+            return False
+        game.extra["session"] = session
+        self.details_play_button.set_label("Session Ready")
+        self.details_play_button.set_sensitive(False)
+        self.details_description.set_label(
+            "The host reserved this game successfully. Waiting for Kabin's native WebRTC media channel before launching."
+        )
+        return False
 
     def _open_details(self, game):
         self._show_details(game)
@@ -785,11 +870,30 @@ class MainWindow(Adw.ApplicationWindow):
 
         self.details_title.set_label(game.title)
         self.details_description.set_label("")
+        self.details_play_button.set_label("Play")
+        self.details_play_button.set_sensitive(bool(game.launch))
         self.details_picture.set_paintable(None)
         self._update_backdrop(None)
 
-        source_labels = {"steam": "Steam", "desktop": "Installed App"}
+        source_labels = {"steam": "Steam", "desktop": "Installed App", "remote": "Kabin Host"}
         meta_parts = [source_labels.get(game.source, game.subtitle or game.source.title())]
+
+        if game.source == "remote":
+            remote_system = game.extra.get("remote_system")
+            if remote_system:
+                meta_parts.append(remote_system)
+            meta_parts.append(game.subtitle)
+            self.details_play_button.set_label("Stream")
+            self.details_play_button.set_sensitive(True)
+            self.details_description.set_label(
+                "Available from this Kabin Host. Native streaming session support is the next network milestone."
+            )
+            if game.extra.get("has_artwork"):
+                threading.Thread(
+                    target=self._load_remote_details_art,
+                    args=(game,),
+                    daemon=True,
+                ).start()
 
         if game.icon_path:
             self.details_picture.set_filename(game.icon_path)
@@ -810,10 +914,33 @@ class MainWindow(Adw.ApplicationWindow):
         self.details_meta.set_label(" · ".join(meta_parts))
         self._update_favorite_button()
 
-    def _open_settings(self):
-        settings_window = SettingsWindow(self.config, transient_for=self)
+    def _load_remote_details_art(self, game):
+        try:
+            host = game.extra["host"]
+            path = fetch_remote_cover(host, host.get("token", ""), game.extra["remote_id"])
+        except Exception:
+            path = None
+        GLib.idle_add(self._on_remote_details_art_ready, game, path)
+
+    def _on_remote_details_art_ready(self, game, path):
+        if path and self._selected_game is game:
+            self.details_picture.set_filename(str(path))
+            self._update_backdrop(path)
+        return False
+
+    def _open_settings(self, page=None):
+        settings_window = SettingsWindow(
+            self.config,
+            host_service=self.host_service,
+            initial_page=page,
+            transient_for=self,
+        )
         settings_window.connect("close-request", lambda *_: self.refresh() or False)
         settings_window.present()
+
+    def _on_close_request(self, *_args):
+        self.host_service.stop()
+        return False
 
     def _on_key_pressed(self, controller, keyval, keycode, state):
         control = bool(state & Gdk.ModifierType.CONTROL_MASK)
