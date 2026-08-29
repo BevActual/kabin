@@ -85,6 +85,12 @@ row:selected .omagames-sidebar-count {
 }
 
 .omagames-content {
+  /* translucent so the backdrop (tinted by this same theme color) shows
+     through - see omagames-backdrop and MainWindow._update_backdrop */
+  background-color: alpha(@bg_color, 0.88);
+}
+
+.omagames-backdrop {
   background-color: @bg_color;
 }
 

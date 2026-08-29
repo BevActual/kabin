@@ -6,7 +6,8 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Gdk", "4.0")
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import Adw, Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from . import icons  # noqa: E402
 from .config import Config  # noqa: E402
@@ -331,8 +332,23 @@ class MainWindow(Adw.ApplicationWindow):
         body_paned.set_end_child(details_widget)
         body_paned.set_resize_end_child(False)
         body_paned.set_shrink_end_child(False)
+        body_paned.set_hexpand(True)
+        body_paned.set_vexpand(True)
 
-        content_page = Adw.NavigationPage(title="Games", child=body_paned)
+        # A heavily downscaled (blurred-by-upscale), theme-tinted backdrop
+        # from the selected game's art - the tint comes from the Omarchy
+        # theme's own background color, not the raw box art, so it still
+        # reads as "this app in your theme" rather than clashing with it.
+        self.backdrop_picture = Gtk.Picture()
+        self.backdrop_picture.set_content_fit(Gtk.ContentFit.COVER)
+        self.backdrop_picture.set_can_shrink(True)
+        self.backdrop_picture.add_css_class("omagames-backdrop")
+
+        body_overlay = Gtk.Overlay()
+        body_overlay.set_child(self.backdrop_picture)
+        body_overlay.add_overlay(body_paned)
+
+        content_page = Adw.NavigationPage(title="Games", child=body_overlay)
         split_view.set_content(content_page)
 
         toolbar_view.set_content(split_view)
@@ -588,6 +604,27 @@ class MainWindow(Adw.ApplicationWindow):
         if self._selected_game:
             self._launch_game(self._selected_game)
 
+    def _update_backdrop(self, cover_path):
+        if cover_path is None:
+            self.backdrop_picture.set_paintable(None)
+            return
+        try:
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file(str(cover_path))
+        except GLib.Error:
+            self.backdrop_picture.set_paintable(None)
+            return
+        # Shrink drastically first so the inevitable upscale-to-fill blurs
+        # it - a cheap stand-in for a real gaussian blur.
+        width, height = pixbuf.get_width(), pixbuf.get_height()
+        scale = 32 / max(width, height, 1)
+        small_width = max(1, round(width * scale))
+        small_height = max(1, round(height * scale))
+        small = pixbuf.scale_simple(small_width, small_height, GdkPixbuf.InterpType.BILINEAR)
+        if small is None:
+            self.backdrop_picture.set_paintable(None)
+            return
+        self.backdrop_picture.set_paintable(Gdk.Texture.new_for_pixbuf(small))
+
     def _toggle_favorite_selected(self):
         if not self._selected_game:
             return
@@ -610,12 +647,14 @@ class MainWindow(Adw.ApplicationWindow):
         self._selected_game = game
         if game is None:
             self.details_stack.set_visible_child_name("empty")
+            self._update_backdrop(None)
             return
         self.details_stack.set_visible_child_name("details")
 
         self.details_title.set_label(game.title)
         self.details_description.set_label("")
         self.details_picture.set_paintable(None)
+        self._update_backdrop(None)
 
         source_labels = {"steam": "Steam", "desktop": "Installed App"}
         meta_parts = [source_labels.get(game.source, game.subtitle or game.source.title())]
@@ -628,6 +667,7 @@ class MainWindow(Adw.ApplicationWindow):
                 cached = icons.cached_path(appid)
                 if cached:
                     self.details_picture.set_filename(str(cached))
+                    self._update_backdrop(cached)
                 metadata = steam_source.load_local_metadata(appid, self.config.data.get("steam_root"))
                 if metadata.get("developers"):
                     meta_parts.append(", ".join(metadata["developers"][:2]))
