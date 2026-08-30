@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "kabin"
 version = "0.1.0"
-description = "A standalone game launcher for Omarchy — Steam, other apps, and ROMs in one grid"
+description = "A personal media cabinet for games, books, music, movies, and more"
 requires-python = ">=3.11"
 authors = [{ name = "Andrew" }]
 

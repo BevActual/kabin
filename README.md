@@ -1,10 +1,11 @@
 # Kabin
 
-Your games live here.
+Your games and media live here.
 
-A standalone game launcher for Omarchy — one fullscreen grid for Steam games,
-other apps categorized as games, and ROMs, instead of switching between
-Steam, a file manager, and an emulator.
+Kabin is a personal media cabinet that starts with a polished game library for
+Steam, installed apps, and ROMs. Its paired host and generic catalog foundation
+are expanding toward ebooks, comics, music, movies, and TV without requiring a
+different server and interface for every kind of media.
 
 This is not an Omarchy shell plugin. It's a regular GTK4/libadwaita app you
 launch like any other, and it isn't tied to the Quickshell bar.

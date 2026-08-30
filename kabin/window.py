@@ -1,6 +1,7 @@
 import threading
 import time
 from functools import lru_cache
+from pathlib import Path
 
 import gi
 
@@ -42,6 +43,7 @@ _SIDEBAR_ICON_CANDIDATES = {
 }
 
 CATEGORY_FAVORITES = ("favorite", None)
+_BRAND_MARK = Path(__file__).resolve().parent.parent / "data" / "kabin-mark.svg"
 
 _remote_artwork = ArtworkQueue(
     fetch_remote_cover,
@@ -254,7 +256,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         brand_box = Gtk.Box(spacing=6)
         brand_box.add_css_class("kabin-brand")
-        brand_icon = Gtk.Image.new_from_icon_name("applications-games-symbolic")
+        brand_icon = Gtk.Image.new_from_file(str(_BRAND_MARK))
         brand_icon.add_css_class("kabin-brand-mark")
         brand_word = Gtk.Label(label="KABIN")
         brand_word.add_css_class("kabin-brand-word")

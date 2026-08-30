@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
 Name=Kabin
-GenericName=Game Launcher
-Comment=Launch Steam, other apps, and ROMs from one grid
+GenericName=Personal Media Library
+Comment=Browse, play, and share your games and personal media
 Exec=kabin
-Icon=applications-games
-Categories=Game;
+Icon=com.andrewbevington.Kabin
+Categories=AudioVideo;Player;
 Terminal=false
 StartupNotify=true

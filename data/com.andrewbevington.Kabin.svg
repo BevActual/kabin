@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="shell" x1="24" y1="16" x2="108" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#282e3b"/>
+      <stop offset="1" stop-color="#141820"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="35" y1="29" x2="91" y2="100" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffd08a"/>
+      <stop offset="0.48" stop-color="#ffb454"/>
+      <stop offset="1" stop-color="#ed7d35"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+  <rect x="7" y="7" width="114" height="114" rx="30" fill="#090b10"/>
+  <rect x="18" y="18" width="92" height="92" rx="23" fill="url(#shell)" stroke="#353c4b" stroke-width="2"/>
+  <path d="M39 31v66m7-33 43-32M46 64l43 33" fill="none" stroke="#ff9f43" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity=".22" filter="url(#glow)"/>
+  <path d="M39 31v66m7-33 43-32M46 64l43 33" fill="none" stroke="url(#mark)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M95 35v58" stroke="#596172" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="95" cy="99" r="4" fill="#ffb454"/>
+</svg>
