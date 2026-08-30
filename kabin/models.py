@@ -3,17 +3,29 @@ from typing import Any, Callable, Optional
 
 
 @dataclass
-class Game:
+class LibraryItem:
     id: str
     title: str
-    source: str  # "steam" | "desktop" | "roms"
+    source: str
     subtitle: str = ""
     icon_path: Optional[str] = None
     icon_name: Optional[str] = None
-    gicon: Optional[Any] = None  # Gio.Icon, for sources that expose one (e.g. desktop entries)
+    gicon: Optional[Any] = None
     launch: Optional[Callable[[], None]] = None
     extra: dict = field(default_factory=dict)
+    media_type: str = "game"
+    media_format: str = ""
+    category: str = ""
+    genres: list[str] = field(default_factory=list)
+    creators: list[str] = field(default_factory=list)
+    series: str = ""
+    series_index: float | None = None
 
     @property
     def sort_key(self) -> str:
         return self.title.casefold()
+
+
+# Compatibility name while game sources and emulator adapters migrate to the
+# broader catalog terminology.
+Game = LibraryItem

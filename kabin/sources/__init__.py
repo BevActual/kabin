@@ -1,7 +1,7 @@
 from . import desktop, remote, roms, steam
 
 
-def discover_all(config) -> list:
+def discover_all_with_status(config) -> tuple[list, dict]:
     hidden = set(config.hidden)
     enabled = config.sources
 
@@ -28,8 +28,17 @@ def discover_all(config) -> list:
                 emulation_settings=config.emulation,
             )
         )
+    host_statuses = {}
     if enabled.get("remote", True):
-        games.extend(remote.get_games(config.network.get("remote_hosts", []), hidden_ids=hidden))
+        remote_games, host_statuses = remote.discover(
+            config.network.get("remote_hosts", []), hidden_ids=hidden
+        )
+        games.extend(remote_games)
 
     games.sort(key=lambda g: g.sort_key)
+    return games, host_statuses
+
+
+def discover_all(config) -> list:
+    games, _host_statuses = discover_all_with_status(config)
     return games

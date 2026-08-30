@@ -16,6 +16,19 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.emulation["preset"], "balanced")
             self.assertEqual(config.artwork["steamgriddb_api_key"], "")
             self.assertFalse(config.network["host_enabled"])
+            self.assertEqual(config.window["width"], 1100)
+            self.assertFalse(config.window["maximized"])
+
+    def test_persists_window_state_without_overwriting_restored_size_when_maximized(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            config = Config(path=path)
+            config.save_window_state(900, 640, False)
+            config.save_window_state(1920, 1080, True)
+
+            restored = Config(path=path).window
+            self.assertEqual((restored["width"], restored["height"]), (900, 640))
+            self.assertTrue(restored["maximized"])
 
     def test_generates_and_persists_network_token(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -98,10 +111,12 @@ class TestConfig(unittest.TestCase):
     def test_hide_and_unhide(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = Config(path=Path(tmp) / "config.json")
-            config.hide("steam:553850")
+            config.hide("steam:553850", "Helldivers 2")
             self.assertTrue(config.is_hidden("steam:553850"))
+            self.assertEqual(config.hidden_titles["steam:553850"], "Helldivers 2")
             config.unhide("steam:553850")
             self.assertFalse(config.is_hidden("steam:553850"))
+            self.assertNotIn("steam:553850", config.hidden_titles)
 
     def test_ignores_corrupt_file(self):
         with tempfile.TemporaryDirectory() as tmp:

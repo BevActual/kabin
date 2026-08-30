@@ -1,12 +1,24 @@
-/* Kabin — layered on top of dynamically generated @define-color tokens
-   (see kabin/style.py), which are pulled from the active Omarchy theme. */
+/* Kabin's owned dark visual system. Palette tokens live in kabin/style.py. */
 
 .kabin-window {
   background-color: @bg_darker_color;
 }
 
+.kabin-settings {
+  background-color: @bg_color;
+}
+
+.kabin-window popover > contents,
+.kabin-settings popover > contents {
+  background-color: @bg_light_color;
+  border: 1px solid alpha(@fg_color, 0.10);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px alpha(black, 0.45);
+}
+
 .kabin-topbar {
   background-color: @bg_dark_color;
+  border-bottom: 1px solid alpha(@fg_color, 0.07);
 }
 
 .kabin-brand {
@@ -20,18 +32,21 @@
 }
 
 .kabin-brand-word {
-  font-weight: 800;
-  font-size: 14px;
   letter-spacing: 2px;
   color: @fg_color;
 }
 
 .kabin-search {
-  min-width: 380px;
+  min-width: 220px;
 }
 
 .kabin-icon-button {
   border-radius: 999px;
+}
+
+.kabin-filter-active {
+  color: @accent_color;
+  background-color: alpha(@accent_color, 0.16);
 }
 
 .kabin-sidebar {
@@ -41,8 +56,6 @@
 
 .kabin-sidebar-header {
   color: @fg_dim_color;
-  font-size: 11px;
-  font-weight: 700;
   letter-spacing: 1px;
   padding: 14px 12px 4px 12px;
 }
@@ -75,8 +88,6 @@ row:selected .kabin-sidebar-label {
   color: @fg_dim_color;
   border-radius: 999px;
   padding: 1px 8px;
-  font-size: 11px;
-  font-weight: 600;
 }
 
 row:selected .kabin-sidebar-count {
@@ -92,13 +103,10 @@ row:selected .kabin-sidebar-count {
 
 .kabin-library-title {
   color: @fg_color;
-  font-size: 26px;
-  font-weight: 800;
 }
 
 .kabin-library-subtitle {
   color: @fg_dim_color;
-  font-size: 13px;
 }
 
 .kabin-backdrop {
@@ -115,8 +123,18 @@ row:selected .kabin-sidebar-count {
 
 .kabin-tile:hover,
 .kabin-tile:focus,
-.kabin-tile:selected {
+.kabin-tile:selected,
+.kabin-game-grid > child:selected .kabin-tile {
   box-shadow: 0 0 0 3px @accent_color, 0 6px 18px alpha(black, 0.5);
+  background-color: @muted_color;
+}
+
+.kabin-game-grid {
+  padding: 4px;
+}
+
+.kabin-tile-art {
+  border-radius: 14px 14px 0 0;
   background-color: @muted_color;
 }
 
@@ -124,29 +142,19 @@ row:selected .kabin-sidebar-count {
   background-color: @muted_color;
 }
 
-.kabin-tile-scrim {
-  background-image: linear-gradient(
-    to top,
-    alpha(black, 0.92) 0%,
-    alpha(black, 0.55) 60%,
-    transparent 100%
-  );
-  padding: 26px 10px 8px 10px;
+.kabin-tile-text {
+  padding: 9px 10px 10px;
 }
 
 .kabin-tile-title {
-  color: white;
-  font-weight: 700;
-  font-size: 13px;
+  color: @fg_color;
 }
 
-.kabin-tile-logo {
-  margin-bottom: 2px;
+.kabin-tile-subtitle {
+  color: @fg_dim_color;
 }
 
 .kabin-shelf-header {
-  font-size: 15px;
-  font-weight: 800;
   color: @fg_color;
 }
 
@@ -173,8 +181,6 @@ row:selected .kabin-sidebar-count {
 
 .kabin-shortcut {
   color: @fg_dim_color;
-  font-size: 11px;
-  font-weight: 600;
 }
 
 .kabin-details-page {
@@ -193,17 +199,13 @@ row:selected .kabin-sidebar-count {
 }
 
 .kabin-details-title {
-  font-size: 36px;
-  font-weight: 800;
   color: @fg_color;
 }
 
 .kabin-details-meta {
   color: @fg_dim_color;
-  font-size: 14px;
 }
 
 .kabin-details-description {
   color: @fg_color;
-  font-size: 15px;
 }

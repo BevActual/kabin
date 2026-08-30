@@ -243,6 +243,7 @@ class SettingsWindow(Adw.PreferencesWindow):
         self.set_title("Kabin Settings")
         self.set_default_size(820, 720)
         self.set_search_enabled(True)
+        self.add_css_class("kabin-settings")
 
         self.network_page = Adw.PreferencesPage(
             title="Network", icon_name="network-workgroup-symbolic"
@@ -421,6 +422,14 @@ class SettingsWindow(Adw.PreferencesWindow):
             row.connect("notify::active", self._make_source_toggle_handler(source_id))
             sources_group.add(row)
         self.library_page.add(sources_group)
+
+        self.hidden_group = Adw.PreferencesGroup(
+            title="Hidden Games",
+            description="Restore games that were hidden from their detail page.",
+        )
+        self.library_page.add(self.hidden_group)
+        self._hidden_rows = []
+        self._refresh_hidden_games()
 
         self.readiness_group = Adw.PreferencesGroup(
             title="Emulation Center",
@@ -641,6 +650,30 @@ class SettingsWindow(Adw.PreferencesWindow):
             self.config.save()
 
         return handler
+
+    def _refresh_hidden_games(self):
+        for row in self._hidden_rows:
+            self.hidden_group.remove(row)
+        self._hidden_rows = []
+        self.hidden_group.set_visible(bool(self.config.hidden))
+        for game_id in self.config.hidden:
+            row = Adw.ActionRow(
+                title=self.config.hidden_titles.get(game_id, "Hidden game"),
+                subtitle=game_id,
+            )
+            row.set_icon_name("view-conceal-symbolic")
+            restore = Gtk.Button(label="Restore", valign=Gtk.Align.CENTER)
+            restore.add_css_class("pill")
+            restore.connect(
+                "clicked", lambda _button, target=game_id: self._restore_hidden_game(target)
+            )
+            row.add_suffix(restore)
+            self.hidden_group.add(row)
+            self._hidden_rows.append(row)
+
+    def _restore_hidden_game(self, game_id):
+        self.config.unhide(game_id)
+        self._refresh_hidden_games()
 
     def _refresh_rom_dir_rows(self):
         for row in self._readiness_rows:

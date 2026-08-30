@@ -1,4 +1,5 @@
 import unittest
+import urllib.error
 
 from kabin.sources import remote
 
@@ -34,6 +35,27 @@ class TestRemoteSource(unittest.TestCase):
 
         self.assertEqual(remote.get_games([host], fetcher=fetcher), [])
 
+        games, statuses = remote.discover([host], fetcher=fetcher)
+        self.assertEqual(games, [])
+        self.assertEqual(statuses["Offline"]["state"], "offline")
+
+    def test_authentication_failure_requests_repair(self):
+        host = {"name": "Host", "token": "expired"}
+
+        def fetcher(_host, _token):
+            raise urllib.error.HTTPError("https://host", 401, "Unauthorized", {}, None)
+
+        _games, statuses = remote.discover([host], fetcher=fetcher)
+        self.assertEqual(statuses["Host"]["state"], "auth")
+        self.assertEqual(statuses["Host"]["message"], "Re-pair required")
+
+    def test_successful_host_is_reported_online(self):
+        host = {"name": "Host", "token": "token"}
+        _games, statuses = remote.discover(
+            [host], fetcher=lambda *_args: {"games": []}
+        )
+        self.assertEqual(statuses["Host"]["state"], "online")
+
     def test_remote_game_defers_transferred_artwork(self):
         host = {"name": "Host", "token": "t"}
         payload = {
@@ -42,6 +64,17 @@ class TestRemoteSource(unittest.TestCase):
         games = remote.get_games([host], fetcher=lambda *_args: payload)
         self.assertIsNone(games[0].icon_path)
         self.assertTrue(games[0].extra["has_artwork"])
+
+    def test_game_view_ignores_non_game_catalog_items_for_now(self):
+        host = {"name": "Host", "token": "t"}
+        payload = {
+            "items": [
+                {"id": "book:1", "title": "Book", "media_type": "book"},
+                {"id": "steam:1", "title": "Game", "media_type": "game"},
+            ]
+        }
+        games = remote.get_games([host], fetcher=lambda *_args: payload)
+        self.assertEqual([game.title for game in games], ["Game"])
 
 
 if __name__ == "__main__":

@@ -13,12 +13,14 @@ DEFAULT_CONFIG = {
     # each: {"path": str, "system": str, "extensions": [str], "emulator": "cmd {rom}"}
     "rom_dirs": [],
     "hidden": [],
+    "hidden_titles": {},
     "sources": {"steam": True, "desktop": True, "roms": True, "remote": True},
     "steam_root": None,
     "recent": {},  # game id -> unix timestamp of last launch through kabin
     "favorites": [],
     "emulation": DEFAULT_EMULATION_SETTINGS,
     "artwork": {"steamgriddb_api_key": ""},
+    "window": {"width": 1100, "height": 720, "maximized": False},
     "network": {
         "host_enabled": False,
         "host_name": "",
@@ -85,15 +87,22 @@ class Config:
     def is_hidden(self, game_id: str) -> bool:
         return game_id in self.hidden
 
-    def hide(self, game_id: str):
+    @property
+    def hidden_titles(self) -> dict:
+        return self.data.setdefault("hidden_titles", {})
+
+    def hide(self, game_id: str, title: str | None = None):
         if game_id not in self.hidden:
             self.hidden.append(game_id)
-            self.save()
+        if title:
+            self.hidden_titles[game_id] = title
+        self.save()
 
     def unhide(self, game_id: str):
         if game_id in self.hidden:
             self.hidden.remove(game_id)
-            self.save()
+        self.hidden_titles.pop(game_id, None)
+        self.save()
 
     def add_rom_dir(self, path: str, system: str, extensions: list, emulator, bios_path=None):
         entry = {"path": path, "system": system, "extensions": extensions, "emulator": emulator}
@@ -133,6 +142,20 @@ class Config:
     @property
     def artwork(self) -> dict:
         return self.data.setdefault("artwork", {"steamgriddb_api_key": ""})
+
+    @property
+    def window(self) -> dict:
+        settings = self.data.setdefault("window", dict(DEFAULT_CONFIG["window"]))
+        for key, value in DEFAULT_CONFIG["window"].items():
+            settings.setdefault(key, value)
+        return settings
+
+    def save_window_state(self, width: int, height: int, maximized: bool):
+        if not maximized:
+            self.window["width"] = max(640, int(width))
+            self.window["height"] = max(480, int(height))
+        self.window["maximized"] = bool(maximized)
+        self.save()
 
     @property
     def network(self) -> dict:

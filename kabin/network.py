@@ -53,15 +53,37 @@ def ensure_host_certificate(root: Path | None = None) -> tuple[Path, Path, str]:
     return certificate, private_key, fingerprint
 
 
-def serialize_game(game) -> dict:
+def serialize_item(item) -> dict:
     """Public catalog representation: deliberately excludes paths and commands."""
+    media_type = getattr(item, "media_type", "game")
     return {
-        "id": game.id,
-        "title": game.title,
-        "source": game.source,
-        "system": game.subtitle,
-        "has_artwork": bool(game.icon_path),
+        "id": item.id,
+        "title": item.title,
+        "media_type": media_type,
+        "media_format": getattr(item, "media_format", ""),
+        "category": getattr(item, "category", ""),
+        "genres": list(getattr(item, "genres", [])),
+        "creators": list(getattr(item, "creators", [])),
+        "series": getattr(item, "series", ""),
+        "series_index": getattr(item, "series_index", None),
+        "source": item.source,
+        "section": item.subtitle,
+        "system": item.subtitle if media_type == "game" else "",
+        "has_artwork": bool(item.icon_path),
     }
+
+
+def serialize_game(game) -> dict:
+    """Backward-compatible name for callers using the v1 game catalog."""
+    return serialize_item(game)
+
+
+def _catalog_counts(items: list[dict]) -> dict[str, int]:
+    counts = {}
+    for item in items:
+        media_type = item.get("media_type", "unknown")
+        counts[media_type] = counts.get(media_type, 0) + 1
+    return counts
 
 
 class _KabinHTTPServer(ThreadingHTTPServer):
@@ -166,8 +188,17 @@ class HostService:
                     if not self._authorized():
                         self._json(HTTPStatus.UNAUTHORIZED, {"error": "authentication required"})
                         return
-                    games = [serialize_game(game) for game in service.catalog_provider()]
-                    self._json(HTTPStatus.OK, {"games": games, "count": len(games)})
+                    items = [serialize_item(item) for item in service.catalog_provider()]
+                    games = [item for item in items if item["media_type"] == "game"]
+                    self._json(
+                        HTTPStatus.OK,
+                        {
+                            "items": items,
+                            "games": games,
+                            "count": len(items),
+                            "counts": _catalog_counts(items),
+                        },
+                    )
                     return
                 if self.path == "/v1/media/capabilities":
                     if not self._authorized():

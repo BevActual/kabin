@@ -33,6 +33,10 @@ class TestNetwork(unittest.TestCase):
         )
         public = serialize_game(game)
         self.assertEqual(public["title"], "Test")
+        self.assertEqual(public["media_type"], "game")
+        self.assertEqual(public["section"], "Game Boy Advance")
+        self.assertEqual(public["genres"], [])
+        self.assertEqual(public["creators"], [])
         self.assertNotIn("extra", public)
         self.assertNotIn("launch", public)
 
@@ -71,6 +75,8 @@ class TestNetwork(unittest.TestCase):
             }
             payload = fetch_remote_library(host, config.ensure_network_token())
             self.assertEqual(payload["count"], 1)
+            self.assertEqual(payload["counts"], {"game": 1})
+            self.assertEqual(payload["items"], payload["games"])
             host["fingerprint"] = "0" * 64
             with self.assertRaisesRegex(Exception, "fingerprint changed"):
                 fetch_remote_library(host, config.ensure_network_token())
