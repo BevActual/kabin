@@ -439,6 +439,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._playback_auth = None
         self._seeking = False
         self._last_progress_save = 0.0
+        self._player_art_path = None
         self._closing = False
         self._nav_target = "home"
         self._home_focus_rows = []
@@ -722,11 +723,18 @@ class MainWindow(Adw.ApplicationWindow):
         now.connect("clicked", self._open_playing_details)
         now_row = Gtk.Box(spacing=12)
         self.player_art = Gtk.Picture()
-        self.player_art.set_size_request(52, 52)
         self.player_art.set_can_shrink(True)
-        self.player_art.set_overflow(Gtk.Overflow.HIDDEN)
-        self.player_art.add_css_class("kabin-player-art")
-        now_row.append(self.player_art)
+        player_art_frame = Gtk.Overlay()
+        player_art_frame.set_size_request(52, 52)
+        player_art_frame.set_hexpand(False)
+        player_art_frame.set_vexpand(False)
+        player_art_frame.set_halign(Gtk.Align.START)
+        player_art_frame.set_valign(Gtk.Align.START)
+        player_art_frame.set_overflow(Gtk.Overflow.HIDDEN)
+        player_art_frame.add_css_class("kabin-player-art")
+        player_art_frame.set_child(Gtk.Box())
+        player_art_frame.add_overlay(self.player_art)
+        now_row.append(player_art_frame)
         copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, valign=Gtk.Align.CENTER)
         copy.set_size_request(180, -1)
         self.player_title = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
@@ -1872,10 +1880,12 @@ class MainWindow(Adw.ApplicationWindow):
         if len(self._playback_queue) > 1:
             suffix = f" · {self._playback_index + 1}/{len(self._playback_queue)}"
         self.player_track.set_label((entry.get("title") or kind_for(game).verb) + suffix)
-        if game.icon_path:
-            self.player_art.set_filename(game.icon_path)
-        else:
-            self.player_art.set_paintable(None)
+        if game.icon_path != self._player_art_path:
+            self._player_art_path = game.icon_path
+            if game.icon_path:
+                self.player_art.set_filename(game.icon_path)
+            else:
+                self.player_art.set_paintable(None)
         self.player_prev.set_sensitive(self._playback_index > 0)
         self.player_next.set_sensitive(self._playback_index + 1 < len(self._playback_queue))
         self.player_pause.set_icon_name(
