@@ -493,7 +493,6 @@ class SettingsWindow(Adw.PreferencesWindow):
             "https://www.steamgriddb.com/profile/preferences",
             "Get an API key",
         )
-        key_link.add_css_class("pill")
         key_link_row = Adw.ActionRow(
             title="SteamGridDB account",
             subtitle="Generate or manage your personal API key",
@@ -502,6 +501,30 @@ class SettingsWindow(Adw.PreferencesWindow):
         key_link_row.set_activatable_widget(key_link)
         artwork_group.add(key_link_row)
         self.artwork_page.add(artwork_group)
+
+        book_art_group = Adw.PreferencesGroup(
+            title="Book Artwork",
+            description="Missing book jackets are fetched from Open Library after the library is on screen. No API key.",
+        )
+        self.openlibrary_switch = Adw.SwitchRow(
+            title="Open Library covers",
+            subtitle="Search by title and author, then cache the jacket locally",
+        )
+        self.openlibrary_switch.set_active(bool(self.config.artwork.get("openlibrary_covers", True)))
+        self.openlibrary_switch.connect("notify::active", self._on_openlibrary_changed)
+        book_art_group.add(self.openlibrary_switch)
+        ol_link = Gtk.LinkButton.new_with_label(
+            "https://openlibrary.org",
+            "Open Library",
+        )
+        ol_link_row = Adw.ActionRow(
+            title="Cover source",
+            subtitle="Internet Archive's public book catalog",
+        )
+        ol_link_row.add_suffix(ol_link)
+        ol_link_row.set_activatable_widget(ol_link)
+        book_art_group.add(ol_link_row)
+        self.artwork_page.add(book_art_group)
 
         sources_group = Adw.PreferencesGroup(title="Sources")
         for source_id, label in (
@@ -602,7 +625,6 @@ class SettingsWindow(Adw.PreferencesWindow):
             row.set_icon_name("emblem-ok-symbolic")
             disconnect = Gtk.Button(label="Disconnect", valign=Gtk.Align.CENTER)
             disconnect.add_css_class("destructive-action")
-            disconnect.add_css_class("pill")
             disconnect.connect(
                 "clicked", lambda _button, name=host["name"]: self._disconnect_host(name)
             )
@@ -633,7 +655,6 @@ class SettingsWindow(Adw.PreferencesWindow):
             row.set_icon_name("channel-secure-symbolic")
             revoke = Gtk.Button(label="Revoke", valign=Gtk.Align.CENTER)
             revoke.add_css_class("destructive-action")
-            revoke.add_css_class("pill")
             revoke.connect("clicked", lambda _button, target=index: self._revoke_device(target))
             row.add_suffix(revoke)
             self.devices_group.add(row)
@@ -686,7 +707,6 @@ class SettingsWindow(Adw.PreferencesWindow):
             row.set_icon_name("network-server-symbolic")
             pair_button = Gtk.Button(label="Pair", valign=Gtk.Align.CENTER)
             pair_button.add_css_class("suggested-action")
-            pair_button.add_css_class("pill")
             pair_button.connect(
                 "clicked", lambda _button, selected=host, target=row: self._pair_discovered_host(
                     selected, target
@@ -752,6 +772,10 @@ class SettingsWindow(Adw.PreferencesWindow):
         self.config.artwork["steamgriddb_api_key"] = row.get_text().strip()
         self.config.save()
 
+    def _on_openlibrary_changed(self, row, _pspec):
+        self.config.artwork["openlibrary_covers"] = bool(row.get_active())
+        self.config.save()
+
     def _on_stream_resolution_changed(self, row, _pspec):
         selected = row.get_selected()
         if 0 <= selected < len(self._resolution_ids):
@@ -777,7 +801,6 @@ class SettingsWindow(Adw.PreferencesWindow):
             )
             row.set_icon_name("view-conceal-symbolic")
             restore = Gtk.Button(label="Restore", valign=Gtk.Align.CENTER)
-            restore.add_css_class("pill")
             restore.connect(
                 "clicked", lambda _button, target=game_id: self._restore_hidden_game(target)
             )
@@ -808,7 +831,6 @@ class SettingsWindow(Adw.PreferencesWindow):
             emulator = entry.get("emulator") if entry else None
             if isinstance(emulator, dict) and emulator.get("executable"):
                 test_button = Gtk.Button(label="Test", valign=Gtk.Align.CENTER)
-                test_button.add_css_class("pill")
                 test_button.connect(
                     "clicked", lambda _button, profile=emulator, target=row: self._test_emulator(
                         profile, target
@@ -818,7 +840,6 @@ class SettingsWindow(Adw.PreferencesWindow):
             elif entry is None:
                 setup_button = Gtk.Button(label="Setup", valign=Gtk.Align.CENTER)
                 setup_button.add_css_class("suggested-action")
-                setup_button.add_css_class("pill")
                 setup_button.connect(
                     "clicked", lambda _button, system_id=system.id: self._open_system_setup(
                         system_id

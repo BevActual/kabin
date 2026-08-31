@@ -53,6 +53,16 @@ class TestPlayback(unittest.TestCase):
             self.assertEqual(playable_tracks(item), [album / "a.flac", album / "b.flac"])
             self.assertEqual(playable_file(item), album / "a.flac")
             self.assertEqual(local_queue(item)[0]["title"], "a")
+            (album / "Artist - Album - 02 Late.flac").write_bytes(b"c")
+            (album / "Artist - Album - 01 Early.flac").write_bytes(b"d")
+            numbered = SimpleNamespace(
+                extra={"path": str(album)},
+                media_type="music",
+                title="Album",
+                creators=["Artist"],
+            )
+            queue = local_queue(numbered)
+            self.assertEqual([entry["title"] for entry in queue[:2]], ["Early", "Late"])
 
     def test_safe_media_file_stays_inside_configured_dirs(self):
         with tempfile.TemporaryDirectory() as tmp:

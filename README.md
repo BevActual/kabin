@@ -43,11 +43,15 @@ standalone emulator adapter as support is added. Connected Linux game
 controllers are shown alongside these defaults.
 
 Optional console cover art comes from SteamGridDB. Add a personal API key in
-Settings → Game Artwork; Kabin then sends normalized game titles to the
+Settings → Artwork; Kabin then sends normalized game titles to the
 SteamGridDB search API and caches portrait covers locally. The key is stored
 only in Kabin's owner-readable configuration file. The same artwork pipeline
 is used for console libraries and non-Steam games; native application icons
 remain the fallback when no cover is available.
+
+Book jackets without an embedded EPUB cover come from Open Library. Kabin
+searches by title and author, then caches the image under `~/.cache/kabin`.
+No API key is required; the fetch can be turned off in Settings → Artwork.
 
 For DuckStation, PCSX2, and PPSSPP, Kabin can download a portable Linux
 runtime directly from the emulator's official GitHub releases. Downloads are
@@ -114,10 +118,10 @@ per-source enable/disable, hidden game ids).
 
 ## Shortcuts
 
-A controller can browse the cabinet. D-pad or left stick moves, A opens a
-title, B goes back, Y favorites, LB/RB change library, L3 picks a random
-title, and Start opens Settings. Letter keys jump to that letter in the
-current list, like ES-DE.
+Kabin is meant for mouse, keyboard, gamepads, and touch. On a controller,
+D-pad or left stick moves, A opens a title, B goes back, Y favorites,
+LB/RB change library, L3 picks a random title, and Start opens Settings.
+Letter keys jump to that letter in the current list.
 
 - `Ctrl+F` or `/` — focus search
 - `A`–`Z` or `0`–`9` — jump to the first matching title

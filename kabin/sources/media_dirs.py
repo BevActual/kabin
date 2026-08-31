@@ -4,9 +4,10 @@ import os
 import subprocess
 from pathlib import Path
 
-from ..artwork import clean_game_title, folder_cover, local_cover
+from ..artwork import book_artwork_root, cached_cover, extract_epub_cover, folder_cover, local_cover
 from ..kinds import FOLDER_KINDS, get_kind
 from ..models import LibraryItem
+from ..titles import parse_media_name
 
 _SKIP_DIRS = {"covers", "media", "images", "manuals", "videos", ".git"}
 
@@ -40,22 +41,36 @@ def _open(path: Path):
     subprocess.Popen(["xdg-open", str(path)], start_new_session=True)
 
 
+def _cover_for(path: Path) -> Path | None:
+    return local_cover(path) or folder_cover(path.parent) or extract_epub_cover(path)
+
+
 def _file_item(kind, base: Path, path: Path, hidden_ids) -> LibraryItem | None:
     item_id = _item_id(kind.id, base, path)
     if item_id in hidden_ids:
         return None
-    cover = local_cover(path) or folder_cover(path.parent)
+    parsed = parse_media_name(path.name, kind.id)
+    cover = _cover_for(path)
+    if cover is None and kind.id == "book":
+        cover = cached_cover(item_id, book_artwork_root())
     return LibraryItem(
         id=item_id,
-        title=clean_game_title(path.name),
+        title=parsed.title,
         source=kind.source,
         subtitle=kind.label,
         icon_path=str(cover) if cover else None,
         icon_name=kind.icon,
         launch=lambda target=path: _open(target),
-        extra={"path": str(path), "added_at": path.stat().st_mtime},
+        extra={
+            "path": str(path),
+            "added_at": path.stat().st_mtime,
+            "needs_artwork": cover is None and kind.id == "book",
+        },
         media_type=kind.id,
         media_format=path.suffix.lower().lstrip("."),
+        creators=list(parsed.creators),
+        series=parsed.series,
+        series_index=parsed.series_index,
     )
 
 
@@ -63,10 +78,11 @@ def _album_item(kind, base: Path, folder: Path, tracks: list[Path], hidden_ids) 
     item_id = _item_id(kind.id, base, folder)
     if item_id in hidden_ids:
         return None
+    parsed = parse_media_name(folder.name, kind.id)
     cover = folder_cover(folder) or local_cover(tracks[0])
     return LibraryItem(
         id=item_id,
-        title=clean_game_title(folder.name),
+        title=parsed.title,
         source=kind.source,
         subtitle=kind.plural,
         icon_path=str(cover) if cover else None,
@@ -79,6 +95,9 @@ def _album_item(kind, base: Path, folder: Path, tracks: list[Path], hidden_ids) 
         },
         media_type=kind.id,
         media_format="album",
+        creators=list(parsed.creators),
+        series=parsed.series,
+        series_index=parsed.series_index,
     )
 
 

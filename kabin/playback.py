@@ -3,9 +3,9 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from .artwork import clean_game_title
 from .kinds import kind_for
 from .streaming import native_helper_path
+from .titles import clean_track_title, track_sort_key
 
 PLAY_IN_KABIN = frozenset({"video", "music"})
 RESUME_AFTER = 5
@@ -121,12 +121,13 @@ def playable_tracks(item) -> list[Path]:
     if not path.is_dir():
         return []
     tracks = []
-    for child in sorted(path.iterdir()):
+    for child in path.iterdir():
         if child.name.startswith(".") or child.is_symlink() or not child.is_file():
             continue
         if kind.extensions and child.suffix.lower() not in kind.extensions:
             continue
         tracks.append(child)
+    tracks.sort(key=track_sort_key)
     return tracks
 
 
@@ -148,10 +149,13 @@ def track_count(item) -> int:
 
 def local_queue(item) -> list[dict]:
     tracks = playable_tracks(item)
+    creators = getattr(item, "creators", None) or []
+    artist = creators[0] if creators else ""
+    album = getattr(item, "title", "") or ""
     return [
         {
             "track": index,
-            "title": clean_game_title(path.name),
+            "title": clean_track_title(path.name, album=album, artist=artist),
             "uri": path.resolve().as_uri(),
         }
         for index, path in enumerate(tracks)

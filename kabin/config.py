@@ -39,7 +39,7 @@ DEFAULT_CONFIG = {
     "play_counts": {},
     "favorites": [],
     "emulation": DEFAULT_EMULATION_SETTINGS,
-    "artwork": {"steamgriddb_api_key": ""},
+    "artwork": {"steamgriddb_api_key": "", "openlibrary_covers": True, "covers": {}},
     "window": {"width": 1100, "height": 720, "maximized": False},
     "network": {
         "host_enabled": False,
@@ -188,7 +188,34 @@ class Config:
 
     @property
     def artwork(self) -> dict:
-        return self.data.setdefault("artwork", {"steamgriddb_api_key": ""})
+        settings = self.data.setdefault("artwork", dict(DEFAULT_CONFIG["artwork"]))
+        for key, value in DEFAULT_CONFIG["artwork"].items():
+            settings.setdefault(key, value)
+        settings.setdefault("covers", {})
+        return settings
+
+    @property
+    def covers(self) -> dict:
+        covers = self.artwork.setdefault("covers", {})
+        if not isinstance(covers, dict):
+            covers = {}
+            self.artwork["covers"] = covers
+        return covers
+
+    def cover_for(self, item_id: str) -> str:
+        path = self.covers.get(item_id, "")
+        return path if path and Path(path).is_file() else ""
+
+    def set_cover(self, item_id: str, path: str):
+        if not item_id or not path:
+            return
+        self.covers[item_id] = str(path)
+        self.save()
+
+    def clear_cover(self, item_id: str):
+        if item_id in self.covers:
+            self.covers.pop(item_id, None)
+            self.save()
 
     @property
     def window(self) -> dict:

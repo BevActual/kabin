@@ -12,12 +12,24 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Adw, Gdk, GdkPixbuf, Gio, GLib, GObject, Gtk, Pango  # noqa: E402
 
 from . import icons  # noqa: E402
-from .artwork import fetch_remote_cover, fetch_steamgriddb_cover  # noqa: E402
+from .artwork import fetch_openlibrary_cover, fetch_remote_cover, fetch_steamgriddb_cover  # noqa: E402
 from .artwork_queue import ArtworkQueue  # noqa: E402
 from .browse import first_index_for_prefix, pick_random_index  # noqa: E402
 from .config import Config  # noqa: E402
-from .emulation import connected_controllers  # noqa: E402
+from .cover_picker import CoverPicker  # noqa: E402
 from .gamepad import GamepadMonitor, cycle_index, move_grid_index  # noqa: E402
+from .home import (  # noqa: E402
+    added_heading,
+    continue_caption,
+    continue_heading,
+    continue_tile_scale,
+    hero_meta_line,
+    hero_uses_bleed,
+    library_tile_scale,
+    move_home_focus,
+    show_library_sort,
+    split_home_shelves,
+)
 from .kinds import CABINET_KIND, FOLDER_KINDS, KINDS, count_noun, get_kind, kind_for  # noqa: E402
 from .media import MediaHelperError, MediaHelperSession, PlaybackSession, create_client_offer  # noqa: E402
 from .network import HostService, media_stream_url, prepare_remote_session, push_remote_progress, signal_remote_session  # noqa: E402
@@ -39,6 +51,11 @@ from .settings import SettingsWindow  # noqa: E402
 from .sources import discover_all_with_status  # noqa: E402
 from .sources import steam as steam_source  # noqa: E402
 from .systems import get_system  # noqa: E402
+
+
+def _art_fit(kind) -> Gtk.ContentFit:
+    return Gtk.ContentFit.CONTAIN if getattr(kind, "art_fit", "cover") == "contain" else Gtk.ContentFit.COVER
+
 
 CATEGORY_HOME = ("home", None)
 CATEGORY_ALL = ("all", None)
@@ -94,7 +111,23 @@ _sgdb_artwork = ArtworkQueue(
     fetch_steamgriddb_cover,
     lambda callback, result: GLib.idle_add(callback, result),
 )
+_book_artwork = ArtworkQueue(
+    fetch_openlibrary_cover,
+    lambda callback, result: GLib.idle_add(callback, result),
+)
 _artwork_api_key = ""
+_openlibrary_covers = True
+
+
+def _queue_book_cover(game, callback):
+    if not _openlibrary_covers:
+        return
+    author = game.creators[0] if game.creators else ""
+    _book_artwork.request_job(
+        ("openlibrary", game.id),
+        (game.title, author, game.id),
+        callback,
+    )
 
 
 @lru_cache(maxsize=None)
@@ -146,6 +179,11 @@ class _TileArt:
                 game.extra["remote_id"],
                 self._on_remote_cover_ready,
             )
+            return
+        if kind_for(game).id == "book" and game.extra.get("needs_artwork"):
+            gicon = game.gicon or (Gio.ThemedIcon.new(game.icon_name) if game.icon_name else None)
+            self._show_icon_plate(gicon)
+            _queue_book_cover(game, self._on_cover_ready)
             return
         if game.extra.get("needs_artwork") and _artwork_api_key:
             gicon = game.gicon or (Gio.ThemedIcon.new(game.icon_name) if game.icon_name else None)
@@ -226,36 +264,49 @@ def _progress_bar(value: float) -> Gtk.LevelBar:
     return bar
 
 
-def _build_tile_content(game, kind=None, progress=0.0, playing=False):
+def _build_tile_content(
+    game,
+    kind=None,
+    progress=0.0,
+    playing=False,
+    show_badge=True,
+    subtitle=None,
+    scale=1.0,
+):
     """Build an artwork-first card with a stable, readable text footer."""
     kind = kind or CABINET_KIND
+    tile_width = max(1, int(kind.tile_width * scale))
+    tile_height = max(1, int(kind.tile_height * scale))
     content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-    content.set_size_request(kind.tile_width, -1)
+    content.set_size_request(tile_width, -1)
     content.add_css_class(f"kabin-tile-{kind.shape}")
     content.add_css_class(f"kabin-kind-{kind.id}")
+    if show_badge:
+        content.add_css_class("kabin-tile-mixed")
     if playing:
         content.add_css_class("kabin-tile-playing")
 
     overlay = Gtk.Overlay()
-    overlay.set_size_request(kind.tile_width, kind.tile_height)
+    overlay.set_size_request(tile_width, tile_height)
     overlay.set_overflow(Gtk.Overflow.HIDDEN)
     overlay.add_css_class("kabin-tile-art")
     overlay.add_css_class(f"kabin-art-{kind.shape}")
 
     picture = Gtk.Picture()
-    picture.set_content_fit(Gtk.ContentFit.COVER)
+    picture.set_content_fit(_art_fit(kind))
     overlay.set_child(picture)
 
-    badge_key = game.source if game.source in _SOURCE_BADGE_CANDIDATES else kind.id
-    badge_icon_name = _resolve_icon_name(
-        tuple(_SOURCE_BADGE_CANDIDATES.get(badge_key, [kind.icon]))
-    )
-    badge = Gtk.Box(halign=Gtk.Align.END, valign=Gtk.Align.START)
-    badge.add_css_class("kabin-tile-badge")
-    badge_image = Gtk.Image.new_from_icon_name(badge_icon_name)
-    badge_image.set_pixel_size(12)
-    badge.append(badge_image)
-    overlay.add_overlay(badge)
+    if show_badge:
+        badge_key = game.source if game.source in _SOURCE_BADGE_CANDIDATES else kind.id
+        badge_icon_name = _resolve_icon_name(
+            tuple(_SOURCE_BADGE_CANDIDATES.get(badge_key, [kind.icon]))
+        )
+        badge = Gtk.Box(halign=Gtk.Align.END, valign=Gtk.Align.START)
+        badge.add_css_class("kabin-tile-badge")
+        badge_image = Gtk.Image.new_from_icon_name(badge_icon_name)
+        badge_image.set_pixel_size(12)
+        badge.append(badge_image)
+        overlay.add_overlay(badge)
     if playing:
         now = Gtk.Label(label="Now playing")
         now.add_css_class("kabin-now-chip")
@@ -267,23 +318,25 @@ def _build_tile_content(game, kind=None, progress=0.0, playing=False):
     if progress > 0:
         tick = _progress_bar(progress)
         tick.set_valign(Gtk.Align.END)
-        tick.set_margin_start(8)
-        tick.set_margin_end(8)
-        tick.set_margin_bottom(8)
         overlay.add_overlay(tick)
 
     text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
     text.add_css_class("kabin-tile-text")
     title = Gtk.Label(label=game.title, xalign=0)
+    title.set_wrap(True)
+    title.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+    title.set_lines(2)
     title.set_ellipsize(Pango.EllipsizeMode.END)
     title.set_tooltip_text(game.title)
     title.add_css_class("kabin-tile-title")
     title.add_css_class("heading")
-    subtitle = Gtk.Label(label=_tile_subtitle(game), xalign=0)
+    caption = subtitle if subtitle is not None else _tile_subtitle(game)
+    subtitle = Gtk.Label(label=caption, xalign=0)
     subtitle.set_ellipsize(Pango.EllipsizeMode.END)
     subtitle.add_css_class("kabin-tile-subtitle")
     subtitle.add_css_class("caption")
     subtitle.add_css_class("dim-label")
+    subtitle.set_visible(bool(caption))
     text.append(title)
     text.append(subtitle)
     content.append(overlay)
@@ -301,30 +354,53 @@ class GameItem(GObject.Object):
 
 
 class GameTile(Gtk.Box):
-    def __init__(self, game, kind=None, progress=0.0, playing=False):
+    def __init__(
+        self,
+        game,
+        kind=None,
+        progress=0.0,
+        playing=False,
+        show_badge=True,
+        subtitle=None,
+        scale=1.0,
+    ):
         super().__init__()
         self.game = game
         self.set_focusable(False)
-        self.set_overflow(Gtk.Overflow.HIDDEN)
+        self.set_overflow(Gtk.Overflow.VISIBLE)
         self.add_css_class("kabin-tile")
         self.add_css_class(f"kabin-kind-{(kind or kind_for(game)).id}")
         if playing:
             self.add_css_class("kabin-tile-playing")
-        content, self._art = _build_tile_content(game, kind, progress, playing)
+        content, self._art = _build_tile_content(
+            game, kind, progress, playing, show_badge, subtitle, scale
+        )
         self.append(content)
 
 
-def _build_shelf_button(game, on_activate, progress=0.0, playing=False):
-    content, _art = _build_tile_content(game, kind_for(game), progress, playing)
+def _build_shelf_button(
+    game,
+    on_activate,
+    progress=0.0,
+    playing=False,
+    subtitle=None,
+    scale=1.0,
+    show_badge=True,
+):
+    caption = subtitle if subtitle is not None else _tile_subtitle(game)
+    content, _art = _build_tile_content(
+        game, kind_for(game), progress, playing, show_badge, caption, scale
+    )
     button = Gtk.Button()
-    button.set_overflow(Gtk.Overflow.HIDDEN)
+    button.set_overflow(Gtk.Overflow.VISIBLE)
     button.add_css_class("kabin-tile")
     button.add_css_class(f"kabin-kind-{kind_for(game).id}")
     button.add_css_class("flat")
     if playing:
         button.add_css_class("kabin-tile-playing")
-    button.set_tooltip_text(f"{game.title} — {_tile_subtitle(game)}")
+    button.set_tooltip_text(f"{game.title} — {caption}")
     button.set_child(content)
+    button._kabin_game = game
     button.connect("clicked", lambda *_: on_activate(game))
     return button
 
@@ -341,7 +417,6 @@ class MainWindow(Adw.ApplicationWindow):
         self._host_statuses = {}
         self._has_recent = False
         self._has_added = False
-        self._has_favorites = False
         self._selected_game = None
         self._sort_mode = "title"
         self._location_filter = "all"
@@ -357,7 +432,10 @@ class MainWindow(Adw.ApplicationWindow):
         self._seeking = False
         self._last_progress_save = 0.0
         self._closing = False
-        self._nav_target = "grid"
+        self._nav_target = "home"
+        self._home_focus_rows = []
+        self._home_shelf_rows = []
+        self._home_focus_pos = (0, 0)
         self._gamepad = GamepadMonitor(self._queue_cabinet_action)
 
         self.set_title("Kabin")
@@ -398,7 +476,7 @@ class MainWindow(Adw.ApplicationWindow):
         brand_box.append(brand_word)
         header.pack_start(brand_box)
 
-        self.search_entry = Gtk.SearchEntry(placeholder_text="Search your cabinet…")
+        self.search_entry = Gtk.SearchEntry(placeholder_text="Search titles…")
         self.search_entry.add_css_class("kabin-search")
         self.search_entry.connect("search-changed", self._on_search_changed)
         header.set_title_widget(self.search_entry)
@@ -443,7 +521,6 @@ class MainWindow(Adw.ApplicationWindow):
 
         self.now_playing_button = Gtk.Button()
         self.now_playing_button.add_css_class("kabin-now-header")
-        self.now_playing_button.add_css_class("pill")
         self.now_playing_button.set_visible(False)
         self.now_playing_button.set_tooltip_text("Jump to what’s playing")
         self.now_playing_label = Gtk.Label(label="Now playing", ellipsize=Pango.EllipsizeMode.END)
@@ -464,9 +541,8 @@ class MainWindow(Adw.ApplicationWindow):
         sidebar_page = Adw.NavigationPage(title="Library", child=sidebar_scroller)
         split_view.set_sidebar(sidebar_page)
 
-        self.recent_section, self.recent_shelf = self._build_shelf("Continue")
-        self.added_section, self.added_shelf = self._build_shelf("Recently Added")
-        self.favorite_section, self.favorite_shelf = self._build_shelf("Favorites")
+        self.home_continue_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=28)
+        self.home_added_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=28)
 
         self.game_store = Gio.ListStore.new(GameItem)
         self.game_filter = Gtk.CustomFilter.new(self._filter_item)
@@ -474,7 +550,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.game_sorter = Gtk.CustomSorter.new(self._compare_items)
         self.sorted_games = Gtk.SortListModel.new(self.filtered_games, self.game_sorter)
         self.game_selection = Gtk.SingleSelection.new(self.sorted_games)
-        self.game_selection.set_autoselect(True)
+        self.game_selection.set_autoselect(False)
 
         tile_factory = Gtk.SignalListItemFactory()
         tile_factory.connect("bind", self._bind_game_tile)
@@ -487,47 +563,53 @@ class MainWindow(Adw.ApplicationWindow):
         self.game_grid.connect("activate", self._on_tile_activated)
         self.game_selection.connect("notify::selected-item", self._on_tile_selected)
 
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=28)
-        content_box.set_margin_top(28)
-        content_box.set_margin_bottom(28)
-        content_box.set_margin_start(28)
-        content_box.set_margin_end(28)
-        library_header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        content_box.add_css_class("kabin-content")
+        self.hero_section = self._build_hero()
+        content_box.append(self.hero_section)
+
+        self.library_column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=28)
+        self.library_column.set_margin_top(20)
+        self.library_column.set_margin_bottom(32)
+        self.library_column.set_margin_start(24)
+        self.library_column.set_margin_end(24)
+        self.library_header = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         self.library_title = Gtk.Label(label="Library", xalign=0)
         self.library_title.add_css_class("kabin-library-title")
-        self.library_title.add_css_class("title-1")
         self.library_subtitle = Gtk.Label(xalign=0)
         self.library_subtitle.add_css_class("kabin-library-subtitle")
         self.library_subtitle.add_css_class("dim-label")
-        library_header.append(self.library_title)
-        library_header.append(self.library_subtitle)
-        content_box.append(library_header)
+        self.library_header.append(self.library_title)
+        self.library_header.append(self.library_subtitle)
+        self.library_column.append(self.library_header)
         self.filter_bar = Gtk.Box(spacing=8)
         self.filter_bar.add_css_class("kabin-filter-bar")
         self.filter_bar.set_visible(False)
-        content_box.append(self.filter_bar)
-        self.hero_section = self._build_hero()
-        content_box.append(self.hero_section)
-        content_box.append(self.recent_section)
-        content_box.append(self.added_section)
-        content_box.append(self.favorite_section)
-        self.browse_section, self.browse_shelf = self._build_shelf("Browse", min_height=150)
-        content_box.append(self.browse_section)
+        self.library_column.append(self.filter_bar)
+        self.library_column.append(self.home_continue_box)
+        self.library_column.append(self.home_added_box)
         self.grid_header = Gtk.Label(label="All titles", xalign=0)
         self.grid_header.add_css_class("kabin-shelf-header")
         self.grid_header.add_css_class("heading")
-        content_box.append(self.grid_header)
+        self.library_column.append(self.grid_header)
         self.game_scroller = Gtk.ScrolledWindow(child=self.game_grid)
         self.game_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.game_scroller.set_hexpand(True)
         self.game_scroller.set_vexpand(True)
-        content_box.append(self.game_scroller)
-        content_box.add_css_class("kabin-content")
+        self.game_scroller.add_css_class("kabin-game-scroller")
+        self.library_column.append(self.game_scroller)
+        content_box.append(self.library_column)
+        self.page_scroller = Gtk.ScrolledWindow(child=content_box)
+        self.page_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.page_scroller.set_hexpand(True)
+        self.page_scroller.set_vexpand(True)
+        self.page_scroller.set_propagate_natural_height(False)
+        self.page_scroller.add_css_class("kabin-page-scroller")
 
         self.empty_status = Adw.StatusPage(
-            title="Your cabinet is empty",
+            title="Nothing here yet",
             description="Add Steam, a ROM folder, or books, comics, music, and movies in Settings.",
-            icon_name="user-bookmarks-symbolic",
+            icon_name="folder-symbolic",
         )
         self.empty_status.set_vexpand(True)
         open_settings_button = Gtk.Button(label="Open Settings", halign=Gtk.Align.CENTER)
@@ -544,10 +626,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.no_matches_status.set_vexpand(True)
         self.no_matches_actions = Gtk.Box(spacing=10, halign=Gtk.Align.CENTER)
         self.no_matches_clear_search = Gtk.Button(label="Clear search")
-        self.no_matches_clear_search.add_css_class("pill")
         self.no_matches_clear_search.connect("clicked", lambda *_: self._clear_search())
         self.no_matches_clear_filters = Gtk.Button(label="Clear filters")
-        self.no_matches_clear_filters.add_css_class("pill")
         self.no_matches_clear_filters.connect("clicked", lambda *_: self._clear_filters())
         self.no_matches_actions.append(self.no_matches_clear_search)
         self.no_matches_actions.append(self.no_matches_clear_filters)
@@ -564,27 +644,26 @@ class MainWindow(Adw.ApplicationWindow):
         self.no_matches_status.add_css_class("kabin-status")
 
         self.content_stack = Gtk.Stack()
+        self.content_stack.add_css_class("kabin-library-stack")
         self.content_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self.content_stack.set_transition_duration(180)
-        self.content_stack.add_named(content_box, "games")
+        self.content_stack.add_named(self.page_scroller, "games")
         self.content_stack.add_named(self.empty_status, "empty")
         self.content_stack.add_named(self.no_matches_status, "no-matches")
         self.content_stack.add_named(self.loading_status, "loading")
 
         self.main_stack = Gtk.Stack()
+        self.main_stack.add_css_class("kabin-main-stack")
         self.main_stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
         self.main_stack.set_transition_duration(220)
         self.main_stack.add_named(self.content_stack, "library")
         self.main_stack.add_named(self._build_details_panel(), "details")
 
-        self.shortcut_bar = Gtk.Box(spacing=18, halign=Gtk.Align.CENTER)
-        self.shortcut_bar.add_css_class("kabin-shortcut-bar")
         self.bottom_stack = Gtk.Stack()
         self.bottom_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-        self.bottom_stack.add_named(self.shortcut_bar, "shortcuts")
         self.bottom_stack.add_named(self._build_player_bar(), "player")
+        self.bottom_stack.set_visible(False)
         toolbar_view.add_bottom_bar(self.bottom_stack)
-        self._update_shortcut_bar()
 
         # A heavily downscaled artwork backdrop behind Kabin's own translucent
         # surface palette. Keeping it subtle prevents cover colors from
@@ -593,17 +672,18 @@ class MainWindow(Adw.ApplicationWindow):
         self.backdrop_picture.set_content_fit(Gtk.ContentFit.COVER)
         self.backdrop_picture.set_can_shrink(True)
         self.backdrop_picture.add_css_class("kabin-backdrop")
-        backdrop_scrim = Gtk.Box()
-        backdrop_scrim.add_css_class("kabin-backdrop-scrim")
-        backdrop_scrim.set_hexpand(True)
-        backdrop_scrim.set_vexpand(True)
+        self.backdrop_scrim = Gtk.Box()
+        self.backdrop_scrim.add_css_class("kabin-backdrop-scrim")
+        self.backdrop_scrim.set_hexpand(True)
+        self.backdrop_scrim.set_vexpand(True)
 
         body_overlay = Gtk.Overlay()
         body_overlay.set_child(self.backdrop_picture)
-        body_overlay.add_overlay(backdrop_scrim)
+        body_overlay.add_overlay(self.backdrop_scrim)
         body_overlay.add_overlay(self.main_stack)
 
         content_page = Adw.NavigationPage(title="Library", child=body_overlay)
+        content_page.add_css_class("kabin-content-page")
         split_view.set_content(content_page)
 
         toolbar_view.set_content(split_view)
@@ -619,7 +699,6 @@ class MainWindow(Adw.ApplicationWindow):
         compact.add_setter(self.details_art_frame, "width-request", 240)
         compact.add_setter(self.details_art_frame, "height-request", 322)
         compact.add_setter(self.details_info, "width-request", -1)
-        compact.add_setter(self.shortcut_bar, "visible", False)
         self.add_breakpoint(compact)
         self._apply_grid_metrics()
 
@@ -637,6 +716,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.player_art = Gtk.Picture()
         self.player_art.set_size_request(52, 52)
         self.player_art.set_can_shrink(True)
+        self.player_art.set_overflow(Gtk.Overflow.HIDDEN)
         self.player_art.add_css_class("kabin-player-art")
         now_row.append(self.player_art)
         copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, valign=Gtk.Align.CENTER)
@@ -654,17 +734,14 @@ class MainWindow(Adw.ApplicationWindow):
 
         transport = Gtk.Box(spacing=4, valign=Gtk.Align.CENTER)
         self.player_prev = Gtk.Button(icon_name="media-skip-backward-symbolic")
-        self.player_prev.add_css_class("circular")
         self.player_prev.add_css_class("flat")
         self.player_prev.add_css_class("kabin-player-button")
         self.player_prev.connect("clicked", lambda *_: self._skip_playback(-1))
         self.player_pause = Gtk.Button(icon_name="media-playback-pause-symbolic")
-        self.player_pause.add_css_class("circular")
-        self.player_pause.add_css_class("suggested-action")
         self.player_pause.add_css_class("kabin-player-button")
+        self.player_pause.add_css_class("kabin-player-pause")
         self.player_pause.connect("clicked", lambda *_: self._toggle_playback_pause())
         self.player_next = Gtk.Button(icon_name="media-skip-forward-symbolic")
-        self.player_next.add_css_class("circular")
         self.player_next.add_css_class("flat")
         self.player_next.add_css_class("kabin-player-button")
         self.player_next.connect("clicked", lambda *_: self._skip_playback(1))
@@ -705,8 +782,8 @@ class MainWindow(Adw.ApplicationWindow):
         bar.append(self.player_remaining)
 
         stop = Gtk.Button(icon_name="media-playback-stop-symbolic", tooltip_text="Stop")
-        stop.add_css_class("circular")
         stop.add_css_class("flat")
+        stop.add_css_class("kabin-player-button")
         stop.connect("clicked", lambda *_: self._stop_playback())
         bar.append(stop)
         return bar
@@ -714,13 +791,16 @@ class MainWindow(Adw.ApplicationWindow):
     def _build_shelf(self, title, min_height=300):
         section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         header = Gtk.Label(label=title, xalign=0)
+        header.add_css_class("kabin-kicker")
         header.add_css_class("kabin-shelf-header")
-        header.add_css_class("heading")
         section.append(header)
         scroller = Gtk.ScrolledWindow()
+        scroller.add_css_class("kabin-shelf-rail")
         scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
+        scroller.set_propagate_natural_width(False)
         scroller.set_min_content_height(min_height)
-        shelf = Gtk.Box(spacing=20)
+        shelf = Gtk.Box(spacing=16)
+        shelf.add_css_class("kabin-shelf-row")
         scroller.set_child(shelf)
         section.append(scroller)
         section.set_visible(False)
@@ -731,18 +811,32 @@ class MainWindow(Adw.ApplicationWindow):
         hero.add_css_class("kabin-hero")
         hero.set_overflow(Gtk.Overflow.HIDDEN)
         overlay = Gtk.Overlay()
-        overlay.set_size_request(-1, 280)
+        overlay.set_size_request(-1, 360)
         overlay.set_hexpand(True)
         self.hero_picture = Gtk.Picture()
         self.hero_picture.set_content_fit(Gtk.ContentFit.COVER)
         self.hero_picture.set_can_shrink(True)
+        self.hero_picture.add_css_class("kabin-hero-bleed")
         overlay.set_child(self.hero_picture)
+
+        row = Gtk.Box(spacing=24)
+        row.set_valign(Gtk.Align.END)
+        row.set_hexpand(True)
+        row.add_css_class("kabin-hero-row")
+        self.hero_poster = Gtk.Picture()
+        self.hero_poster.set_content_fit(Gtk.ContentFit.COVER)
+        self.hero_poster.set_can_shrink(True)
+        self.hero_poster.set_overflow(Gtk.Overflow.HIDDEN)
+        self.hero_poster.add_css_class("kabin-hero-poster")
+        self.hero_poster.set_size_request(168, 252)
+        row.append(self.hero_poster)
 
         copy = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         copy.set_valign(Gtk.Align.END)
-        copy.set_halign(Gtk.Align.START)
+        copy.set_hexpand(True)
         copy.add_css_class("kabin-hero-copy")
         self.hero_kicker = Gtk.Label(xalign=0)
+        self.hero_kicker.add_css_class("kabin-kicker")
         self.hero_kicker.add_css_class("kabin-hero-kicker")
         self.hero_kicker.add_css_class("caption")
         self.hero_title = Gtk.Label(xalign=0)
@@ -762,50 +856,20 @@ class MainWindow(Adw.ApplicationWindow):
         actions = Gtk.Box(spacing=8)
         self.hero_play = Gtk.Button(label="Play")
         self.hero_play.add_css_class("suggested-action")
-        self.hero_play.add_css_class("pill")
         self.hero_play.add_css_class("kabin-hero-play")
         self.hero_play.connect("clicked", self._on_hero_play)
         self.hero_open = Gtk.Button(label="Details")
-        self.hero_open.add_css_class("pill")
         self.hero_open.add_css_class("kabin-hero-open")
         self.hero_open.connect("clicked", self._on_hero_clicked)
         actions.append(self.hero_play)
         actions.append(self.hero_open)
         copy.append(actions)
-        overlay.add_overlay(copy)
+        row.append(copy)
+        overlay.add_overlay(row)
         hero.append(overlay)
         hero.set_visible(False)
         self._featured_item = None
         return hero
-
-    def _build_browse_card(self, kind, count):
-        button = Gtk.Button()
-        button.add_css_class("kabin-browse-card")
-        button.add_css_class(f"kabin-kind-{kind.id}")
-        button.add_css_class("flat")
-        button.set_can_focus(False)
-        button.set_tooltip_text(f"Open {kind.plural}")
-        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        icon = Gtk.Image.new_from_icon_name(
-            _resolve_icon_name(tuple(_SIDEBAR_ICON_CANDIDATES.get(kind.id, [kind.icon])))
-        )
-        icon.set_pixel_size(28)
-        title = Gtk.Label(label=kind.plural, xalign=0)
-        title.add_css_class("heading")
-        count_label = Gtk.Label(
-            label=f"{count} {count_noun(count, kind)}" if count else "None yet",
-            xalign=0,
-        )
-        count_label.add_css_class("caption")
-        count_label.add_css_class("dim-label")
-        count_label.set_wrap(True)
-        count_label.set_max_width_chars(22)
-        content.append(icon)
-        content.append(title)
-        content.append(count_label)
-        button.set_child(content)
-        button.connect("clicked", lambda *_: self._select_category(("type", kind.id)))
-        return button
 
     def _build_filter_popover(self):
         popover = Gtk.Popover()
@@ -850,7 +914,7 @@ class MainWindow(Adw.ApplicationWindow):
         panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         panel.add_css_class("kabin-details-page")
 
-        back_button = Gtk.Button(label="Back", icon_name="go-previous-symbolic")
+        back_button = Gtk.Button(label="Library", icon_name="go-previous-symbolic")
         back_button.set_halign(Gtk.Align.START)
         back_button.add_css_class("flat")
         back_button.add_css_class("kabin-details-back")
@@ -861,42 +925,54 @@ class MainWindow(Adw.ApplicationWindow):
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroller.set_vexpand(True)
 
-        self.details_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=48)
-        self.details_content.set_halign(Gtk.Align.CENTER)
-        self.details_content.set_valign(Gtk.Align.CENTER)
-        self.details_content.set_margin_top(28)
-        self.details_content.set_margin_bottom(56)
-        self.details_content.set_margin_start(56)
-        self.details_content.set_margin_end(56)
+        self.details_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=32)
+        self.details_content.set_halign(Gtk.Align.START)
+        self.details_content.set_valign(Gtk.Align.START)
+        self.details_content.set_margin_top(8)
+        self.details_content.set_margin_bottom(40)
+        self.details_content.set_margin_start(32)
+        self.details_content.set_margin_end(32)
 
-        self.details_art_frame = Gtk.Box()
-        self.details_art_frame.set_overflow(Gtk.Overflow.HIDDEN)
-        self.details_art_frame.add_css_class("kabin-details-art-frame")
-        self.details_art_frame.set_size_request(320, 430)
         self.details_picture = Gtk.Picture()
+        self.details_picture.set_can_shrink(True)
+        self.details_picture.set_hexpand(True)
+        self.details_picture.set_vexpand(True)
         self.details_picture.set_content_fit(Gtk.ContentFit.COVER)
-        self.details_art_frame.append(self.details_picture)
+        self.details_art_plate = Gtk.Box()
+        self.details_art_plate.set_size_request(320, 430)
+        self.details_art_frame = Gtk.Overlay()
+        self.details_art_frame.set_overflow(Gtk.Overflow.HIDDEN)
+        self.details_art_frame.set_hexpand(False)
+        self.details_art_frame.set_vexpand(False)
+        self.details_art_frame.set_halign(Gtk.Align.START)
+        self.details_art_frame.set_valign(Gtk.Align.START)
+        self.details_art_frame.add_css_class("kabin-details-art-frame")
+        self.details_art_frame.add_css_class("kabin-art-portrait")
+        self.details_art_frame.set_size_request(320, 430)
+        self.details_art_frame.set_child(self.details_art_plate)
+        self.details_art_frame.add_overlay(self.details_picture)
         self.details_content.append(self.details_art_frame)
 
-        self.details_info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        self.details_info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.details_info.set_size_request(420, -1)
-        self.details_info.set_valign(Gtk.Align.CENTER)
+        self.details_info.set_hexpand(True)
+        self.details_info.set_valign(Gtk.Align.START)
 
-        chips = Gtk.Box(spacing=8)
         self.details_kind_chip = Gtk.Label(xalign=0)
-        self.details_kind_chip.add_css_class("kabin-kind-chip")
+        self.details_kind_chip.add_css_class("kabin-kicker")
+        self.details_kind_chip.add_css_class("kabin-details-kicker")
         self.details_kind_chip.set_halign(Gtk.Align.START)
         self.details_now_chip = Gtk.Label(label="Now playing")
         self.details_now_chip.add_css_class("kabin-now-chip")
         self.details_now_chip.set_halign(Gtk.Align.START)
         self.details_now_chip.set_visible(False)
-        chips.append(self.details_kind_chip)
-        chips.append(self.details_now_chip)
-        self.details_info.append(chips)
+        kickers = Gtk.Box(spacing=10)
+        kickers.append(self.details_kind_chip)
+        kickers.append(self.details_now_chip)
+        self.details_info.append(kickers)
 
         self.details_title = Gtk.Label(xalign=0, wrap=True)
         self.details_title.add_css_class("kabin-details-title")
-        self.details_title.add_css_class("title-1")
         self.details_info.append(self.details_title)
 
         self.details_meta = Gtk.Label(xalign=0, wrap=True)
@@ -910,7 +986,6 @@ class MainWindow(Adw.ApplicationWindow):
 
         self.details_play_button = Gtk.Button(label="Play")
         self.details_play_button.add_css_class("suggested-action")
-        self.details_play_button.add_css_class("pill")
         self.details_play_button.connect("clicked", lambda *_: self._launch_selected())
 
         self.details_favorite_icon = Gtk.Image.new_from_icon_name("non-starred-symbolic")
@@ -932,9 +1007,13 @@ class MainWindow(Adw.ApplicationWindow):
         more_content.set_margin_bottom(8)
         more_content.set_margin_start(8)
         more_content.set_margin_end(8)
+        cover_button = Gtk.Button(label="Change cover", icon_name="image-x-generic-symbolic")
+        cover_button.add_css_class("flat")
+        cover_button.connect("clicked", self._change_selected_cover)
         hide_button = Gtk.Button(label="Hide from Library", icon_name="view-conceal-symbolic")
         hide_button.add_css_class("flat")
         hide_button.connect("clicked", self._hide_selected_game)
+        more_content.append(cover_button)
         more_content.append(hide_button)
         more_popover.set_child(more_content)
         self.details_more_button.set_popover(more_popover)
@@ -994,6 +1073,7 @@ class MainWindow(Adw.ApplicationWindow):
             content.append(count_label)
 
         row = Gtk.ListBoxRow()
+        row.add_css_class("kabin-sidebar-item")
         row.set_child(content)
         self.sidebar_list.append(row)
         self._sidebar_rows[row] = category
@@ -1020,25 +1100,19 @@ class MainWindow(Adw.ApplicationWindow):
         self._add_sidebar_row("Home", "home", None, CATEGORY_HOME)
         if favorite_count:
             self._add_sidebar_row("Favorites", "favorites", favorite_count, CATEGORY_FAVORITES)
-        unplayed_count = sum(1 for item in games if item.id not in self.config.recent)
-        if unplayed_count:
-            self._add_sidebar_row(
-                "Not opened yet",
-                "all",
-                unplayed_count,
-                ("preset", "unplayed"),
-            )
         self._add_sidebar_header("MEDIA")
         game_count = sum(1 for item in games if kind_for(item).id == "game")
         self._add_sidebar_row("Games", "all", game_count, ("type", "game"))
         for kind in FOLDER_KINDS:
             count = sum(1 for item in games if kind_for(item).id == kind.id)
-            self._add_sidebar_row(kind.plural, kind.id, count, ("type", kind.id))
-        self._add_sidebar_header("PC")
-        if steam_count:
-            self._add_sidebar_row("Steam", "steam", steam_count, ("source", "steam"))
-        if desktop_count:
-            self._add_sidebar_row("Other Apps", "desktop", desktop_count, ("source", "desktop"))
+            if count:
+                self._add_sidebar_row(kind.plural, kind.id, count, ("type", kind.id))
+        if steam_count or desktop_count:
+            self._add_sidebar_header("PC")
+            if steam_count:
+                self._add_sidebar_row("Steam", "steam", steam_count, ("source", "steam"))
+            if desktop_count:
+                self._add_sidebar_row("Other Apps", "desktop", desktop_count, ("source", "desktop"))
         if remote_hosts:
             self._add_sidebar_header("KABIN HOSTS")
             for host in sorted(remote_hosts):
@@ -1048,10 +1122,14 @@ class MainWindow(Adw.ApplicationWindow):
                 badge = "Re-pair" if state == "auth" else ("Offline" if state == "offline" else count)
                 icon = "network-offline" if state in ("auth", "offline") else "remote"
                 self._add_sidebar_row(host, icon, badge, ("host", host))
-        if systems:
+        populated = []
+        for system in sorted(systems):
+            count = sum(1 for game in games if game.source == "roms" and game.subtitle == system)
+            if count:
+                populated.append((system, count))
+        if populated:
             self._add_sidebar_header("CONSOLES")
-            for system in sorted(systems):
-                count = sum(1 for g in games if g.source == "roms" and g.subtitle == system)
+            for system, count in populated:
                 self._add_sidebar_row(system, "roms", count, ("system", system))
 
         self._add_sidebar_header("MANAGE")
@@ -1071,9 +1149,10 @@ class MainWindow(Adw.ApplicationWindow):
     # -- data loading -----------------------------------------------------
 
     def refresh(self):
-        global _artwork_api_key
+        global _artwork_api_key, _openlibrary_covers
         self.config.load()
         _artwork_api_key = self.config.artwork.get("steamgriddb_api_key", "")
+        _openlibrary_covers = bool(self.config.artwork.get("openlibrary_covers", True))
         self._refresh_generation += 1
         generation = self._refresh_generation
         if hasattr(self, "content_stack"):
@@ -1095,77 +1174,86 @@ class MainWindow(Adw.ApplicationWindow):
         for game in games:
             if game.source == "remote":
                 adopt_progress(self.config, game.id, game.extra.get("progress"))
-        self._update_shortcut_bar()
         self._rebuild_sidebar(games, preserve_category=self._category)
         self.game_store.remove_all()
         for game in games:
             self.game_store.append(GameItem(game))
+        self._apply_grid_metrics()
         self._rebuild_recent_shelf(games)
         self._update_stack_visibility()
         self._update_library_header()
         self._update_filter_bar()
 
-        if self.game_selection.get_n_items():
+        if (
+            self.game_selection.get_n_items()
+            and self.main_stack.get_visible_child_name() == "details"
+        ):
             self.game_selection.set_selected(0)
         else:
+            self.game_selection.set_selected(Gtk.INVALID_LIST_POSITION)
             self._show_details(None)
         if not self._search_text:
-            self._set_nav_target("grid")
+            self._set_nav_target(self._library_nav_target(), show_focus=False)
         return False
 
+    def _clear_box(self, box):
+        while (child := box.get_first_child()) is not None:
+            box.remove(child)
+
+    def _fill_kind_shelf(self, parent, title, items, kind, *, resume=False):
+        scale = continue_tile_scale(len(items)) if resume else 1.0
+        section, shelf = self._build_shelf(
+            title, int(kind.tile_height * scale) + 72
+        )
+        buttons = []
+        for game in items:
+            button = _build_shelf_button(
+                game,
+                self._start_item if resume else self._open_details,
+                self._item_progress(game),
+                self._is_playing(game),
+                subtitle=self._continue_caption(game) if resume else None,
+                scale=scale,
+                show_badge=False,
+            )
+            shelf.append(button)
+            buttons.append(button)
+        section.set_visible(True)
+        parent.append(section)
+        if buttons:
+            self._home_shelf_rows.append(buttons)
+
     def _rebuild_recent_shelf(self, games):
-        while (child := self.recent_shelf.get_first_child()) is not None:
-            self.recent_shelf.remove(child)
-        while (child := self.favorite_shelf.get_first_child()) is not None:
-            self.favorite_shelf.remove(child)
-        while (child := self.added_shelf.get_first_child()) is not None:
-            self.added_shelf.remove(child)
+        self._clear_box(self.home_continue_box)
+        self._clear_box(self.home_added_box)
+        self._home_shelf_rows = []
 
-        games_by_id = {g.id: g for g in games}
-        recent_games = [
-            games_by_id[gid] for gid in self.config.recent_ids(limit=8) if gid in games_by_id
-        ]
-        for game in recent_games:
-            self.recent_shelf.append(
-                _build_shelf_button(
-                    game,
-                    self._open_details,
-                    self._item_progress(game),
-                    self._is_playing(game),
-                )
+        featured, _kicker = self._pick_featured(games)
+        continue_rows, added_rows = split_home_shelves(
+            games,
+            self.config.recent_ids(limit=24),
+            featured.id if featured else None,
+        )
+        for kind, items in continue_rows:
+            self._fill_kind_shelf(
+                self.home_continue_box,
+                continue_heading(kind),
+                items,
+                kind,
+                resume=True,
+            )
+        for kind, items in added_rows:
+            self._fill_kind_shelf(
+                self.home_added_box, added_heading(kind), items, kind
             )
 
-        added_games = sorted(
-            (game for game in games if game.extra.get("added_at")),
-            key=lambda game: game.extra["added_at"],
-            reverse=True,
-        )[:8]
-        for game in added_games:
-            self.added_shelf.append(
-                _build_shelf_button(
-                    game,
-                    self._open_details,
-                    self._item_progress(game),
-                    self._is_playing(game),
-                )
-            )
-
-        favorite_games = [game for game in games if self.config.is_favorite(game.id)][:8]
-        for game in favorite_games:
-            self.favorite_shelf.append(
-                _build_shelf_button(
-                    game,
-                    self._open_details,
-                    self._item_progress(game),
-                    self._is_playing(game),
-                )
-            )
-
-        self._has_recent = bool(recent_games)
-        self._has_added = bool(added_games)
-        self._has_favorites = bool(favorite_games)
+        self._has_recent = bool(continue_rows)
+        self._has_added = bool(added_rows)
         self._rebuild_hero(games)
-        self._rebuild_browse(games)
+        self._home_focus_rows = []
+        if featured and hasattr(self, "hero_play"):
+            self._home_focus_rows.append([self.hero_play, self.hero_open])
+        self._home_focus_rows.extend(self._home_shelf_rows)
         self._update_recent_visibility()
 
     def _pick_featured(self, games):
@@ -1184,9 +1272,9 @@ class MainWindow(Adw.ApplicationWindow):
             reverse=True,
         )
         if added:
-            return added[0], "New in the cabinet"
+            return added[0], "Just added"
         if games:
-            return games[0], "From your library"
+            return games[0], "Featured"
         return None, ""
 
     def _rebuild_hero(self, games):
@@ -1194,15 +1282,18 @@ class MainWindow(Adw.ApplicationWindow):
         self._featured_item = featured
         if not featured:
             self.hero_picture.set_paintable(None)
+            self.hero_poster.set_paintable(None)
+            if hasattr(self, "hero_section"):
+                for css_class in list(self.hero_section.get_css_classes()):
+                    if css_class.startswith("kabin-kind-") or css_class == "kabin-hero-quiet":
+                        self.hero_section.remove_css_class(css_class)
             return
         kind = kind_for(featured)
         self.hero_kicker.set_label(kicker)
         self.hero_title.set_label(featured.title)
-        hint = self._resume_hint(featured).strip()
-        meta = f"{kind.verb} · {_tile_subtitle(featured)}"
-        if hint:
-            meta += f" · {hint.rstrip('.')}"
+        meta = hero_meta_line(featured) or _tile_subtitle(featured)
         self.hero_meta.set_label(meta)
+        self.hero_meta.set_visible(bool(meta))
         ratio = self._item_progress(featured)
         self.hero_progress.set_value(ratio)
         self.hero_progress.set_visible(ratio > 0)
@@ -1213,24 +1304,36 @@ class MainWindow(Adw.ApplicationWindow):
                 self.hero_play.set_label(self._play_button_label(featured))
             else:
                 self.hero_play.set_label(kind.verb)
+        self.hero_poster.set_size_request(kind.tile_width, kind.tile_height)
+        self.hero_poster.set_content_fit(_art_fit(kind))
+        for css_class in list(self.hero_section.get_css_classes()):
+            if css_class.startswith("kabin-kind-") or css_class == "kabin-hero-quiet":
+                self.hero_section.remove_css_class(css_class)
+        self.hero_section.add_css_class(f"kabin-kind-{kind.id}")
+        bleed = hero_uses_bleed(kind)
+        if not bleed:
+            self.hero_section.add_css_class("kabin-hero-quiet")
+        self.hero_picture.set_visible(bleed)
         if featured.icon_path:
-            self.hero_picture.set_filename(featured.icon_path)
+            if bleed:
+                self.hero_picture.set_filename(featured.icon_path)
+            else:
+                self.hero_picture.set_paintable(None)
+            self.hero_poster.set_filename(featured.icon_path)
         else:
             self.hero_picture.set_paintable(None)
-
-    def _rebuild_browse(self, games):
-        while (child := self.browse_shelf.get_first_child()) is not None:
-            self.browse_shelf.remove(child)
-        for kind in KINDS.values():
-            count = sum(1 for item in games if kind_for(item).id == kind.id)
-            self.browse_shelf.append(self._build_browse_card(kind, count))
+            self.hero_poster.set_paintable(None)
+        self.hero_play._kabin_game = featured
+        self.hero_open._kabin_game = featured
 
     def _on_hero_clicked(self, *_args):
         if self._featured_item:
             self._open_details(self._featured_item)
 
     def _on_hero_play(self, *_args):
-        game = self._featured_item
+        self._start_item(self._featured_item)
+
+    def _start_item(self, game):
         if not game:
             return
         if plays_in_kabin(game) and self._can_play_media(game):
@@ -1240,22 +1343,70 @@ class MainWindow(Adw.ApplicationWindow):
         else:
             self._launch_game(game)
 
+    def _continue_caption(self, game) -> str:
+        clock = ""
+        tracks = 1
+        track = 0
+        if plays_in_kabin(game):
+            tracks = track_count(game)
+            track = resume_track(self.config, game.id, tracks)
+            start = resume_seconds(self.config, game.id)
+            if start:
+                clock = format_clock(start)
+        return continue_caption(
+            playing=self._is_playing(game),
+            track=track,
+            tracks=tracks,
+            clock=clock,
+            opened_at=self.config.recent.get(game.id) or 0,
+            fallback=kind_for(game).last_opened,
+        )
+
+    def _is_on_home(self) -> bool:
+        filters_active = (
+            self._location_filter != "all" or self._favorites_only or self._unplayed_only
+        )
+        return (
+            not self._search_text
+            and not filters_active
+            and self._category == CATEGORY_HOME
+        )
+
+    def _library_nav_target(self) -> str:
+        return "home" if self._is_on_home() else "grid"
+
     def _update_recent_visibility(self):
         filters_active = (
             self._location_filter != "all" or self._favorites_only or self._unplayed_only
         )
-        on_home = not self._search_text and not filters_active and self._category == CATEGORY_HOME
-        self.recent_section.set_visible(self._has_recent and on_home)
-        self.added_section.set_visible(self._has_added and on_home)
-        self.favorite_section.set_visible(self._has_favorites and on_home)
+        on_home = self._is_on_home()
+        self.home_continue_box.set_visible(self._has_recent and on_home)
+        self.home_added_box.set_visible(self._has_added and on_home)
         if hasattr(self, "hero_section"):
             self.hero_section.set_visible(bool(self._featured_item) and on_home)
-        if hasattr(self, "browse_section"):
-            self.browse_section.set_visible(on_home)
+        if hasattr(self, "library_column"):
+            self.library_column.set_margin_top(8 if on_home and self._featured_item else 20)
+        show_grid = not on_home
         if hasattr(self, "grid_header"):
-            self.grid_header.set_visible(on_home)
-            self.grid_header.set_label("All titles")
-        self.game_scroller.set_visible(True)
+            self.grid_header.set_visible(False)
+        self.game_scroller.set_visible(show_grid)
+        self.game_scroller.set_vexpand(show_grid)
+        if hasattr(self, "library_header"):
+            self.library_header.set_visible(not on_home)
+        if on_home:
+            self.remove_css_class("kabin-on-library")
+            if hasattr(self, "backdrop_scrim"):
+                self.backdrop_scrim.remove_css_class("kabin-backdrop-library")
+        else:
+            self.add_css_class("kabin-on-library")
+            if hasattr(self, "backdrop_scrim"):
+                self.backdrop_scrim.add_css_class("kabin-backdrop-library")
+        if hasattr(self, "sort_dropdown"):
+            count = sum(1 for game in self._games if self._matches(game))
+            self.sort_dropdown.set_visible(show_grid and show_library_sort(count))
+        if hasattr(self, "filter_button"):
+            self.filter_button.set_visible(show_grid or filters_active)
+        self._sync_library_nav()
 
     # -- filtering & interaction -------------------------------------------
 
@@ -1318,12 +1469,19 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _bind_game_tile(self, _factory, list_item):
         game = list_item.get_item().game
+        kind, _value = self._category
+        caption = None
+        if kind in ("system", "source", "host"):
+            caption = (game.creators[0] if game.creators else game.series) or ""
         list_item.set_child(
             GameTile(
                 game,
                 self._tile_kind(),
                 self._item_progress(game),
                 self._is_playing(game),
+                kind not in ("type", "system", "source", "host") or bool(self._search_text),
+                caption,
+                self._library_tile_scale(),
             )
         )
 
@@ -1359,6 +1517,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.filter_button.add_css_class("kabin-filter-active")
         else:
             self.filter_button.remove_css_class("kabin-filter-active")
+        self._apply_grid_metrics()
         self.game_filter.changed(Gtk.FilterChange.DIFFERENT)
         self._update_stack_visibility()
         self._update_recent_visibility()
@@ -1381,7 +1540,6 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _add_filter_chip(self, label: str, on_remove):
         chip = Gtk.Button(label=label)
-        chip.add_css_class("pill")
         chip.add_css_class("kabin-filter-chip")
         chip.set_tooltip_text(f"Remove {label}")
         chip.connect("clicked", lambda *_: on_remove())
@@ -1432,9 +1590,18 @@ class MainWindow(Adw.ApplicationWindow):
             return get_kind(value)
         return CABINET_KIND
 
+    def _visible_count(self) -> int:
+        return sum(1 for game in self._games if self._matches(game))
+
+    def _library_tile_scale(self) -> float:
+        if self._is_on_home():
+            return 1.0
+        return library_tile_scale(self._visible_count())
+
     def _apply_grid_metrics(self):
         kind = self._tile_kind()
-        self.game_grid.set_min_columns(kind.min_columns)
+        min_cols = 1 if self._visible_count() <= 3 else kind.min_columns
+        self.game_grid.set_min_columns(min_cols)
         self.game_grid.set_max_columns(kind.max_columns)
         for name in ("portrait", "square", "landscape"):
             if name == kind.shape:
@@ -1459,30 +1626,28 @@ class MainWindow(Adw.ApplicationWindow):
         elif kind == "preset" and value == "unplayed":
             title, context = "Not opened yet", "Titles you have not launched from Kabin"
         elif kind == "home":
-            title, context = "Welcome back", "Continue below, or browse the full cabinet"
+            title, context = "Home", "Continue, or open a library"
         elif kind == "type":
             title = media.plural
-            context = {
-                "game": "Installed and streamed games",
-                "book": "Ebooks and documents",
-                "comic": "Issues and collected editions",
-                "music": "Albums grouped by folder",
-                "video": "Movies and video files",
-            }.get(value, media.plural)
+            context = ""
         else:
-            title, context = "Library", "Every title in this cabinet"
+            title, context = "Library", ""
         count = sum(1 for game in self._games if self._matches(game))
         context_count = sum(1 for game in self._games if self._matches_context(game))
         noun = count_noun(count, media if kind == "type" else CABINET_KIND)
         if kind != "type":
             noun = "title" if count == 1 else "titles"
         self.library_title.set_label(title)
+        for name in KINDS:
+            self.library_title.remove_css_class(f"kabin-kind-{name}")
         count_text = (
             f"{count} of {context_count} {noun}"
             if count != context_count
             else f"{count} {noun}"
         )
-        self.library_subtitle.set_label(f"{context} · {count_text}")
+        self.library_subtitle.set_label(
+            f"{context} · {count_text}" if context else count_text
+        )
         if kind == "type" and count == 0:
             self.no_matches_status.set_title(f"No {media.plural.lower()} yet")
             self.no_matches_status.set_description(media.empty_hint)
@@ -1510,6 +1675,7 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_search_changed(self, entry):
         self._search_text = entry.get_text().strip().casefold()
+        self._apply_grid_metrics()
         self.game_filter.changed(Gtk.FilterChange.DIFFERENT)
         self._update_stack_visibility()
         self._update_recent_visibility()
@@ -1546,38 +1712,15 @@ class MainWindow(Adw.ApplicationWindow):
         if not self.game_selection.get_n_items():
             self.game_selection.set_selected(Gtk.INVALID_LIST_POSITION)
             self._show_details(None)
-        else:
+        elif self.main_stack.get_visible_child_name() == "details":
             self.game_selection.set_selected(0)
+        else:
+            self.game_selection.set_selected(Gtk.INVALID_LIST_POSITION)
+            self._show_details(None)
 
     def _toast(self, title: str):
         if hasattr(self, "toast_overlay"):
             self.toast_overlay.add_toast(Adw.Toast(title=title, timeout=5))
-
-    def _update_shortcut_bar(self):
-        if not hasattr(self, "shortcut_bar"):
-            return
-        while (child := self.shortcut_bar.get_first_child()) is not None:
-            self.shortcut_bar.remove(child)
-        pads = connected_controllers()
-        shortcuts = (
-            ("A", "Open") if pads else ("Enter", "Open"),
-            ("B", "Back") if pads else ("Esc", "Back"),
-            ("Y", "Favorite") if pads else ("/", "Search"),
-            ("LB RB", "Library") if pads else ("PgUp", "Library"),
-            ("Start", "Settings") if pads else ("F1", "Settings"),
-            ("L3", "Surprise") if pads else ("F2", "Surprise"),
-        )
-        for hint, action in shortcuts:
-            chip = Gtk.Box(spacing=8)
-            chip.add_css_class("kabin-shortcut-chip")
-            key = Gtk.Label(label=hint)
-            key.add_css_class("kabin-shortcut-key")
-            label = Gtk.Label(label=action)
-            label.add_css_class("kabin-shortcut")
-            label.add_css_class("caption")
-            chip.append(key)
-            chip.append(label)
-            self.shortcut_bar.append(chip)
 
     def _launch_game(self, game):
         if plays_in_kabin(game):
@@ -1672,9 +1815,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.details_progress.set_value(ratio)
             self.details_progress.set_visible(ratio > 0)
         if hasattr(self, "now_playing_button"):
-            title = self._playback_item.title if self._playback_item else "Now playing"
-            self.now_playing_label.set_label(title)
-            self.now_playing_button.set_visible(self._playback is not None)
+            self.now_playing_button.set_visible(False)
         if hasattr(self, "details_tracks"):
             self._highlight_current_track()
 
@@ -1730,7 +1871,7 @@ class MainWindow(Adw.ApplicationWindow):
     def _show_player_bar(self, visible: bool):
         if not hasattr(self, "bottom_stack"):
             return
-        self.bottom_stack.set_visible_child_name("player" if visible else "shortcuts")
+        self.bottom_stack.set_visible(visible)
 
     def _persist_progress(self, item, session):
         if not item or not session:
@@ -1773,7 +1914,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._sync_media_chrome(item)
         if item:
             self._sync_play_button(item)
-        if hasattr(self, "recent_shelf"):
+        if hasattr(self, "home_continue_box"):
             self._rebuild_recent_shelf(self._games)
 
     def _refresh_player_bar(self):
@@ -2073,15 +2214,43 @@ class MainWindow(Adw.ApplicationWindow):
         self.backdrop_picture.set_paintable(Gdk.Texture.new_for_pixbuf(small))
 
     def _toggle_favorite_selected(self):
-        if not self._selected_game:
+        self._toggle_favorite_item(self._selected_game)
+
+    def _toggle_favorite_item(self, game):
+        if not game:
             return
-        self.config.toggle_favorite(self._selected_game.id)
+        self.config.toggle_favorite(game.id)
+        self._selected_game = game
         self._update_favorite_button()
         self._rebuild_sidebar(self._games, preserve_category=self._category)
         self._rebuild_recent_shelf(self._games)
-        if not self._matches(self._selected_game):
+        if not self._matches(game):
             self._close_details()
         self._apply_library_filters()
+
+    def _change_selected_cover(self, _button):
+        game = self._selected_game
+        if not game:
+            return
+        self.details_more_button.popdown()
+        picker = CoverPicker(
+            game,
+            self.config,
+            on_chosen=lambda path: self._apply_chosen_cover(game, path),
+            transient_for=self,
+        )
+        picker.present()
+
+    def _apply_chosen_cover(self, game, path):
+        if not game or not path:
+            return
+        game.icon_path = str(path)
+        game.extra["needs_artwork"] = False
+        if self._selected_game is game:
+            self.details_picture.set_filename(str(path))
+            self._update_backdrop(path)
+        self.game_filter.changed(Gtk.FilterChange.DIFFERENT)
+        self._rebuild_recent_shelf(self._games)
 
     def _hide_selected_game(self, _button):
         game = self._selected_game
@@ -2110,10 +2279,27 @@ class MainWindow(Adw.ApplicationWindow):
             "Remove from Favorites" if is_favorite else "Add to Favorites"
         )
 
+    def _library_backdrop_item(self):
+        selected = (
+            self.game_selection.get_selected_item() if hasattr(self, "game_selection") else None
+        )
+        if selected and self._matches(selected.game) and selected.game.icon_path:
+            return selected.game
+        if self._playback_item and self._matches(self._playback_item) and self._playback_item.icon_path:
+            return self._playback_item
+        for game in self._games:
+            if self._matches(game) and game.icon_path:
+                return game
+        return None
+
+    def _refresh_library_backdrop(self):
+        item = self._library_backdrop_item()
+        self._update_backdrop(item.icon_path if item else None)
+
     def _show_details(self, game):
         self._selected_game = game
         if game is None:
-            self._update_backdrop(None)
+            self._refresh_library_backdrop()
             return
 
         kind = kind_for(game)
@@ -2124,6 +2310,8 @@ class MainWindow(Adw.ApplicationWindow):
             else:
                 self.details_kind_chip.remove_css_class(f"kabin-kind-{name}")
         self.details_art_frame.set_size_request(kind.details_width, kind.details_height)
+        self.details_art_plate.set_size_request(kind.details_width, kind.details_height)
+        self.details_picture.set_content_fit(_art_fit(kind))
         for name in ("portrait", "square", "landscape"):
             if name == kind.shape:
                 self.details_art_frame.add_css_class(f"kabin-art-{name}")
@@ -2137,21 +2325,18 @@ class MainWindow(Adw.ApplicationWindow):
         self._update_backdrop(None)
 
         source_labels = {"steam": "Steam", "desktop": "Installed App", "remote": "Kabin Host"}
-        meta_parts = [kind.label]
-        if game.source == "remote":
-            meta_parts.append("Kabin Host")
-        else:
-            meta_parts.append(source_labels.get(game.source, game.subtitle or kind.plural))
+        meta_parts = []
         if game.creators:
             meta_parts.append(", ".join(game.creators[:3]))
         if game.series:
             index = f" #{int(game.series_index)}" if game.series_index else ""
             meta_parts.append(f"{game.series}{index}")
+        if game.source == "remote":
+            meta_parts.append("Kabin Host")
+        elif kind.id == "game":
+            meta_parts.append(source_labels.get(game.source, game.subtitle or kind.plural))
         if game.media_format and game.media_format not in {"", "album"}:
             meta_parts.append(game.media_format.upper())
-        opened = self.config.play_count(game.id)
-        if opened:
-            meta_parts.append("Opened once" if opened == 1 else f"Opened {opened} times")
         last_played = self.config.recent.get(game.id)
         if last_played:
             played_date = time.strftime("%b %d, %Y", time.localtime(last_played)).replace(" 0", " ")
@@ -2206,6 +2391,10 @@ class MainWindow(Adw.ApplicationWindow):
                     meta_parts.append(", ".join(metadata["developers"][:2]))
                 if metadata.get("description"):
                     self.details_description.set_label(metadata["description"])
+        elif kind_for(game).id == "book" and game.extra.get("needs_artwork"):
+            _queue_book_cover(
+                game, lambda path: self._on_remote_details_art_ready(game, path)
+            )
         elif game.extra.get("needs_artwork") and _artwork_api_key:
             _sgdb_artwork.request_job(
                 ("sgdb", game.id),
@@ -2243,6 +2432,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.host_service.stop()
         _remote_artwork.close()
         _sgdb_artwork.close()
+        _book_artwork.close()
         return False
 
     def _queue_cabinet_action(self, action: str):
@@ -2252,16 +2442,57 @@ class MainWindow(Adw.ApplicationWindow):
         focused = self.get_focus()
         return isinstance(focused, (Gtk.Editable, Gtk.Entry, Gtk.SearchEntry, Gtk.DropDown, Gtk.TextView))
 
-    def _set_nav_target(self, target: str):
+    def _set_nav_target(self, target: str, *, show_focus: bool = True):
         self._nav_target = target
+        self.sidebar_list.remove_css_class("kabin-nav-focus")
+        self.game_grid.remove_css_class("kabin-nav-focus")
+        if not show_focus:
+            return
         if target == "sidebar":
             self.sidebar_list.add_css_class("kabin-nav-focus")
-            self.game_grid.remove_css_class("kabin-nav-focus")
             self.sidebar_list.grab_focus()
+        elif target == "home":
+            self._restore_home_focus()
         else:
             self.game_grid.add_css_class("kabin-nav-focus")
-            self.sidebar_list.remove_css_class("kabin-nav-focus")
             self.game_grid.grab_focus()
+
+    def _sync_library_nav(self):
+        if self._nav_target == "sidebar":
+            return
+        wanted = self._library_nav_target()
+        if self._nav_target != wanted:
+            if self._cabinet_chrome_focused():
+                self._nav_target = wanted
+                return
+            self._set_nav_target(wanted, show_focus=False)
+
+    def _restore_home_focus(self):
+        rows = self._home_focus_rows
+        if not rows:
+            if hasattr(self, "hero_play"):
+                self.hero_play.grab_focus()
+            return
+        row, col = self._home_focus_pos
+        row = max(0, min(row, len(rows) - 1))
+        col = max(0, min(col, len(rows[row]) - 1))
+        self._home_focus_pos = (row, col)
+        widget = rows[row][col]
+        widget.grab_focus()
+        game = getattr(widget, "_kabin_game", None)
+        if game:
+            self._selected_game = game
+
+    def _focused_home_game(self):
+        if self._nav_target != "home":
+            return self._featured_item
+        rows = self._home_focus_rows
+        if not rows:
+            return self._featured_item
+        row, col = self._home_focus_pos
+        if row >= len(rows) or col >= len(rows[row]):
+            return self._featured_item
+        return getattr(rows[row][col], "_kabin_game", None) or self._featured_item
 
     def _sidebar_categories(self) -> list:
         return [category for category in self._sidebar_rows.values() if category[0] != "action"]
@@ -2283,7 +2514,7 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _grid_column_count(self) -> int:
         width = max(1, self.game_grid.get_width())
-        tile = self._tile_kind().tile_width + 16
+        tile = int(self._tile_kind().tile_width * self._library_tile_scale()) + 20
         return max(1, min(self._tile_kind().max_columns, width // tile))
 
     def _selected_index(self) -> int:
@@ -2345,16 +2576,16 @@ class MainWindow(Adw.ApplicationWindow):
                 if self.search_entry.get_text():
                     self.search_entry.set_text("")
                 else:
-                    self._set_nav_target("grid")
+                    self._set_nav_target(self._library_nav_target())
             elif action == "confirm":
-                self._set_nav_target("grid")
+                self._set_nav_target(self._library_nav_target())
             return False
 
         if action == "back":
             if self.search_entry.get_text():
                 self.search_entry.set_text("")
             elif self._nav_target == "sidebar":
-                self._set_nav_target("grid")
+                self._set_nav_target(self._library_nav_target())
             elif self._category != CATEGORY_HOME:
                 self._select_category(CATEGORY_HOME)
             elif self.is_fullscreen():
@@ -2363,13 +2594,18 @@ class MainWindow(Adw.ApplicationWindow):
 
         if action == "confirm":
             if self._nav_target == "sidebar":
-                self._set_nav_target("grid")
+                self._set_nav_target(self._library_nav_target())
+            elif self._nav_target == "home":
+                self._activate_home_focus()
             else:
                 self._open_details_selected()
             return False
 
         if action == "extra":
-            self._toggle_favorite_selected()
+            if self._nav_target == "home":
+                self._toggle_favorite_item(self._focused_home_game())
+            else:
+                self._toggle_favorite_selected()
             return False
 
         if action in ("prev", "next"):
@@ -2380,14 +2616,39 @@ class MainWindow(Adw.ApplicationWindow):
             self._move_cabinet(action)
         return False
 
+    def _activate_home_focus(self):
+        rows = self._home_focus_rows
+        if not rows:
+            self._on_hero_play()
+            return
+        row, col = self._home_focus_pos
+        if row >= len(rows) or col >= len(rows[row]):
+            self._on_hero_play()
+            return
+        rows[row][col].activate()
+
     def _move_cabinet(self, action: str):
         if self._nav_target == "sidebar":
             if action == "right":
-                self._set_nav_target("grid")
+                self._set_nav_target(self._library_nav_target())
             elif action in ("up", "down"):
                 self._cycle_category(-1 if action == "up" else 1)
             return
 
+        if self._nav_target == "home":
+            lengths = [len(row) for row in self._home_focus_rows if row]
+            next_pos = move_home_focus(
+                lengths, self._home_focus_pos[0], self._home_focus_pos[1], action
+            )
+            if next_pos is None:
+                self._set_nav_target("sidebar")
+                return
+            self._home_focus_pos = next_pos
+            self._restore_home_focus()
+            return
+
+        if "kabin-nav-focus" not in self.game_grid.get_css_classes():
+            self.game_grid.add_css_class("kabin-nav-focus")
         count = self.game_selection.get_n_items()
         if not count:
             if action == "left":
@@ -2442,7 +2703,7 @@ class MainWindow(Adw.ApplicationWindow):
             letter = Gdk.keyval_to_unicode(keyval)
             if letter:
                 character = chr(letter)
-                if character.isalnum():
+                if character.isalnum() and not self._is_on_home():
                     self._jump_to_letter(character)
                     return True
         return False
@@ -2467,7 +2728,7 @@ class MainWindow(Adw.ApplicationWindow):
         if index is None:
             self._toast("Nothing here to surprise you with")
             return
-        self._set_nav_target("grid")
+        self._set_nav_target(self._library_nav_target() if not self._is_on_home() else "grid")
         self._select_index(index)
         item = self.game_selection.get_selected_item()
         if item:

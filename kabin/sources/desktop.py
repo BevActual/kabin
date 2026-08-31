@@ -9,9 +9,9 @@ from gi.repository import Gio  # noqa: E402
 from ..artwork import resolve_local_cover  # noqa: E402
 from ..models import Game  # noqa: E402
 
-# Steam owns its own launch path via sources/steam.py; skip its launcher entry
-# and kabin' own launcher entry (Categories=Game, since it's a game
-# launcher, would otherwise list itself) so they don't show up as "games".
+# Steam owns its own launch path via sources/steam.py; skip its launcher
+# entry, Kabin's own launcher, emulator frontends, and stream clients
+# (Moonlight/Sunshine are not games even when they ship Categories=Game).
 _EXCLUDED_IDS = {
     "steam.desktop",
     "kabin.desktop",
@@ -29,6 +29,12 @@ _EXCLUDED_IDS = {
     "com.github.Rosalie241.RMG.desktop",
     "io.github.gopher64.gopher64.desktop",
     "io.github.punesemu.puNES.desktop",
+    "com.moonlight_stream.Moonlight.desktop",
+    "com.moonlight-stream.Moonlight.desktop",
+    "moonlight.desktop",
+    "sunshine.desktop",
+    "com.lizardbyte.sunshine.desktop",
+    "dev.lizardbyte.app.Sunshine.desktop",
 }
 
 _STEAM_RUNGAME_RE = re.compile(r"steam://rungameid/(\d+)")

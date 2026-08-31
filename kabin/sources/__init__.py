@@ -1,3 +1,4 @@
+from ..artwork import apply_chosen_covers
 from . import desktop, media_dirs, remote, roms, steam
 
 
@@ -48,6 +49,7 @@ def discover_all_with_status(config) -> tuple[list, dict]:
             )
         )
 
+    apply_chosen_covers(games, config.covers)
     games.sort(key=lambda g: g.sort_key)
     return games, host_statuses
 

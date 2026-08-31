@@ -17,6 +17,11 @@ class TestDesktopSource(unittest.TestCase):
         self.assertIn("mame.desktop", desktop._EXCLUDED_IDS)
         self.assertIn("com.libretro.RetroArch.desktop", desktop._EXCLUDED_IDS)
 
+    def test_excludes_streaming_clients_from_game_library(self):
+        self.assertIn("com.moonlight_stream.Moonlight.desktop", desktop._EXCLUDED_IDS)
+        self.assertIn("moonlight.desktop", desktop._EXCLUDED_IDS)
+        self.assertIn("sunshine.desktop", desktop._EXCLUDED_IDS)
+
     def test_rungame_regex_extracts_appid(self):
         match = desktop._STEAM_RUNGAME_RE.search("steam steam://rungameid/553850")
         self.assertIsNotNone(match)

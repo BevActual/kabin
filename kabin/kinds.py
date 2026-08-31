@@ -22,6 +22,7 @@ class MediaKind:
     extensions: frozenset[str]
     empty_hint: str
     accent: str = "#ffb454"
+    art_fit: str = "cover"
 
 
 KINDS = {
@@ -62,6 +63,7 @@ KINDS = {
         extensions=frozenset({".epub", ".pdf", ".mobi", ".azw3", ".fb2", ".txt"}),
         empty_hint="Add a Books folder in Settings. Kabin opens files with your default reader.",
         accent="#e8c99a",
+        art_fit="contain",
     ),
     "comic": MediaKind(
         id="comic",
@@ -78,9 +80,10 @@ KINDS = {
         details_height=435,
         min_columns=2,
         max_columns=10,
-        extensions=frozenset({".cbz", ".cbr", ".cb7", ".cbt"}),
-        empty_hint="Add a Comics folder in Settings. CBZ and CBR files open in your reader.",
+        extensions=frozenset({".cbz", ".cbr", ".cb7", ".cbt", ".epub", ".pdf"}),
+        empty_hint="Add a Comics folder in Settings. CBZ, CBR, EPUB, and PDF files open in your reader.",
         accent="#ff8a6b",
+        art_fit="contain",
     ),
     "music": MediaKind(
         id="music",
@@ -135,4 +138,6 @@ def kind_for(item) -> MediaKind:
 
 
 def count_noun(count: int, kind: MediaKind) -> str:
+    if kind.id == "music":
+        return "album" if count == 1 else "albums"
     return kind.label.lower() if count == 1 else kind.plural.lower()

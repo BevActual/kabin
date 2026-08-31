@@ -1,28 +1,75 @@
 /* Kabin's owned dark visual system. Palette tokens live in kabin/style.py.
-   Sized for a desk and a couch. Layout follows Apple HIG ideas that travel:
-   clarity (one hierarchy), deference (chrome behind artwork), depth
-   (focus lifts; color is not the only signal). */
+   Media lives in rectangles: jackets, issues, album squares, and frames.
+   Corners stay square so artwork is the object. Focus lifts and gets a
+   light edge; color is not the only signal. */
 
 .kabin-window {
   background-color: @bg_darker_color;
+  --adw-radius: 0px;
+  --button-radius: 0px;
+  --card-radius: 0px;
+  --window-radius: 0px;
 }
 
 .kabin-settings {
-  background-color: @bg_color;
+  background-color: @bg_darker_color;
+}
+
+.kabin-cover-choice-art {
+  background-color: transparent;
+  min-width: 120px;
+  min-height: 168px;
+}
+
+.kabin-window button,
+.kabin-window button *,
+.kabin-window button.pill,
+.kabin-window button.circular,
+.kabin-window button.suggested-action,
+.kabin-window button.flat,
+.kabin-window menubutton > button,
+.kabin-window dropdown > button,
+.kabin-window entry,
+.kabin-window searchentry,
+.kabin-window searchentry > text,
+.kabin-window headerbar button,
+.kabin-window headerbar entry,
+.kabin-window headerbar searchentry,
+.kabin-window headerbar dropdown > button,
+.kabin-settings button,
+.kabin-settings button *,
+.kabin-settings button.pill,
+.kabin-settings button.suggested-action,
+.kabin-settings menubutton > button,
+.kabin-settings entry {
+  border-radius: 0;
+}
+
+.kabin-window listbox.kabin-sidebar > row,
+.kabin-window listbox.kabin-sidebar > row:hover,
+.kabin-window listbox.kabin-sidebar > row:selected,
+.kabin-window listbox.kabin-sidebar > row:selected:hover,
+.kabin-window listbox.kabin-sidebar > row:focus,
+.kabin-window listbox.kabin-sidebar > row:selected:focus,
+.kabin-sidebar-item,
+.kabin-sidebar-item:selected {
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
 }
 
 .kabin-window popover > contents,
 .kabin-settings popover > contents {
   background-color: @bg_light_color;
   border: 1px solid alpha(@fg_color, 0.08);
-  border-radius: 14px;
+  border-radius: 0;
   box-shadow: 0 18px 48px alpha(black, 0.5);
 }
 
 .kabin-topbar {
-  background-color: alpha(@bg_dark_color, 0.86);
-  border-bottom: 1px solid alpha(@fg_color, 0.05);
-  min-height: 56px;
+  background-color: alpha(@bg_dark_color, 0.28);
+  border-bottom: none;
+  min-height: 48px;
 }
 
 .kabin-brand {
@@ -44,10 +91,11 @@
 .kabin-search {
   min-width: 280px;
   min-height: 36px;
+  border-radius: 0;
 }
 
 .kabin-icon-button {
-  border-radius: 999px;
+  border-radius: 0;
   min-width: 44px;
   min-height: 44px;
 }
@@ -62,17 +110,25 @@
   padding: 12px 8px;
 }
 
-.kabin-sidebar-header {
+.kabin-kicker,
+.kabin-sidebar-header,
+.kabin-shelf-header,
+.kabin-hero-kicker,
+.kabin-details-kicker {
   color: @fg_dim_color;
-  letter-spacing: 1.6px;
+  letter-spacing: 1.8px;
   font-weight: 700;
-  padding: 20px 12px 8px 12px;
+  font-size: 0.78em;
+}
+
+.kabin-sidebar-header {
+  padding: 18px 12px 6px 12px;
 }
 
 .kabin-sidebar-row {
-  border-radius: 12px;
+  border-radius: 0;
   padding: 11px 12px;
-  margin: 3px 4px;
+  margin: 2px 0;
   min-height: 24px;
 }
 
@@ -82,7 +138,7 @@
 
 row:selected .kabin-sidebar-row {
   background-color: alpha(@fg_color, 0.1);
-  box-shadow: inset 3px 0 0 @accent_color;
+  box-shadow: none;
 }
 
 row:selected .kabin-sidebar-icon {
@@ -94,15 +150,15 @@ row:selected .kabin-sidebar-label {
   font-weight: 700;
 }
 
-.kabin-sidebar.kabin-nav-focus {
+.kabin-sidebar.kabin-nav-focus row:selected .kabin-sidebar-row {
   box-shadow: inset 3px 0 0 alpha(white, 0.86);
 }
 
 .kabin-sidebar-count {
   background-color: alpha(@fg_color, 0.08);
   color: @fg_dim_color;
-  border-radius: 999px;
-  padding: 2px 8px;
+  border-radius: 0;
+  padding: 2px 7px;
   font-weight: 600;
 }
 
@@ -111,13 +167,67 @@ row:selected .kabin-sidebar-count {
   color: @fg_color;
 }
 
-.kabin-content {
-  background-color: alpha(@bg_color, 0.55);
+.kabin-content,
+.kabin-content-page,
+.kabin-content-page.background,
+.kabin-content-page.view,
+.kabin-library-stack,
+.kabin-main-stack,
+.kabin-page-scroller,
+.kabin-page-scroller > viewport,
+.kabin-game-scroller,
+.kabin-game-scroller > viewport,
+.kabin-game-grid,
+.kabin-game-grid.view,
+.kabin-shelf-rail,
+.kabin-shelf-rail > viewport,
+.kabin-window .content-pane,
+.kabin-window .content-pane.view,
+.kabin-window gridview,
+.kabin-window gridview.view,
+.kabin-window stack,
+.kabin-window overlay,
+.kabin-window navigation-page,
+.kabin-window navigation-view,
+.kabin-window navigation-view-page,
+.kabin-window navigation-view-page.background,
+.kabin-window navigation-view-page.view {
+  background-color: transparent;
+  box-shadow: none;
+  border: none;
+}
+
+.kabin-content-page,
+.kabin-window .content-pane {
+  --view-bg-color: transparent;
+  margin: 0;
+  border-radius: 0;
+}
+
+.kabin-window gridview > child,
+.kabin-window gridview > child:hover,
+.kabin-window gridview > child:active,
+.kabin-window gridview > child:selected,
+.kabin-window gridview > child:selected:hover,
+.kabin-window gridview > child:focus,
+.kabin-window gridview > child:selected:focus,
+.kabin-window gridview > child:focus-within,
+.kabin-window gridview > child.activatable:hover,
+.kabin-window gridview > child.activatable:active,
+.kabin-window gridview > child.activatable:selected,
+.kabin-window gridview > child.activatable:selected:hover,
+.kabin-window gridview > child.activatable:selected:active {
+  background-color: transparent;
+  box-shadow: none;
+  outline: none;
+  border: none;
+  border-radius: 0;
 }
 
 .kabin-library-title {
   color: @fg_color;
   font-weight: 800;
+  font-size: 1.6em;
 }
 
 .kabin-library-subtitle {
@@ -129,6 +239,10 @@ row:selected .kabin-sidebar-count {
   opacity: 0.5;
 }
 
+.kabin-window.kabin-on-library .kabin-backdrop {
+  opacity: 0.7;
+}
+
 .kabin-backdrop-scrim {
   background-image: linear-gradient(
     to bottom,
@@ -137,12 +251,21 @@ row:selected .kabin-sidebar-count {
   );
 }
 
-.kabin-tile {
-  border-radius: 16px;
+.kabin-backdrop-scrim.kabin-backdrop-library {
+  background-image: linear-gradient(
+    to bottom,
+    alpha(@bg_darker_color, 0.08),
+    alpha(@bg_darker_color, 0.36)
+  );
+}
+
+.kabin-tile,
+button.kabin-tile {
+  border-radius: 0;
   padding: 0;
-  background-color: @bg_light_color;
-  border: 1px solid alpha(@fg_color, 0.03);
-  box-shadow: 0 8px 18px alpha(black, 0.28);
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 .kabin-tile:hover,
@@ -150,40 +273,43 @@ row:selected .kabin-sidebar-count {
 .kabin-tile:selected,
 .kabin-game-grid > child:selected .kabin-tile,
 .kabin-game-grid > child:focus-within .kabin-tile,
-.kabin-game-grid.kabin-nav-focus > child:selected .kabin-tile,
-.kabin-browse-card:hover,
-.kabin-browse-card:focus {
-  border-color: alpha(white, 0.55);
-  background-color: @bg_light_color;
+.kabin-game-grid.kabin-nav-focus > child:selected .kabin-tile {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.kabin-tile:focus-visible .kabin-tile-art,
+button.kabin-tile:focus-visible .kabin-tile-art,
+.kabin-game-grid.kabin-nav-focus > child:selected .kabin-tile-art {
+  transform: scale(1.06);
   box-shadow:
-    0 22px 40px alpha(black, 0.55),
-    0 0 0 2px alpha(white, 0.88);
+    0 18px 36px alpha(black, 0.55),
+    0 0 0 2px alpha(white, 0.9);
 }
 
 .kabin-game-grid {
-  padding: 12px 4px 20px;
+  padding: 4px 0 24px;
 }
 
 .kabin-game-grid > child {
-  padding: 10px;
+  padding: 14px 10px;
+}
+
+.kabin-shelf-row {
+  padding-right: 64px;
+}
+
+.kabin-tile-art,
+.kabin-art-square,
+.kabin-art-landscape,
+.kabin-details-art-frame.kabin-art-square,
+.kabin-details-art-frame.kabin-art-landscape {
+  border-radius: 0;
 }
 
 .kabin-tile-art {
-  border-radius: 16px 16px 0 0;
-  background-color: @muted_color;
-}
-
-.kabin-art-square {
-  border-radius: 12px 12px 0 0;
-}
-
-.kabin-art-landscape {
-  border-radius: 14px 14px 0 0;
-}
-
-.kabin-details-art-frame.kabin-art-square,
-.kabin-details-art-frame.kabin-art-landscape {
-  border-radius: 18px;
+  background-color: transparent;
+  transition: transform 140ms ease, box-shadow 140ms ease;
 }
 
 .kabin-grid-landscape {
@@ -191,11 +317,11 @@ row:selected .kabin-sidebar-count {
 }
 
 .kabin-tile-plate {
-  background-color: @muted_color;
+  background-color: transparent;
 }
 
 .kabin-tile-text {
-  padding: 12px 14px 14px;
+  padding: 8px 2px 0;
 }
 
 .kabin-tile-title {
@@ -204,19 +330,18 @@ row:selected .kabin-sidebar-count {
 }
 
 .kabin-tile-subtitle {
-  color: @fg_dim_color;
+  color: alpha(@fg_color, 0.72);
 }
 
 .kabin-shelf-header {
-  color: @fg_color;
-  letter-spacing: 0.4px;
+  margin-bottom: 2px;
 }
 
 .kabin-tile-badge {
-  background-color: alpha(black, 0.5);
-  border-radius: 999px;
+  background-color: alpha(black, 0.55);
+  border-radius: 0;
   padding: 5px;
-  margin: 8px;
+  margin: 0;
 }
 
 .kabin-tile-badge image {
@@ -227,59 +352,70 @@ row:selected .kabin-sidebar-count {
   margin-top: 12px;
   min-height: 44px;
   min-width: 140px;
-}
-
-.kabin-shortcut-bar {
-  background-color: alpha(@bg_darker_color, 0.72);
-  border-top: 1px solid alpha(@fg_color, 0.05);
-  padding: 10px 20px;
-  min-height: 36px;
-}
-
-.kabin-shortcut-chip {
-  align-items: center;
-}
-
-.kabin-shortcut-key {
-  background-color: alpha(@fg_color, 0.08);
-  color: @fg_color;
-  border-radius: 8px;
-  min-width: 28px;
-  min-height: 28px;
-  padding: 2px 8px;
-  font-weight: 800;
-  letter-spacing: 0.4px;
-}
-
-.kabin-shortcut {
-  color: @fg_dim_color;
-  letter-spacing: 0.3px;
-  font-weight: 600;
+  border-radius: 0;
 }
 
 .kabin-hero {
-  border-radius: 22px;
+  border-radius: 0;
   padding: 0;
-  min-height: 280px;
+  min-height: 320px;
   background-color: @bg_darker_color;
-  box-shadow: 0 22px 50px alpha(black, 0.45);
-  border: 1px solid alpha(@fg_color, 0.04);
 }
 
-.kabin-hero-copy {
-  padding: 28px 28px 22px;
+.kabin-hero-bleed {
+  opacity: 0.38;
+}
+
+.kabin-hero.kabin-hero-quiet {
+  min-height: 0;
+  background-color: @bg_darker_color;
+}
+
+.kabin-hero.kabin-hero-quiet.kabin-kind-book {
+  background-image: linear-gradient(120deg, alpha(#e8c99a, 0.22), @bg_darker_color 58%);
+}
+
+.kabin-hero.kabin-hero-quiet.kabin-kind-comic {
+  background-image: linear-gradient(120deg, alpha(#ff8a6b, 0.20), @bg_darker_color 58%);
+}
+
+.kabin-hero.kabin-hero-quiet.kabin-kind-music {
+  background-image: linear-gradient(120deg, alpha(#65d995, 0.18), @bg_darker_color 58%);
+}
+
+.kabin-hero.kabin-hero-quiet.kabin-kind-game {
+  background-image: linear-gradient(120deg, alpha(#ffb454, 0.16), @bg_darker_color 58%);
+}
+
+.kabin-hero-quiet .kabin-hero-bleed {
+  opacity: 0;
+}
+
+.kabin-hero-row {
+  padding: 28px 32px 24px;
   background-image: linear-gradient(
     to top,
-    alpha(black, 0.82) 0%,
-    alpha(black, 0.28) 62%,
+    alpha(black, 0.78) 0%,
+    alpha(black, 0.22) 70%,
     transparent 100%
   );
 }
 
+.kabin-hero-quiet .kabin-hero-row {
+  background-image: none;
+  padding: 28px 32px 8px;
+}
+
+.kabin-hero-poster {
+  background-color: transparent;
+}
+
+.kabin-hero-copy {
+  padding: 4px 0 0 4px;
+}
+
 .kabin-hero-kicker {
   color: alpha(white, 0.78);
-  letter-spacing: 1.8px;
-  font-weight: 800;
 }
 
 .kabin-hero-title {
@@ -291,80 +427,81 @@ row:selected .kabin-sidebar-count {
   color: alpha(white, 0.72);
 }
 
-.kabin-browse-card {
-  min-width: 168px;
-  min-height: 118px;
-  padding: 18px;
-  border-radius: 16px;
-  background-color: alpha(@bg_light_color, 0.92);
-  border: 1px solid alpha(@fg_color, 0.05);
-  box-shadow: 0 8px 18px alpha(black, 0.22);
-}
-
 .kabin-kind-chip {
   background-color: alpha(@fg_color, 0.1);
   color: @fg_color;
-  border-radius: 999px;
-  padding: 4px 11px;
+  border-radius: 0;
+  padding: 4px 10px;
   font-weight: 800;
   letter-spacing: 0.6px;
 }
 
-.kabin-kind-book,
+.kabin-details-kicker.kabin-kind-book,
+.kabin-details-kicker.kabin-kind-comic,
+.kabin-details-kicker.kabin-kind-music,
+.kabin-details-kicker.kabin-kind-video {
+  background-color: transparent;
+  padding: 0;
+}
+
+.kabin-kicker.kabin-kind-book,
+.kabin-details-kicker.kabin-kind-book,
 .kabin-kind-chip.kabin-kind-book {
   color: #e8c99a;
 }
 
-.kabin-kind-comic,
+.kabin-kicker.kabin-kind-comic,
+.kabin-details-kicker.kabin-kind-comic,
 .kabin-kind-chip.kabin-kind-comic {
   color: #ff8a6b;
 }
 
-.kabin-kind-music,
+.kabin-kicker.kabin-kind-music,
+.kabin-details-kicker.kabin-kind-music,
 .kabin-kind-chip.kabin-kind-music {
   color: #65d995;
 }
 
-.kabin-kind-video,
+.kabin-kicker.kabin-kind-video,
+.kabin-details-kicker.kabin-kind-video,
 .kabin-kind-chip.kabin-kind-video {
   color: #7ec8e3;
 }
 
-.kabin-browse-card.kabin-kind-book {
-  box-shadow: inset 0 -2px 0 #e8c99a;
-}
-
-.kabin-browse-card.kabin-kind-comic {
-  box-shadow: inset 0 -2px 0 #ff8a6b;
-}
-
-.kabin-browse-card.kabin-kind-music {
-  box-shadow: inset 0 -2px 0 #65d995;
-}
-
-.kabin-browse-card.kabin-kind-video {
-  box-shadow: inset 0 -2px 0 #7ec8e3;
-}
-
 .kabin-details-page {
-  background-color: alpha(@bg_darker_color, 0.28);
+  background-color: alpha(@bg_darker_color, 0.88);
 }
 
 .kabin-details-back {
-  margin: 20px 24px;
+  margin: 12px 20px 0;
   font-weight: 700;
-  min-height: 44px;
+  min-height: 40px;
 }
 
 .kabin-details-art-frame {
-  border-radius: 22px;
-  background-color: @bg_light_color;
-  box-shadow: 0 28px 64px alpha(black, 0.58);
+  border-radius: 0;
+  background-color: transparent;
+}
+
+.kabin-details-art-frame.kabin-art-portrait {
+  min-width: 320px;
+  min-height: 430px;
+}
+
+.kabin-details-art-frame.kabin-art-square {
+  min-width: 360px;
+  min-height: 360px;
+}
+
+.kabin-details-art-frame.kabin-art-landscape {
+  min-width: 480px;
+  min-height: 270px;
 }
 
 .kabin-details-title {
   color: @fg_color;
   font-weight: 800;
+  font-size: 2em;
 }
 
 .kabin-details-meta {
@@ -376,11 +513,12 @@ row:selected .kabin-sidebar-count {
 }
 
 .kabin-details-page .suggested-action {
-  min-height: 48px;
-  min-width: 148px;
-  padding-left: 28px;
-  padding-right: 28px;
+  min-height: 44px;
+  min-width: 132px;
+  padding-left: 24px;
+  padding-right: 24px;
   font-weight: 800;
+  border-radius: 0;
 }
 
 .kabin-details-page .suggested-action:disabled {
@@ -388,21 +526,21 @@ row:selected .kabin-sidebar-count {
 }
 
 .kabin-player {
-  background-color: alpha(@bg_dark_color, 0.88);
-  border-top: 1px solid alpha(@fg_color, 0.06);
-  padding: 12px 18px;
-  min-height: 80px;
+  background-color: alpha(@bg_darker_color, 0.88);
+  border-top: none;
+  padding: 8px 16px;
+  min-height: 64px;
 }
 
 .kabin-player-art {
-  border-radius: 10px;
+  border-radius: 0;
   background-color: @bg_light_color;
-  box-shadow: 0 8px 18px alpha(black, 0.35);
+  box-shadow: 0 6px 14px alpha(black, 0.35);
 }
 
 .kabin-player-now {
   padding: 4px 10px 4px 4px;
-  border-radius: 14px;
+  border-radius: 0;
 }
 
 .kabin-player-now:hover,
@@ -412,8 +550,14 @@ row:selected .kabin-sidebar-count {
 }
 
 .kabin-player-button {
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 0;
+}
+
+.kabin-player-pause {
+  background-color: alpha(white, 0.14);
+  color: white;
 }
 
 .kabin-player-time {
@@ -428,49 +572,48 @@ row:selected .kabin-sidebar-count {
 }
 
 .kabin-now-chip {
-  background-color: alpha(white, 0.14);
+  background-color: alpha(white, 0.16);
   color: white;
-  border-radius: 999px;
-  padding: 3px 10px;
+  border-radius: 0;
+  padding: 3px 8px;
   font-weight: 800;
   letter-spacing: 0.4px;
 }
 
 .kabin-now-header {
   min-height: 36px;
-  padding-left: 14px;
-  padding-right: 14px;
+  padding-left: 12px;
+  padding-right: 12px;
   background-color: alpha(@fg_color, 0.1);
   color: @fg_color;
   font-weight: 800;
-}
-
-.kabin-now-header label {
-  max-width: 200px;
+  border-radius: 0;
 }
 
 .kabin-tile-playing {
-  box-shadow:
-    0 16px 32px alpha(black, 0.4),
-    0 0 0 2px alpha(white, 0.35);
+  box-shadow: 0 0 0 2px alpha(white, 0.45);
 }
 
 .kabin-progress {
-  min-height: 4px;
+  min-height: 3px;
+}
+
+.kabin-tile-art .kabin-progress {
+  margin: 0;
 }
 
 .kabin-progress trough {
   background-color: alpha(white, 0.28);
   border: none;
-  border-radius: 999px;
-  min-height: 4px;
+  border-radius: 0;
+  min-height: 3px;
 }
 
 .kabin-progress block.filled,
 .kabin-progress block.high,
 .kabin-hero .kabin-progress block.filled {
   background-color: white;
-  border-radius: 999px;
+  border-radius: 0;
 }
 
 .kabin-filter-bar {
@@ -481,19 +624,30 @@ row:selected .kabin-sidebar-count {
   min-height: 32px;
   background-color: alpha(@fg_color, 0.1);
   font-weight: 700;
+  border-radius: 0;
 }
 
-.kabin-hero-play {
+.kabin-hero-play,
+.kabin-window .kabin-hero-play,
+.kabin-window button.kabin-hero-play.suggested-action {
   min-height: 40px;
   min-width: 108px;
   font-weight: 800;
+  border-radius: 0;
 }
 
-.kabin-hero-open {
+.kabin-hero-open,
+.kabin-window button.kabin-hero-open {
   min-height: 40px;
   background-color: alpha(white, 0.14);
   color: white;
   font-weight: 700;
+  border-radius: 0;
+}
+
+.kabin-hero-play:focus-visible,
+.kabin-hero-open:focus-visible {
+  box-shadow: 0 0 0 2px alpha(white, 0.9);
 }
 
 .kabin-player-skip {
@@ -501,6 +655,7 @@ row:selected .kabin-sidebar-count {
   min-height: 36px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  border-radius: 0;
 }
 
 .kabin-track-list {
@@ -512,7 +667,7 @@ row:selected .kabin-sidebar-count {
 }
 
 .kabin-track {
-  border-radius: 10px;
+  border-radius: 0;
   padding: 8px 10px;
   min-height: 40px;
 }
@@ -533,8 +688,4 @@ row:selected .kabin-sidebar-count {
 
 .kabin-status {
   background-color: transparent;
-}
-
-.kabin-settings {
-  background-color: @bg_darker_color;
 }

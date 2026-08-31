@@ -17,6 +17,8 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.media_dirs, [])
             self.assertEqual(config.emulation["preset"], "balanced")
             self.assertEqual(config.artwork["steamgriddb_api_key"], "")
+            self.assertTrue(config.artwork["openlibrary_covers"])
+            self.assertEqual(config.covers, {})
             self.assertFalse(config.network["host_enabled"])
             self.assertEqual(config.streaming["sunshine_app"], "Desktop")
             self.assertEqual(config.streaming["resolution"], "1080")
@@ -101,6 +103,18 @@ class TestConfig(unittest.TestCase):
             config.artwork["steamgriddb_api_key"] = "secret"
             config.save()
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_persists_chosen_cover_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            cover = Path(tmp) / "jacket.jpg"
+            cover.write_bytes(b"jpg")
+            config = Config(path=path)
+            config.set_cover("book:chamber.epub", str(cover))
+            restored = Config(path=path)
+            self.assertEqual(restored.cover_for("book:chamber.epub"), str(cover))
+            restored.clear_cover("book:chamber.epub")
+            self.assertEqual(Config(path=path).cover_for("book:chamber.epub"), "")
 
     def test_remove_rom_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
