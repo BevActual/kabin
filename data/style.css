@@ -444,6 +444,12 @@ button.kabin-tile:focus-visible .kabin-tile-art,
   padding: 0;
 }
 
+.kabin-kicker.kabin-kind-game,
+.kabin-details-kicker.kabin-kind-game,
+.kabin-kind-chip.kabin-kind-game {
+  color: #ffb454;
+}
+
 .kabin-kicker.kabin-kind-book,
 .kabin-details-kicker.kabin-kind-book,
 .kabin-kind-chip.kabin-kind-book {
