@@ -750,15 +750,21 @@ class MainWindow(Adw.ApplicationWindow):
         bar.append(now)
 
         transport = Gtk.Box(spacing=4, valign=Gtk.Align.CENTER)
-        self.player_prev = Gtk.Button(icon_name="media-skip-backward-symbolic")
+        self.player_prev = Gtk.Button(
+            icon_name="media-skip-backward-symbolic", tooltip_text="Previous track"
+        )
         self.player_prev.add_css_class("flat")
         self.player_prev.add_css_class("kabin-player-button")
         self.player_prev.connect("clicked", lambda *_: self._skip_playback(-1))
-        self.player_pause = Gtk.Button(icon_name="media-playback-pause-symbolic")
+        self.player_pause = Gtk.Button(
+            icon_name="media-playback-pause-symbolic", tooltip_text="Pause"
+        )
         self.player_pause.add_css_class("kabin-player-button")
         self.player_pause.add_css_class("kabin-player-pause")
         self.player_pause.connect("clicked", lambda *_: self._toggle_playback_pause())
-        self.player_next = Gtk.Button(icon_name="media-skip-forward-symbolic")
+        self.player_next = Gtk.Button(
+            icon_name="media-skip-forward-symbolic", tooltip_text="Next track"
+        )
         self.player_next.add_css_class("flat")
         self.player_next.add_css_class("kabin-player-button")
         self.player_next.connect("clicked", lambda *_: self._skip_playback(1))
@@ -1876,6 +1882,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.player_pause.set_icon_name(
             "media-playback-start-symbolic" if session.paused else "media-playback-pause-symbolic"
         )
+        self.player_pause.set_tooltip_text("Resume" if session.paused else "Pause")
         duration = session.duration or 0
         position = session.position or 0
         self.player_elapsed.set_label(format_clock(position))
