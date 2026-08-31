@@ -9,6 +9,7 @@ from kabin.artwork import (
     clean_game_title,
     fetch_steamgriddb_cover,
     fetch_remote_cover,
+    folder_cover,
     local_cover,
     resolve_cover,
 )
@@ -52,6 +53,13 @@ class TestArtwork(unittest.TestCase):
             cover.parent.mkdir()
             cover.touch()
             self.assertEqual(local_cover(rom), cover)
+
+    def test_finds_folder_cover_for_albums(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            cover = directory / "folder.jpg"
+            cover.touch()
+            self.assertEqual(folder_cover(directory), cover)
 
     def test_cached_cover_uses_stable_game_id(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -120,6 +128,20 @@ class TestArtwork(unittest.TestCase):
         self.assertEqual(len(requests), 1)
         self.assertEqual(requests[0].get_header("Authorization"), "Bearer device-token")
         self.assertIn("id=roms%3Agba%3Atest.gba", requests[0].full_url)
+
+    def test_resolve_cover_skips_network_when_fetch_disabled(self):
+        from unittest.mock import patch
+
+        with patch("kabin.artwork.fetch_steamgriddb_cover") as fetch:
+            self.assertIsNone(
+                resolve_cover(
+                    "Game",
+                    "roms:gba:Game.zip",
+                    {"steamgriddb_api_key": "secret"},
+                    fetch=False,
+                )
+            )
+            fetch.assert_not_called()
 
     def test_resolve_cover_uses_cached_art_for_desktop_game(self):
         with tempfile.TemporaryDirectory() as tmp:

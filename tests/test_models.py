@@ -27,6 +27,18 @@ class TestLibraryItem(unittest.TestCase):
         self.assertIsInstance(game, LibraryItem)
         self.assertEqual(game.media_type, "game")
 
+    def test_search_text_includes_source_and_system(self):
+        game = Game(
+            id="roms:snes:game.sfc",
+            title="Super Metroid",
+            source="roms",
+            subtitle="Super Nintendo",
+            extra={"system": "snes"},
+        )
+        self.assertIn("super metroid", game.search_text)
+        self.assertIn("snes", game.search_text)
+        self.assertIn("roms", game.search_text)
+
 
 if __name__ == "__main__":
     unittest.main()

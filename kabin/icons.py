@@ -28,7 +28,16 @@ _ASSET_SPECS = {
     },
 }
 
-_inflight = set()
+_lock = threading.Lock()
+_inflight: dict[tuple, list[Callable]] = {}
+
+
+def _supported_image(data: bytes) -> bool:
+    return (
+        data.startswith(b"\x89PNG\r\n\x1a\n")
+        or data.startswith(b"\xff\xd8\xff")
+        or (data.startswith(b"RIFF") and data[8:12] == b"WEBP")
+    )
 
 
 def cached_path(appid: str, kind: str = "cover") -> Optional[Path]:
@@ -45,11 +54,15 @@ def fetch_async(appid: str, on_done: Callable[[Optional[Path]], None], kind: str
 
     `on_done(path_or_None)` is invoked on the GLib main loop thread. `kind`
     is "cover" (portrait library art) or "logo" (transparent clear-logo).
+    Duplicate in-flight requests share one download and every listener is notified.
     """
     key = (kind, appid)
-    if key in _inflight:
-        return
-    _inflight.add(key)
+    with _lock:
+        listeners = _inflight.get(key)
+        if listeners is not None:
+            listeners.append(on_done)
+            return
+        _inflight[key] = [on_done]
 
     spec = _ASSET_SPECS[kind]
     cache_dir = _CACHE_ROOT / kind
@@ -64,16 +77,20 @@ def fetch_async(appid: str, on_done: Callable[[Optional[Path]], None], kind: str
                 try:
                     request = urllib.request.Request(url, headers={"User-Agent": "kabin/0.1"})
                     with urllib.request.urlopen(request, timeout=6) as resp:
-                        data = resp.read()
+                        data = resp.read(15 * 1024 * 1024 + 1)
+                    if not data or len(data) > 15 * 1024 * 1024 or not _supported_image(data):
+                        continue
                     tmp = dest.with_suffix(".tmp")
                     tmp.write_bytes(data)
-                    tmp.rename(dest)
+                    tmp.replace(dest)
                     result = dest
                     break
                 except (urllib.error.URLError, OSError, TimeoutError):
                     continue
         finally:
-            _inflight.discard(key)
-            GLib.idle_add(on_done, result)
+            with _lock:
+                callbacks = _inflight.pop(key, [])
+            for callback in callbacks:
+                GLib.idle_add(callback, result)
 
     threading.Thread(target=worker, daemon=True).start()

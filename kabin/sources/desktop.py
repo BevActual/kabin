@@ -6,7 +6,7 @@ import gi
 gi.require_version("Gio", "2.0")
 from gi.repository import Gio  # noqa: E402
 
-from ..artwork import resolve_cover  # noqa: E402
+from ..artwork import resolve_local_cover  # noqa: E402
 from ..models import Game  # noqa: E402
 
 # Steam owns its own launch path via sources/steam.py; skip its launcher entry
@@ -67,7 +67,7 @@ def get_games(hidden_ids=None, steam_appids=None, artwork_config=None) -> list:
             continue
 
         title = app_info.get_display_name() or app_info.get_name() or desktop_id
-        cover = resolve_cover(title, gid, artwork_config)
+        cover = resolve_local_cover(gid)
         desktop_file = app_info.get_filename()
         try:
             added_at = Path(desktop_file).stat().st_mtime if desktop_file else 0
@@ -82,7 +82,7 @@ def get_games(hidden_ids=None, steam_appids=None, artwork_config=None) -> list:
                 subtitle="",
                 icon_path=str(cover) if cover else None,
                 gicon=app_info.get_icon(),
-                extra={"added_at": added_at},
+                extra={"added_at": added_at, "needs_artwork": cover is None},
                 launch=_make_launcher(app_info),
             )
         )

@@ -66,18 +66,34 @@ def media_capabilities() -> dict:
     if plugin_available("ximagesrc"):
         captures.append("x11")
 
+    webrtc = plugin_available("webrtcbin")
+    ready = helper["validated"] and webrtc and bool(encoders)
     return {
-        "webrtc": plugin_available("webrtcbin"),
+        "webrtc": webrtc,
         "captures": captures,
         "encoders": encoders,
         "audio": plugin_available("pipewiresrc") and plugin_available("opusenc"),
         "native_helper": helper,
-        "ready": (
-            plugin_available("webrtcbin")
-            and bool(captures)
-            and bool(encoders)
-            and helper["validated"]
-        ),
+        "backend": "kabin" if ready else "none",
+        "ready": ready,
+    }
+
+
+def stream_offer(config=None) -> dict:
+    """Kabin-owned media offer. No external Moonlight or Sunshine process."""
+    del config
+    helper = native_helper_status()
+    if helper["validated"]:
+        return {
+            "status": "awaiting-negotiation",
+            "protocol": "kabin",
+            "transport": "webrtc",
+        }
+    return {
+        "status": "unavailable",
+        "protocol": "kabin",
+        "transport": "webrtc",
+        "error": helper.get("error") or "Kabin media helper is not ready",
     }
 
 

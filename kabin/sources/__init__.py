@@ -1,4 +1,4 @@
-from . import desktop, remote, roms, steam
+from . import desktop, media_dirs, remote, roms, steam
 
 
 def discover_all_with_status(config) -> tuple[list, dict]:
@@ -34,6 +34,19 @@ def discover_all_with_status(config) -> tuple[list, dict]:
             config.network.get("remote_hosts", []), hidden_ids=hidden
         )
         games.extend(remote_games)
+    folder_kinds = [
+        kind
+        for kind in ("book", "comic", "music", "video")
+        if enabled.get(kind, True)
+    ]
+    if folder_kinds:
+        games.extend(
+            media_dirs.get_items(
+                config.media_dirs,
+                hidden_ids=hidden,
+                enabled_kinds=folder_kinds,
+            )
+        )
 
     games.sort(key=lambda g: g.sort_key)
     return games, host_statuses

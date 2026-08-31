@@ -25,6 +25,23 @@ class LibraryItem:
     def sort_key(self) -> str:
         return self.title.casefold()
 
+    @property
+    def search_text(self) -> str:
+        extra = self.extra or {}
+        parts = [
+            self.title,
+            self.subtitle,
+            self.source,
+            self.category,
+            self.series,
+            *self.genres,
+            *self.creators,
+            str(extra.get("system", "")),
+            str(extra.get("remote_system", "")),
+            str(extra.get("remote_source", "")),
+        ]
+        return " ".join(part for part in parts if part).casefold()
+
 
 # Compatibility name while game sources and emulator adapters migrate to the
 # broader catalog terminology.

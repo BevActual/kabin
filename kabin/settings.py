@@ -12,6 +12,7 @@ from .emulators import detect_emulators, emulator_command, launch_environment
 from .managed import ManagedRuntimeError, install_runtime, recommended_runtime
 from .network import discover_hosts, fetch_remote_library, pair_with_host
 from .systems import SYSTEMS, firmware_files, get_system
+from .kinds import FOLDER_KINDS, get_kind
 from .streaming import media_capabilities
 
 
@@ -235,6 +236,76 @@ class AddRomDirDialog(Adw.Window):
         self.close()
 
 
+class AddMediaDirDialog(Adw.Window):
+    def __init__(self, transient_for, on_added):
+        super().__init__(transient_for=transient_for, modal=True, title="Add Media Folder")
+        self.set_default_size(480, -1)
+        self._on_added = on_added
+        self._kinds = list(FOLDER_KINDS)
+        self._selected_path = None
+
+        toolbar_view = Adw.ToolbarView()
+        toolbar_view.add_top_bar(Adw.HeaderBar())
+        page = Adw.PreferencesPage()
+        group = Adw.PreferencesGroup(
+            title="Library",
+            description="Kabin lists the files, plays music and movies itself, and opens books and comics in your reader.",
+        )
+        self.kind_row = Adw.ComboRow(
+            title="Media type",
+            model=Gtk.StringList.new([kind.plural for kind in self._kinds]),
+        )
+        self.kind_row.connect("notify::selected", self._on_kind_changed)
+        group.add(self.kind_row)
+
+        self.path_row = Adw.ActionRow(title="Folder", subtitle="Not selected")
+        choose_button = Gtk.Button(label="Choose…", valign=Gtk.Align.CENTER)
+        choose_button.connect("clicked", self._on_choose_folder)
+        self.path_row.add_suffix(choose_button)
+        group.add(self.path_row)
+
+        self.files_row = Adw.ActionRow(title="Recognized files")
+        group.add(self.files_row)
+        page.add(group)
+
+        add_button = Gtk.Button(label="Add", valign=Gtk.Align.CENTER)
+        add_button.add_css_class("suggested-action")
+        add_button.connect("clicked", self._on_add_clicked)
+        add_button.set_sensitive(False)
+        self.add_button = add_button
+        action_group = Adw.PreferencesGroup()
+        action_group.add(add_button)
+        page.add(action_group)
+        toolbar_view.set_content(page)
+        self.set_content(toolbar_view)
+        self._on_kind_changed(self.kind_row, None)
+
+    def _on_kind_changed(self, _row, _pspec):
+        kind = self._kinds[self.kind_row.get_selected()]
+        self.files_row.set_subtitle(", ".join(sorted(ext.lstrip(".") for ext in kind.extensions)))
+
+    def _on_choose_folder(self, _button):
+        dialog = Gtk.FileDialog(title="Select Media Folder")
+        dialog.select_folder(self, None, self._on_folder_selected)
+
+    def _on_folder_selected(self, dialog, result):
+        try:
+            folder = dialog.select_folder_finish(result)
+        except Exception:
+            return
+        if folder:
+            self._selected_path = folder.get_path()
+            self.path_row.set_subtitle(self._selected_path)
+            self.add_button.set_sensitive(True)
+
+    def _on_add_clicked(self, _button):
+        if not self._selected_path:
+            return
+        kind = self._kinds[self.kind_row.get_selected()]
+        self._on_added(self._selected_path, kind.id)
+        self.close()
+
+
 class SettingsWindow(Adw.PreferencesWindow):
     def __init__(self, config, host_service=None, initial_page=None, **kwargs):
         super().__init__(**kwargs)
@@ -295,19 +366,37 @@ class SettingsWindow(Adw.PreferencesWindow):
         network_group.add(self.host_status_row)
 
         capabilities = media_capabilities()
-        encoder_names = ", ".join(item["encoder"] for item in capabilities["encoders"])
+        helper = capabilities.get("native_helper") or {}
+        encoder_names = ", ".join(item["encoder"] for item in capabilities.get("encoders") or [])
+        capture_names = ", ".join(capabilities.get("captures") or [])
+        if capabilities.get("ready"):
+            media_subtitle = (
+                f"Ready · {capture_names or 'test pattern'} · {encoder_names}"
+            )
+        else:
+            media_subtitle = helper.get("error") or (
+                "Build kabin-media-helper to play media and stream this library from Kabin"
+            )
         self.media_status_row = Adw.ActionRow(
-            title="Native streaming",
-            subtitle=(
-                f"Ready · {encoder_names}"
-                if capabilities["ready"]
-                else "WebRTC runtime missing · install gst-plugins-bad"
-            ),
+            title="Kabin player",
+            subtitle=media_subtitle,
         )
         self.media_status_row.set_icon_name(
-            "emblem-ok-symbolic" if capabilities["ready"] else "dialog-warning-symbolic"
+            "emblem-ok-symbolic" if capabilities.get("ready") else "dialog-warning-symbolic"
         )
         network_group.add(self.media_status_row)
+
+        self.stream_resolution_row = Adw.ComboRow(
+            title="Preferred stream resolution",
+            model=Gtk.StringList.new(["720p", "1080p", "1440p", "4K"]),
+        )
+        self._resolution_ids = ["720", "1080", "1440", "4k"]
+        current_res = str(self.config.streaming.get("resolution", "1080")).casefold()
+        self.stream_resolution_row.set_selected(
+            self._resolution_ids.index(current_res) if current_res in self._resolution_ids else 1
+        )
+        self.stream_resolution_row.connect("notify::selected", self._on_stream_resolution_changed)
+        network_group.add(self.stream_resolution_row)
 
         pairing_row = Adw.ButtonRow(title="Create Pairing Code")
         pairing_row.connect("activated", self._on_create_pairing_code)
@@ -339,7 +428,7 @@ class SettingsWindow(Adw.PreferencesWindow):
 
         play_group = Adw.PreferencesGroup(
             title="Play Defaults",
-            description="Fullscreen is applied at launch. Other defaults are saved for expanding emulator adapters.",
+            description="Fullscreen is applied at launch. VSync and integer scaling are passed to MAME and Mupen64Plus. BIOS folders are linked into DuckStation and PCSX2 data directories.",
         )
         self._preset_ids = list(PRESETS)
         current_preset = self.config.emulation.get("preset", "balanced")
@@ -370,7 +459,11 @@ class SettingsWindow(Adw.PreferencesWindow):
         controllers = connected_controllers()
         controller_row = Adw.ActionRow(
             title="Controllers",
-            subtitle=(", ".join(controllers) if controllers else "No game controller detected"),
+            subtitle=(
+                f"{', '.join(controllers)} · D-pad moves, A opens, B goes back, Y favorites"
+                if controllers
+                else "No game controller detected · keyboard arrows still browse the library"
+            ),
         )
         controller_row.set_icon_name(
             "input-gaming-symbolic" if controllers else "dialog-warning-symbolic"
@@ -416,6 +509,10 @@ class SettingsWindow(Adw.PreferencesWindow):
             ("desktop", "Other installed apps categorized as Games"),
             ("roms", "ROM directories"),
             ("remote", "Paired Kabin hosts"),
+            ("book", "Books"),
+            ("comic", "Comics"),
+            ("music", "Music"),
+            ("video", "Movies"),
         ):
             row = Adw.SwitchRow(title=label)
             row.set_active(self.config.sources.get(source_id, True))
@@ -424,8 +521,8 @@ class SettingsWindow(Adw.PreferencesWindow):
         self.library_page.add(sources_group)
 
         self.hidden_group = Adw.PreferencesGroup(
-            title="Hidden Games",
-            description="Restore games that were hidden from their detail page.",
+            title="Hidden Titles",
+            description="Restore titles that were hidden from their detail page.",
         )
         self.library_page.add(self.hidden_group)
         self._hidden_rows = []
@@ -446,9 +543,20 @@ class SettingsWindow(Adw.PreferencesWindow):
         self.roms_group.add(add_row)
         self.library_page.add(self.roms_group)
 
+        self.media_group = Adw.PreferencesGroup(
+            title="Media Folders",
+            description="Books, comics, music, and movies. Kabin hosts and plays music and video, queues albums, and syncs resume to the host. Books and comics still open in your reader.",
+        )
+        add_media = Adw.ButtonRow(title="Add Media Folder")
+        add_media.connect("activated", self._on_add_media_dir)
+        self.media_group.add(add_media)
+        self.library_page.add(self.media_group)
+
         self._rom_dir_rows = []
+        self._media_dir_rows = []
         self._readiness_rows = []
         self._refresh_rom_dir_rows()
+        self._refresh_media_dir_rows()
 
     def _on_host_toggled(self, row, _pspec):
         enabled = row.get_active()
@@ -644,6 +752,12 @@ class SettingsWindow(Adw.PreferencesWindow):
         self.config.artwork["steamgriddb_api_key"] = row.get_text().strip()
         self.config.save()
 
+    def _on_stream_resolution_changed(self, row, _pspec):
+        selected = row.get_selected()
+        if 0 <= selected < len(self._resolution_ids):
+            self.config.streaming["resolution"] = self._resolution_ids[selected]
+            self.config.save()
+
     def _make_source_toggle_handler(self, source_id):
         def handler(row, _pspec):
             self.config.sources[source_id] = row.get_active()
@@ -766,3 +880,36 @@ class SettingsWindow(Adw.PreferencesWindow):
     def _on_remove_rom_dir(self, index):
         self.config.remove_rom_dir(index)
         self._refresh_rom_dir_rows()
+
+    def _refresh_media_dir_rows(self):
+        for row in self._media_dir_rows:
+            self.media_group.remove(row)
+        self._media_dir_rows = []
+        for index, entry in enumerate(self.config.media_dirs):
+            kind = get_kind(entry.get("media_type"))
+            row = Adw.ActionRow(
+                title=kind.plural,
+                subtitle=entry.get("path", ""),
+            )
+            row.set_icon_name(kind.icon)
+            remove_button = Gtk.Button(
+                icon_name="user-trash-symbolic",
+                valign=Gtk.Align.CENTER,
+                css_classes=["flat"],
+            )
+            remove_button.connect("clicked", lambda _b, i=index: self._on_remove_media_dir(i))
+            row.add_suffix(remove_button)
+            self.media_group.add(row)
+            self._media_dir_rows.append(row)
+
+    def _on_add_media_dir(self, _row):
+        dialog = AddMediaDirDialog(self, self._on_media_dir_added)
+        dialog.present()
+
+    def _on_media_dir_added(self, path, media_type):
+        self.config.add_media_dir(path, media_type)
+        self._refresh_media_dir_rows()
+
+    def _on_remove_media_dir(self, index):
+        self.config.remove_media_dir(index)
+        self._refresh_media_dir_rows()

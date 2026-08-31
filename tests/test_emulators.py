@@ -3,7 +3,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from kabin.emulators import EmulatorChoice, build_command, detect_emulators, launch_environment
+from kabin.emulators import (
+    EmulatorChoice,
+    build_command,
+    detect_emulators,
+    launch_environment,
+    prepare_bios,
+)
 from kabin.systems import get_system
 
 
@@ -80,6 +86,25 @@ class TestEmulators(unittest.TestCase):
                 choices = detect_emulators(get_system("ps2"), home=home)
         self.assertEqual(choices[0].id, "pcsx2")
         self.assertEqual(choices[0].runtime, "flatpak")
+
+    def test_mame_applies_vsync_flag(self):
+        profile = {"id": "mame", "runtime": "native", "executable": "/usr/bin/mame"}
+        command = build_command(
+            profile, Path("/games/arcade/pacman.zip"), {"vsync": True, "fullscreen": True}
+        )
+        self.assertIn("-waitvsync", command)
+        self.assertIn("-nowindow", command)
+
+    def test_prepare_bios_links_firmware_into_emulator_data_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bios = Path(tmp) / "dump" / "scph5501.bin"
+            bios.parent.mkdir()
+            bios.write_bytes(b"bios")
+            data_home = Path(tmp) / "data"
+            prepare_bios({"id": "duckstation"}, str(bios.parent), {"XDG_DATA_HOME": str(data_home)})
+            linked = data_home / "duckstation" / "bios" / "scph5501.bin"
+            self.assertTrue(linked.exists())
+            self.assertEqual(linked.resolve(), bios.resolve())
 
     def test_does_not_offer_uninstalled_emulator(self):
         with tempfile.TemporaryDirectory() as tmp:

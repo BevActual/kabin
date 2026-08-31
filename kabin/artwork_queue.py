@@ -26,6 +26,9 @@ class ArtworkQueue:
             host.get("fingerprint", ""),
             game_id,
         )
+        self.request_job(key, (dict(host), token, game_id), callback)
+
+    def request_job(self, key: tuple, args: tuple, callback: Callable) -> None:
         with self._lock:
             callbacks = self._inflight.get(key)
             if callbacks is not None:
@@ -33,12 +36,12 @@ class ArtworkQueue:
                 return
             self._inflight[key] = [callback]
 
-        future = self._executor.submit(self._fetch, dict(host), token, game_id)
+        future = self._executor.submit(self._fetch, args)
         future.add_done_callback(lambda completed: self._complete(key, completed.result()))
 
-    def _fetch(self, host: dict, token: str, game_id: str):
+    def _fetch(self, args: tuple):
         try:
-            return self._fetcher(host, token, game_id)
+            return self._fetcher(*args)
         except Exception:
             return None
 

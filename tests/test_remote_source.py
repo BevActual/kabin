@@ -65,16 +65,52 @@ class TestRemoteSource(unittest.TestCase):
         self.assertIsNone(games[0].icon_path)
         self.assertTrue(games[0].extra["has_artwork"])
 
-    def test_game_view_ignores_non_game_catalog_items_for_now(self):
+    def test_remote_steam_game_keeps_appid_for_cdn_covers(self):
+        host = {"name": "Host", "token": "t"}
+        payload = {
+            "games": [{"id": "steam:1", "title": "Game", "source": "steam", "appid": "1"}]
+        }
+        games = remote.get_games([host], fetcher=lambda *_args: payload)
+        self.assertEqual(games[0].extra["appid"], "1")
+
+    def test_remote_catalog_keeps_books_and_games(self):
         host = {"name": "Host", "token": "t"}
         payload = {
             "items": [
-                {"id": "book:1", "title": "Book", "media_type": "book"},
+                {
+                    "id": "book:1",
+                    "title": "Book",
+                    "media_type": "book",
+                    "creators": ["Author"],
+                },
                 {"id": "steam:1", "title": "Game", "media_type": "game"},
             ]
         }
         games = remote.get_games([host], fetcher=lambda *_args: payload)
-        self.assertEqual([game.title for game in games], ["Game"])
+        self.assertEqual([game.title for game in games], ["Book", "Game"])
+        self.assertEqual(games[0].media_type, "book")
+        self.assertEqual(games[0].creators, ["Author"])
+        self.assertFalse(games[0].extra["playable"])
+
+    def test_remote_catalog_keeps_playable_flag(self):
+        host = {"name": "Host", "token": "t"}
+        payload = {
+            "items": [
+                {
+                    "id": "video:1",
+                    "title": "Film",
+                    "media_type": "video",
+                    "playable": True,
+                    "track_count": 1,
+                    "progress": {"position": 12, "duration": 100, "track": 0, "updated_at": 1},
+                }
+            ]
+        }
+        games = remote.get_games([host], fetcher=lambda *_args: payload)
+        self.assertTrue(games[0].extra["playable"])
+        self.assertEqual(games[0].media_type, "video")
+        self.assertEqual(games[0].extra["track_count"], 1)
+        self.assertEqual(games[0].extra["progress"]["position"], 12)
 
 
 if __name__ == "__main__":

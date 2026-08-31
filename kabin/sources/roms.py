@@ -1,11 +1,44 @@
+import os
 import shlex
 import subprocess
 from pathlib import Path
 
-from ..artwork import clean_game_title, local_cover, resolve_cover
+from ..artwork import clean_game_title, local_cover, resolve_local_cover
 from ..emulators import build_command, launch_environment
 from ..models import Game
 from ..systems import get_system
+
+_SKIP_DIRS = {"covers", "media", "images", "manuals", "videos", ".git"}
+
+
+def _iter_rom_files(base: Path):
+    for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
+        dirnames[:] = sorted(
+            name
+            for name in dirnames
+            if name.casefold() not in _SKIP_DIRS and not name.startswith(".")
+        )
+        for name in sorted(filenames):
+            if name.startswith("."):
+                continue
+            path = Path(dirpath) / name
+            if path.is_file() and not path.is_symlink():
+                yield path
+
+
+def _game_id(system_id: str, base: Path, rom_path: Path) -> str:
+    try:
+        relative = rom_path.relative_to(base)
+    except ValueError:
+        return f"roms:{system_id}:{rom_path.name}"
+    if relative.parent == Path("."):
+        return f"roms:{system_id}:{rom_path.name}"
+    return f"roms:{system_id}:{relative.as_posix()}"
+
+
+def custom_command(emulator: str, rom_path: Path) -> list[str]:
+    """Split the template first so paths with spaces stay one argument."""
+    return [part.replace("{rom}", str(rom_path)) for part in shlex.split(emulator)]
 
 
 def get_games(
@@ -31,19 +64,18 @@ def get_games(
         if not base.is_dir() or not valid_emulator:
             continue
 
-        for rom_path in sorted(base.iterdir()):
-            if not rom_path.is_file():
-                continue
+        bios_path = entry.get("bios_path")
+        for rom_path in _iter_rom_files(base):
             ext = rom_path.suffix.lower().lstrip(".")
             if extensions and ext not in extensions:
                 continue
 
-            gid = f"roms:{system_id}:{rom_path.name}"
+            gid = _game_id(system_id, base, rom_path)
             if gid in hidden_ids:
                 continue
 
             title = clean_game_title(rom_path.name)
-            cover = resolve_cover(title, gid, artwork_config, local_cover(rom_path))
+            cover = resolve_local_cover(gid, local_cover(rom_path))
 
             games.append(
                 Game(
@@ -57,20 +89,21 @@ def get_games(
                         "path": str(rom_path),
                         "system": system_id,
                         "added_at": rom_path.stat().st_mtime,
+                        "needs_artwork": cover is None,
                     },
-                    launch=_make_launcher(emulator, rom_path, emulation_settings),
+                    launch=_make_launcher(emulator, rom_path, emulation_settings, bios_path),
                 )
             )
     return games
 
 
-def _make_launcher(emulator, rom_path: Path, emulation_settings=None):
+def _make_launcher(emulator, rom_path: Path, emulation_settings=None, bios_path=None):
     def launch():
         if isinstance(emulator, dict):
             command = build_command(emulator, rom_path, emulation_settings)
-            environment = launch_environment(emulator)
+            environment = launch_environment(emulator, bios_path)
         else:
-            command = shlex.split(emulator.replace("{rom}", str(rom_path)))
+            command = custom_command(emulator, rom_path)
             environment = None
         if environment is None:
             subprocess.Popen(command)

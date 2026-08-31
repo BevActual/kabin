@@ -13,9 +13,13 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.rom_dirs, [])
             self.assertEqual(config.hidden, [])
             self.assertTrue(config.sources["steam"])
+            self.assertTrue(config.sources["book"])
+            self.assertEqual(config.media_dirs, [])
             self.assertEqual(config.emulation["preset"], "balanced")
             self.assertEqual(config.artwork["steamgriddb_api_key"], "")
             self.assertFalse(config.network["host_enabled"])
+            self.assertEqual(config.streaming["sunshine_app"], "Desktop")
+            self.assertEqual(config.streaming["resolution"], "1080")
             self.assertEqual(config.window["width"], 1100)
             self.assertFalse(config.window["maximized"])
 
@@ -108,6 +112,16 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(len(config.rom_dirs), 1)
             self.assertEqual(config.rom_dirs[0]["system"], "GBA")
 
+    def test_round_trips_media_dirs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            config = Config(path=path)
+            config.add_media_dir("/media/books", "book")
+            config.add_media_dir("/media/films", "video")
+            config.remove_media_dir(0)
+            restored = Config(path=path)
+            self.assertEqual(restored.media_dirs, [{"path": "/media/films", "media_type": "video"}])
+
     def test_hide_and_unhide(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = Config(path=Path(tmp) / "config.json")
@@ -148,6 +162,9 @@ class TestConfig(unittest.TestCase):
 
             reloaded = Config(path=path)
             self.assertEqual(reloaded.recent_ids(), ["steam:553850"])
+            self.assertEqual(reloaded.play_count("steam:553850"), 1)
+            config.record_played("steam:553850")
+            self.assertEqual(Config(path=path).play_count("steam:553850"), 2)
 
     def test_is_favorite_defaults_false(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import ssl
 import urllib.error
 
+from ..kinds import get_kind
 from ..models import Game
 from ..network import fetch_remote_library
 
@@ -41,8 +42,6 @@ def discover(
             continue
         statuses[name] = {"state": "online", "message": "Online"}
         for remote in payload.get("items", payload.get("games", [])):
-            if remote.get("media_type", "game") != "game":
-                continue
             remote_id = str(remote.get("id", ""))
             title = str(remote.get("title", "")).strip()
             if not remote_id or not title:
@@ -50,20 +49,32 @@ def discover(
             game_id = f"remote:{name}:{remote_id}"
             if game_id in hidden_ids:
                 continue
+            kind = get_kind(remote.get("media_type", "game"))
             games.append(
                 Game(
                     id=game_id,
                     title=title,
                     source="remote",
                     subtitle=name,
-                    icon_name="network-server-symbolic",
+                    icon_name=kind.icon,
                     extra={
                         "host": dict(host),
                         "remote_id": remote_id,
                         "remote_source": remote.get("source", ""),
                         "remote_system": remote.get("section", remote.get("system", "")),
                         "has_artwork": bool(remote.get("has_artwork")),
+                        "appid": str(remote.get("appid") or ""),
+                        "playable": bool(remote.get("playable")),
+                        "track_count": int(remote.get("track_count") or 0),
+                        "progress": remote.get("progress") or {},
                     },
+                    media_type=kind.id,
+                    media_format=str(remote.get("media_format") or ""),
+                    category=str(remote.get("category") or ""),
+                    genres=list(remote.get("genres") or []),
+                    creators=list(remote.get("creators") or []),
+                    series=str(remote.get("series") or ""),
+                    series_index=remote.get("series_index"),
                 )
             )
     return games, statuses

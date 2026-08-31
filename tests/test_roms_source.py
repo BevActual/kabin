@@ -98,6 +98,30 @@ class TestGetGames(unittest.TestCase):
             self.assertEqual(len(games), 1)
             self.assertTrue(callable(games[0].launch))
 
+    def test_scans_nested_rom_folders_without_changing_root_ids(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / "Chrono Trigger.sfc").touch()
+            nested = base / "RPGs"
+            nested.mkdir()
+            (nested / "Secret of Mana.sfc").touch()
+            (base / "covers").mkdir()
+            (base / "covers" / "ignored.sfc").touch()
+            config = [{
+                "path": str(base),
+                "system": "snes",
+                "extensions": ["sfc"],
+                "emulator": "echo {rom}",
+            }]
+            games = {game.id: game for game in roms.get_games(config)}
+            self.assertIn("roms:snes:Chrono Trigger.sfc", games)
+            self.assertIn("roms:snes:RPGs/Secret of Mana.sfc", games)
+            self.assertNotIn("roms:snes:ignored.sfc", games)
+
+    def test_custom_command_keeps_spaces_in_rom_path(self):
+        command = roms.custom_command("echo {rom}", Path("/games/Game With Spaces.nes"))
+        self.assertEqual(command, ["echo", "/games/Game With Spaces.nes"])
+
     def test_structured_emulator_profile_launches_without_shell_parsing(self):
         with tempfile.TemporaryDirectory() as tmp:
             rom = Path(tmp) / "Game With Spaces.gba"

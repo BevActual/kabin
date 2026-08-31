@@ -47,6 +47,17 @@ def local_cover(rom_path: Path) -> Path | None:
     return next((path for path in candidates if path.is_file()), None)
 
 
+def folder_cover(directory: Path) -> Path | None:
+    if not directory.is_dir():
+        return None
+    for name in ("cover", "folder", "front", "album", "poster"):
+        for suffix in _IMAGE_SUFFIXES:
+            path = directory / f"{name}{suffix}"
+            if path.is_file():
+                return path
+    return None
+
+
 def _cache_key(game_id: str) -> str:
     return hashlib.sha256(game_id.encode()).hexdigest()
 
@@ -140,15 +151,21 @@ def fetch_steamgriddb_cover(
     return destination
 
 
+def resolve_local_cover(game_id: str, local_path: Path | None = None) -> Path | None:
+    """Disk-only lookup so library refresh never waits on SteamGridDB."""
+    return local_path or cached_cover(game_id)
+
+
 def resolve_cover(
     title: str,
     game_id: str,
     artwork_config: dict | None,
     local_path: Path | None = None,
+    fetch: bool = True,
 ):
-    cover = local_path or cached_cover(game_id)
+    cover = resolve_local_cover(game_id, local_path)
     api_key = (artwork_config or {}).get("steamgriddb_api_key", "")
-    if cover is None and api_key:
+    if cover is None and fetch and api_key:
         try:
             cover = fetch_steamgriddb_cover(title, game_id, api_key)
         except (OSError, ValueError, KeyError):

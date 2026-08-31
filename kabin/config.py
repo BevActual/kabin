@@ -9,14 +9,34 @@ from pathlib import Path
 
 from .emulation import DEFAULT_EMULATION_SETTINGS
 
+DEFAULT_STREAMING = {
+    "backend": "auto",
+    "sunshine_host": "127.0.0.1",
+    "sunshine_app": "Desktop",
+    "resolution": "1080",
+    "fps": 60,
+    "fullscreen": True,
+}
+
 DEFAULT_CONFIG = {
     # each: {"path": str, "system": str, "extensions": [str], "emulator": "cmd {rom}"}
     "rom_dirs": [],
+    "media_dirs": [],
     "hidden": [],
     "hidden_titles": {},
-    "sources": {"steam": True, "desktop": True, "roms": True, "remote": True},
+    "sources": {
+        "steam": True,
+        "desktop": True,
+        "roms": True,
+        "remote": True,
+        "book": True,
+        "comic": True,
+        "music": True,
+        "video": True,
+    },
     "steam_root": None,
     "recent": {},  # game id -> unix timestamp of last launch through kabin
+    "play_counts": {},
     "favorites": [],
     "emulation": DEFAULT_EMULATION_SETTINGS,
     "artwork": {"steamgriddb_api_key": ""},
@@ -28,6 +48,7 @@ DEFAULT_CONFIG = {
         "token": "",
         "paired_devices": [],
         "remote_hosts": [],
+        "streaming": dict(DEFAULT_STREAMING),
     },
 }
 
@@ -66,7 +87,11 @@ class Config:
 
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self.data, indent=2))
+        payload = json.dumps(self.data, indent=2)
+        temporary = self.path.with_name(f".{self.path.name}.tmp")
+        temporary.write_text(payload)
+        temporary.chmod(0o600)
+        temporary.replace(self.path)
         self.path.chmod(0o600)
 
     @property
@@ -117,12 +142,34 @@ class Config:
             self.save()
 
     @property
+    def media_dirs(self) -> list:
+        return self.data.setdefault("media_dirs", [])
+
+    def add_media_dir(self, path: str, media_type: str):
+        self.media_dirs.append({"path": path, "media_type": media_type})
+        self.save()
+
+    def remove_media_dir(self, index: int):
+        if 0 <= index < len(self.media_dirs):
+            self.media_dirs.pop(index)
+            self.save()
+
+    @property
     def recent(self) -> dict:
         return self.data.setdefault("recent", {})
 
     def record_played(self, game_id: str):
         self.recent[game_id] = time.time()
+        counts = self.play_counts
+        counts[game_id] = int(counts.get(game_id, 0)) + 1
         self.save()
+
+    @property
+    def play_counts(self) -> dict:
+        return self.data.setdefault("play_counts", {})
+
+    def play_count(self, game_id: str) -> int:
+        return int(self.play_counts.get(game_id, 0))
 
     def recent_ids(self, limit: int = 8) -> list:
         ordered = sorted(self.recent.items(), key=lambda kv: kv[1], reverse=True)
@@ -164,7 +211,14 @@ class Config:
             settings.setdefault(key, value)
         if not settings["host_name"]:
             settings["host_name"] = socket.gethostname()
+        streaming = settings.setdefault("streaming", dict(DEFAULT_STREAMING))
+        for key, value in DEFAULT_STREAMING.items():
+            streaming.setdefault(key, value)
         return settings
+
+    @property
+    def streaming(self) -> dict:
+        return self.network["streaming"]
 
     def ensure_network_token(self) -> str:
         if not self.network["token"]:

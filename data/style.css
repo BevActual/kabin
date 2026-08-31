@@ -1,4 +1,7 @@
-/* Kabin's owned dark visual system. Palette tokens live in kabin/style.py. */
+/* Kabin's owned dark visual system. Palette tokens live in kabin/style.py.
+   Sized for a desk and a couch. Layout follows Apple HIG ideas that travel:
+   clarity (one hierarchy), deference (chrome behind artwork), depth
+   (focus lifts; color is not the only signal). */
 
 .kabin-window {
   background-color: @bg_darker_color;
@@ -11,37 +14,42 @@
 .kabin-window popover > contents,
 .kabin-settings popover > contents {
   background-color: @bg_light_color;
-  border: 1px solid alpha(@fg_color, 0.10);
-  border-radius: 12px;
-  box-shadow: 0 12px 32px alpha(black, 0.45);
+  border: 1px solid alpha(@fg_color, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px alpha(black, 0.5);
 }
 
 .kabin-topbar {
-  background-color: @bg_dark_color;
-  border-bottom: 1px solid alpha(@fg_color, 0.07);
+  background-color: alpha(@bg_dark_color, 0.86);
+  border-bottom: 1px solid alpha(@fg_color, 0.05);
+  min-height: 56px;
 }
 
 .kabin-brand {
   margin-left: 4px;
-  margin-right: 4px;
+  margin-right: 10px;
 }
 
 .kabin-brand-mark {
   color: @accent_color;
-  -gtk-icon-size: 20px;
+  -gtk-icon-size: 22px;
 }
 
 .kabin-brand-word {
-  letter-spacing: 2px;
+  letter-spacing: 3px;
+  font-weight: 800;
   color: @fg_color;
 }
 
 .kabin-search {
-  min-width: 220px;
+  min-width: 280px;
+  min-height: 36px;
 }
 
 .kabin-icon-button {
   border-radius: 999px;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .kabin-filter-active {
@@ -50,59 +58,66 @@
 }
 
 .kabin-sidebar {
-  background-color: @bg_darker_color;
-  padding: 8px 6px;
+  background-color: alpha(@bg_darker_color, 0.92);
+  padding: 12px 8px;
 }
 
 .kabin-sidebar-header {
   color: @fg_dim_color;
-  letter-spacing: 1px;
-  padding: 14px 12px 4px 12px;
+  letter-spacing: 1.6px;
+  font-weight: 700;
+  padding: 20px 12px 8px 12px;
 }
 
 .kabin-sidebar-row {
-  border-radius: 8px;
-  padding: 8px 10px;
-  margin: 1px 4px;
+  border-radius: 12px;
+  padding: 11px 12px;
+  margin: 3px 4px;
+  min-height: 24px;
 }
 
 .kabin-sidebar-row:hover {
-  background-color: alpha(@fg_color, 0.06);
+  background-color: alpha(@fg_color, 0.05);
 }
 
 row:selected .kabin-sidebar-row {
-  background-color: alpha(@accent_color, 0.16);
+  background-color: alpha(@fg_color, 0.1);
+  box-shadow: inset 3px 0 0 @accent_color;
 }
 
 row:selected .kabin-sidebar-icon {
-  color: @accent_color;
+  color: @fg_color;
 }
 
 row:selected .kabin-sidebar-label {
-  color: @accent_color;
+  color: @fg_color;
   font-weight: 700;
 }
 
+.kabin-sidebar.kabin-nav-focus {
+  box-shadow: inset 3px 0 0 alpha(white, 0.86);
+}
+
 .kabin-sidebar-count {
-  background-color: @muted_color;
+  background-color: alpha(@fg_color, 0.08);
   color: @fg_dim_color;
   border-radius: 999px;
-  padding: 1px 8px;
+  padding: 2px 8px;
+  font-weight: 600;
 }
 
 row:selected .kabin-sidebar-count {
-  background-color: @accent_color;
-  color: @bg_darker_color;
+  background-color: alpha(@fg_color, 0.16);
+  color: @fg_color;
 }
 
 .kabin-content {
-  /* translucent so the backdrop (tinted by this same theme color) shows
-     through - see kabin-backdrop and MainWindow._update_backdrop */
-  background-color: alpha(@bg_color, 0.90);
+  background-color: alpha(@bg_color, 0.55);
 }
 
 .kabin-library-title {
   color: @fg_color;
+  font-weight: 800;
 }
 
 .kabin-library-subtitle {
@@ -111,31 +126,68 @@ row:selected .kabin-sidebar-count {
 
 .kabin-backdrop {
   background-color: @bg_color;
+  opacity: 0.5;
+}
+
+.kabin-backdrop-scrim {
+  background-image: linear-gradient(
+    to bottom,
+    alpha(@bg_darker_color, 0.28),
+    alpha(@bg_darker_color, 0.82)
+  );
 }
 
 .kabin-tile {
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 0;
   background-color: @bg_light_color;
-  box-shadow: 0 1px 3px alpha(black, 0.35);
-  transition: box-shadow 150ms ease, background-color 150ms ease;
+  border: 1px solid alpha(@fg_color, 0.03);
+  box-shadow: 0 8px 18px alpha(black, 0.28);
 }
 
 .kabin-tile:hover,
 .kabin-tile:focus,
 .kabin-tile:selected,
-.kabin-game-grid > child:selected .kabin-tile {
-  box-shadow: 0 0 0 3px @accent_color, 0 6px 18px alpha(black, 0.5);
-  background-color: @muted_color;
+.kabin-game-grid > child:selected .kabin-tile,
+.kabin-game-grid > child:focus-within .kabin-tile,
+.kabin-game-grid.kabin-nav-focus > child:selected .kabin-tile,
+.kabin-browse-card:hover,
+.kabin-browse-card:focus {
+  border-color: alpha(white, 0.55);
+  background-color: @bg_light_color;
+  box-shadow:
+    0 22px 40px alpha(black, 0.55),
+    0 0 0 2px alpha(white, 0.88);
 }
 
 .kabin-game-grid {
-  padding: 4px;
+  padding: 12px 4px 20px;
+}
+
+.kabin-game-grid > child {
+  padding: 10px;
 }
 
 .kabin-tile-art {
-  border-radius: 14px 14px 0 0;
+  border-radius: 16px 16px 0 0;
   background-color: @muted_color;
+}
+
+.kabin-art-square {
+  border-radius: 12px 12px 0 0;
+}
+
+.kabin-art-landscape {
+  border-radius: 14px 14px 0 0;
+}
+
+.kabin-details-art-frame.kabin-art-square,
+.kabin-details-art-frame.kabin-art-landscape {
+  border-radius: 18px;
+}
+
+.kabin-grid-landscape {
+  padding-top: 8px;
 }
 
 .kabin-tile-plate {
@@ -143,11 +195,12 @@ row:selected .kabin-sidebar-count {
 }
 
 .kabin-tile-text {
-  padding: 9px 10px 10px;
+  padding: 12px 14px 14px;
 }
 
 .kabin-tile-title {
   color: @fg_color;
+  font-weight: 700;
 }
 
 .kabin-tile-subtitle {
@@ -156,13 +209,14 @@ row:selected .kabin-sidebar-count {
 
 .kabin-shelf-header {
   color: @fg_color;
+  letter-spacing: 0.4px;
 }
 
 .kabin-tile-badge {
-  background-color: alpha(black, 0.55);
+  background-color: alpha(black, 0.5);
   border-radius: 999px;
-  padding: 4px;
-  margin: 6px;
+  padding: 5px;
+  margin: 8px;
 }
 
 .kabin-tile-badge image {
@@ -170,36 +224,147 @@ row:selected .kabin-sidebar-count {
 }
 
 .kabin-empty-cta {
-  margin-top: 8px;
+  margin-top: 12px;
+  min-height: 44px;
+  min-width: 140px;
 }
 
 .kabin-shortcut-bar {
-  background-color: alpha(@bg_darker_color, 0.94);
-  border-top: 1px solid alpha(@fg_color, 0.08);
-  padding: 7px 16px;
+  background-color: alpha(@bg_darker_color, 0.72);
+  border-top: 1px solid alpha(@fg_color, 0.05);
+  padding: 10px 20px;
+  min-height: 36px;
+}
+
+.kabin-shortcut-chip {
+  align-items: center;
+}
+
+.kabin-shortcut-key {
+  background-color: alpha(@fg_color, 0.08);
+  color: @fg_color;
+  border-radius: 8px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 2px 8px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
 }
 
 .kabin-shortcut {
   color: @fg_dim_color;
+  letter-spacing: 0.3px;
+  font-weight: 600;
+}
+
+.kabin-hero {
+  border-radius: 22px;
+  padding: 0;
+  min-height: 280px;
+  background-color: @bg_darker_color;
+  box-shadow: 0 22px 50px alpha(black, 0.45);
+  border: 1px solid alpha(@fg_color, 0.04);
+}
+
+.kabin-hero-copy {
+  padding: 28px 28px 22px;
+  background-image: linear-gradient(
+    to top,
+    alpha(black, 0.82) 0%,
+    alpha(black, 0.28) 62%,
+    transparent 100%
+  );
+}
+
+.kabin-hero-kicker {
+  color: alpha(white, 0.78);
+  letter-spacing: 1.8px;
+  font-weight: 800;
+}
+
+.kabin-hero-title {
+  color: white;
+  font-weight: 800;
+}
+
+.kabin-hero-meta {
+  color: alpha(white, 0.72);
+}
+
+.kabin-browse-card {
+  min-width: 168px;
+  min-height: 118px;
+  padding: 18px;
+  border-radius: 16px;
+  background-color: alpha(@bg_light_color, 0.92);
+  border: 1px solid alpha(@fg_color, 0.05);
+  box-shadow: 0 8px 18px alpha(black, 0.22);
+}
+
+.kabin-kind-chip {
+  background-color: alpha(@fg_color, 0.1);
+  color: @fg_color;
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+}
+
+.kabin-kind-book,
+.kabin-kind-chip.kabin-kind-book {
+  color: #e8c99a;
+}
+
+.kabin-kind-comic,
+.kabin-kind-chip.kabin-kind-comic {
+  color: #ff8a6b;
+}
+
+.kabin-kind-music,
+.kabin-kind-chip.kabin-kind-music {
+  color: #65d995;
+}
+
+.kabin-kind-video,
+.kabin-kind-chip.kabin-kind-video {
+  color: #7ec8e3;
+}
+
+.kabin-browse-card.kabin-kind-book {
+  box-shadow: inset 0 -2px 0 #e8c99a;
+}
+
+.kabin-browse-card.kabin-kind-comic {
+  box-shadow: inset 0 -2px 0 #ff8a6b;
+}
+
+.kabin-browse-card.kabin-kind-music {
+  box-shadow: inset 0 -2px 0 #65d995;
+}
+
+.kabin-browse-card.kabin-kind-video {
+  box-shadow: inset 0 -2px 0 #7ec8e3;
 }
 
 .kabin-details-page {
-  background-color: alpha(@bg_darker_color, 0.76);
+  background-color: alpha(@bg_darker_color, 0.28);
 }
 
 .kabin-details-back {
-  margin: 16px 20px;
+  margin: 20px 24px;
   font-weight: 700;
+  min-height: 44px;
 }
 
 .kabin-details-art-frame {
-  border-radius: 18px;
+  border-radius: 22px;
   background-color: @bg_light_color;
-  box-shadow: 0 18px 50px alpha(black, 0.55);
+  box-shadow: 0 28px 64px alpha(black, 0.58);
 }
 
 .kabin-details-title {
   color: @fg_color;
+  font-weight: 800;
 }
 
 .kabin-details-meta {
@@ -207,5 +372,169 @@ row:selected .kabin-sidebar-count {
 }
 
 .kabin-details-description {
+  color: @fg_dim_color;
+}
+
+.kabin-details-page .suggested-action {
+  min-height: 48px;
+  min-width: 148px;
+  padding-left: 28px;
+  padding-right: 28px;
+  font-weight: 800;
+}
+
+.kabin-details-page .suggested-action:disabled {
+  opacity: 0.42;
+}
+
+.kabin-player {
+  background-color: alpha(@bg_dark_color, 0.88);
+  border-top: 1px solid alpha(@fg_color, 0.06);
+  padding: 12px 18px;
+  min-height: 80px;
+}
+
+.kabin-player-art {
+  border-radius: 10px;
+  background-color: @bg_light_color;
+  box-shadow: 0 8px 18px alpha(black, 0.35);
+}
+
+.kabin-player-now {
+  padding: 4px 10px 4px 4px;
+  border-radius: 14px;
+}
+
+.kabin-player-now:hover,
+.kabin-player-now:focus {
+  background-color: alpha(@fg_color, 0.06);
+  box-shadow: 0 0 0 2px alpha(white, 0.55);
+}
+
+.kabin-player-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.kabin-player-time {
+  min-width: 48px;
+  color: @fg_dim_color;
+  font-variant-numeric: tabular-nums;
+}
+
+.kabin-player scale {
+  min-width: 140px;
+  min-height: 28px;
+}
+
+.kabin-now-chip {
+  background-color: alpha(white, 0.14);
+  color: white;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+}
+
+.kabin-now-header {
+  min-height: 36px;
+  padding-left: 14px;
+  padding-right: 14px;
+  background-color: alpha(@fg_color, 0.1);
   color: @fg_color;
+  font-weight: 800;
+}
+
+.kabin-now-header label {
+  max-width: 200px;
+}
+
+.kabin-tile-playing {
+  box-shadow:
+    0 16px 32px alpha(black, 0.4),
+    0 0 0 2px alpha(white, 0.35);
+}
+
+.kabin-progress {
+  min-height: 4px;
+}
+
+.kabin-progress trough {
+  background-color: alpha(white, 0.28);
+  border: none;
+  border-radius: 999px;
+  min-height: 4px;
+}
+
+.kabin-progress block.filled,
+.kabin-progress block.high,
+.kabin-hero .kabin-progress block.filled {
+  background-color: white;
+  border-radius: 999px;
+}
+
+.kabin-filter-bar {
+  margin-top: 4px;
+}
+
+.kabin-filter-chip {
+  min-height: 32px;
+  background-color: alpha(@fg_color, 0.1);
+  font-weight: 700;
+}
+
+.kabin-hero-play {
+  min-height: 40px;
+  min-width: 108px;
+  font-weight: 800;
+}
+
+.kabin-hero-open {
+  min-height: 40px;
+  background-color: alpha(white, 0.14);
+  color: white;
+  font-weight: 700;
+}
+
+.kabin-player-skip {
+  min-width: 40px;
+  min-height: 36px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.kabin-track-list {
+  margin-top: 10px;
+}
+
+.kabin-track-heading {
+  margin-bottom: 4px;
+}
+
+.kabin-track {
+  border-radius: 10px;
+  padding: 8px 10px;
+  min-height: 40px;
+}
+
+.kabin-track:hover,
+.kabin-track:focus {
+  background-color: alpha(@fg_color, 0.06);
+}
+
+.kabin-track-current {
+  background-color: alpha(@fg_color, 0.1);
+  box-shadow: inset 3px 0 0 white;
+}
+
+.kabin-track-number {
+  color: @fg_dim_color;
+}
+
+.kabin-status {
+  background-color: transparent;
+}
+
+.kabin-settings {
+  background-color: @bg_darker_color;
 }

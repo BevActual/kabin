@@ -19,11 +19,23 @@ from pathlib import Path
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .streaming import media_capabilities
+from .media import MediaHelperError, MediaHelperSession, answer_host_offer
+from .playback import (
+    is_safe_media_file,
+    playable_tracks,
+    plays_in_kabin,
+    progress_for,
+    public_progress,
+    save_progress,
+    track_count,
+)
+from .streaming import media_capabilities, stream_offer
 
 
 SERVICE_TYPE = "_kabin._tcp"
 SESSION_TTL = 600
+PAIR_WINDOW = 30
+PAIR_MAX_FAILURES = 8
 
 
 def network_identity_root() -> Path:
@@ -53,10 +65,12 @@ def ensure_host_certificate(root: Path | None = None) -> tuple[Path, Path, str]:
     return certificate, private_key, fingerprint
 
 
-def serialize_item(item) -> dict:
+def serialize_item(item, media_dirs=None, progress=None) -> dict:
     """Public catalog representation: deliberately excludes paths and commands."""
     media_type = getattr(item, "media_type", "game")
-    return {
+    extra = getattr(item, "extra", None) or {}
+    appid = str(extra.get("appid") or "")
+    public = {
         "id": item.id,
         "title": item.title,
         "media_type": media_type,
@@ -69,13 +83,19 @@ def serialize_item(item) -> dict:
         "source": item.source,
         "section": item.subtitle,
         "system": item.subtitle if media_type == "game" else "",
-        "has_artwork": bool(item.icon_path),
+        "appid": appid,
+        "has_artwork": bool(getattr(item, "icon_path", None)) or bool(appid),
+        "playable": plays_in_kabin(item) and media_file_for_item(item, media_dirs) is not None,
+        "track_count": track_count(item) if plays_in_kabin(item) else 0,
     }
+    if progress is not None:
+        public["progress"] = public_progress(progress)
+    return public
 
 
-def serialize_game(game) -> dict:
+def serialize_game(game, media_dirs=None, progress=None) -> dict:
     """Backward-compatible name for callers using the v1 game catalog."""
-    return serialize_item(game)
+    return serialize_item(game, media_dirs, progress)
 
 
 def _catalog_counts(items: list[dict]) -> dict[str, int]:
@@ -108,7 +128,9 @@ class HostService:
         self.pairing_expires = 0
         self.sessions = {}
         self.session_games = {}
+        self.session_helpers = {}
         self.sessions_lock = threading.Lock()
+        self._pair_failures: list[float] = []
         self.tls = tls
         self.identity_root = identity_root
         self.fingerprint = None
@@ -120,7 +142,8 @@ class HostService:
     @property
     def address(self) -> str:
         port = self.server.server_port if self.server else self.config.network["port"]
-        return f"http://0.0.0.0:{port}"
+        scheme = "https" if self.tls else "http"
+        return f"{scheme}://0.0.0.0:{port}"
 
     def start(self):
         if self.running:
@@ -144,6 +167,9 @@ class HostService:
                 self.wfile.write(body)
 
             def _image(self, path):
+                if not is_safe_artwork_file(path):
+                    self._json(HTTPStatus.NOT_FOUND, {"error": "artwork not found"})
+                    return
                 try:
                     data = Path(path).read_bytes()
                 except OSError:
@@ -168,12 +194,54 @@ class HostService:
                 self.end_headers()
                 self.wfile.write(data)
 
+            def _stream_file(self, path: Path):
+                try:
+                    size = path.stat().st_size
+                    handle = path.open("rb")
+                except OSError:
+                    self._json(HTTPStatus.NOT_FOUND, {"error": "media not found"})
+                    return
+                start, end = 0, size - 1
+                range_header = self.headers.get("Range", "")
+                if range_header.startswith("bytes=") and size:
+                    spec = range_header.removeprefix("bytes=")
+                    start_text, _, end_text = spec.partition("-")
+                    try:
+                        if start_text:
+                            start = max(0, int(start_text))
+                        if end_text:
+                            end = min(size - 1, int(end_text))
+                    except ValueError:
+                        start, end = 0, size - 1
+                length = max(0, end - start + 1)
+                status = HTTPStatus.PARTIAL_CONTENT if start > 0 or end < size - 1 else HTTPStatus.OK
+                self.send_response(status)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(length))
+                self.send_header("Accept-Ranges", "bytes")
+                if status == HTTPStatus.PARTIAL_CONTENT:
+                    self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+                self.send_header("Cache-Control", "private, no-transform")
+                self.end_headers()
+                try:
+                    handle.seek(start)
+                    remaining = length
+                    while remaining:
+                        chunk = handle.read(min(64 * 1024, remaining))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        remaining -= len(chunk)
+                finally:
+                    handle.close()
+
             def _authorized(self):
                 supplied = self.headers.get("Authorization", "").removeprefix("Bearer ")
                 return service.config.network_token_valid(supplied)
 
             def do_GET(self):
                 if self.path == "/v1/info":
+                    capabilities = media_capabilities()
                     self._json(
                         HTTPStatus.OK,
                         {
@@ -181,6 +249,8 @@ class HostService:
                             "name": host_name,
                             "service": "Kabin Host",
                             "pairing_required": True,
+                            "streaming": capabilities.get("backend", "none"),
+                            "media_ready": bool(capabilities.get("ready")),
                         },
                     )
                     return
@@ -188,7 +258,14 @@ class HostService:
                     if not self._authorized():
                         self._json(HTTPStatus.UNAUTHORIZED, {"error": "authentication required"})
                         return
-                    items = [serialize_item(item) for item in service.catalog_provider()]
+                    items = [
+                        serialize_item(
+                            item,
+                            service.config.media_dirs,
+                            progress_for(service.config, item.id) if plays_in_kabin(item) else None,
+                        )
+                        for item in service.catalog_provider()
+                    ]
                     games = [item for item in items if item["media_type"] == "game"]
                     self._json(
                         HTTPStatus.OK,
@@ -213,17 +290,56 @@ class HostService:
                     query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
                     game_id = (query.get("id") or [""])[0]
                     game = next(
-                        (
-                            item
-                            for item in service.catalog_provider()
-                            if item.id == game_id and item.icon_path
-                        ),
+                        (item for item in service.catalog_provider() if item.id == game_id),
                         None,
                     )
-                    if not game:
+                    artwork_path = artwork_file_for_item(game) if game else None
+                    if not artwork_path:
                         self._json(HTTPStatus.NOT_FOUND, {"error": "artwork not found"})
                         return
-                    self._image(game.icon_path)
+                    self._image(artwork_path)
+                    return
+                if self.path.startswith("/v1/media/progress"):
+                    if not self._authorized():
+                        self._json(HTTPStatus.UNAUTHORIZED, {"error": "authentication required"})
+                        return
+                    query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+                    item_id = (query.get("id") or [""])[0]
+                    if item_id:
+                        self._json(HTTPStatus.OK, {"id": item_id, **progress_for(service.config, item_id)})
+                        return
+                    catalog_ids = {entry.id for entry in service.catalog_provider()}
+                    payload = {
+                        item_id: public_progress(info)
+                        for item_id, info in (
+                            (entry_id, progress_for(service.config, entry_id))
+                            for entry_id in catalog_ids
+                        )
+                        if info["updated_at"]
+                    }
+                    self._json(HTTPStatus.OK, {"progress": payload})
+                    return
+                if self.path.startswith("/v1/media/stream"):
+                    if not self._authorized():
+                        self._json(HTTPStatus.UNAUTHORIZED, {"error": "authentication required"})
+                        return
+                    query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+                    item_id = (query.get("id") or [""])[0]
+                    try:
+                        track = int((query.get("track") or ["0"])[0] or 0)
+                    except ValueError:
+                        track = 0
+                    item = next(
+                        (entry for entry in service.catalog_provider() if entry.id == item_id),
+                        None,
+                    )
+                    media_path = (
+                        media_file_for_item(item, service.config.media_dirs, track) if item else None
+                    )
+                    if not media_path:
+                        self._json(HTTPStatus.NOT_FOUND, {"error": "media not found"})
+                        return
+                    self._stream_file(Path(media_path))
                     return
                 if self.path.startswith("/v1/sessions/"):
                     if not self._authorized():
@@ -239,6 +355,28 @@ class HostService:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
             def do_POST(self):
+                if self.path.startswith("/v1/sessions/") and self.path.endswith("/signal"):
+                    if not self._authorized():
+                        self._json(HTTPStatus.UNAUTHORIZED, {"error": "authentication required"})
+                        return
+                    session_id = self.path.removeprefix("/v1/sessions/").removesuffix("/signal")
+                    payload = self._read_payload()
+                    if payload is None:
+                        return
+                    if payload.get("type") != "offer" or not payload.get("sdp"):
+                        self._json(HTTPStatus.BAD_REQUEST, {"error": "offer sdp is required"})
+                        return
+                    try:
+                        answer = service.negotiate_offer(session_id, str(payload["sdp"]))
+                    except MediaHelperError as exc:
+                        self._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": str(exc)})
+                        return
+                    if not answer:
+                        self._json(HTTPStatus.NOT_FOUND, {"error": "session not found"})
+                        return
+                    service.activate_session(session_id)
+                    self._json(HTTPStatus.OK, {"type": "answer", "sdp": answer})
+                    return
                 if self.path.startswith("/v1/sessions/") and self.path.endswith("/launch"):
                     if not self._authorized():
                         self._json(HTTPStatus.UNAUTHORIZED, {"error": "authentication required"})
@@ -246,6 +384,30 @@ class HostService:
                     session_id = self.path.removeprefix("/v1/sessions/").removesuffix("/launch")
                     status, session = service.activate_session(session_id)
                     self._json(status, session)
+                    return
+                if self.path == "/v1/media/progress":
+                    if not self._authorized():
+                        self._json(HTTPStatus.UNAUTHORIZED, {"error": "authentication required"})
+                        return
+                    payload = self._read_payload()
+                    if payload is None:
+                        return
+                    item_id = str(payload.get("id") or "")
+                    item = next(
+                        (entry for entry in service.catalog_provider() if entry.id == item_id),
+                        None,
+                    )
+                    if not item or not plays_in_kabin(item):
+                        self._json(HTTPStatus.NOT_FOUND, {"error": "media not found"})
+                        return
+                    save_progress(
+                        service.config,
+                        item.id,
+                        payload.get("position") or 0,
+                        payload.get("duration") or 0,
+                        payload.get("track") or 0,
+                    )
+                    self._json(HTTPStatus.OK, {"id": item.id, **progress_for(service.config, item.id)})
                     return
                 if self.path == "/v1/sessions":
                     if not self._authorized():
@@ -268,7 +430,11 @@ class HostService:
                     return
 
                 code = str(payload.get("code", ""))
-                if not service.consume_pairing_code(code):
+                pairing = service.attempt_pairing(code)
+                if pairing == "locked":
+                    self._json(HTTPStatus.TOO_MANY_REQUESTS, {"error": "too many pairing attempts"})
+                    return
+                if pairing != "ok":
                     self._json(HTTPStatus.FORBIDDEN, {"error": "invalid or expired pairing code"})
                     return
                 device_name = str(payload.get("device_name", "Kabin device"))[:80]
@@ -307,6 +473,13 @@ class HostService:
         return self.pairing_code
 
     def consume_pairing_code(self, code: str) -> bool:
+        return self.attempt_pairing(code) == "ok"
+
+    def attempt_pairing(self, code: str) -> str:
+        now = time.monotonic()
+        self._pair_failures = [stamp for stamp in self._pair_failures if now - stamp < PAIR_WINDOW]
+        if len(self._pair_failures) >= PAIR_MAX_FAILURES:
+            return "locked"
         valid = (
             self.pairing_code is not None
             and time.monotonic() <= self.pairing_expires
@@ -315,7 +488,10 @@ class HostService:
         if valid:
             self.pairing_code = None
             self.pairing_expires = 0
-        return valid
+            self._pair_failures = []
+            return "ok"
+        self._pair_failures.append(now)
+        return "invalid"
 
     def prepare_session(self, game_id: str) -> dict | None:
         game = next(
@@ -325,13 +501,14 @@ class HostService:
         if game is None:
             return None
         session_id = secrets.token_urlsafe(18)
+        media = stream_offer(self.config)
         session = {
             "id": session_id,
             "game_id": game.id,
             "title": game.title,
-            "state": "prepared",
+            "state": "ready" if media.get("status") == "ready" else "prepared",
             "created_at": time.time(),
-            "media": {"status": "awaiting-negotiation"},
+            "media": media,
             "capabilities": media_capabilities(),
         }
         with self.sessions_lock:
@@ -359,11 +536,32 @@ class HostService:
             session["state"] = "ready"
             return True
 
+    def negotiate_offer(self, session_id: str, offer_sdp: str) -> str | None:
+        session = self.get_session(session_id)
+        if not session:
+            return None
+        helper = MediaHelperSession("host")
+        with self.sessions_lock:
+            previous = self.session_helpers.pop(session_id, None)
+            self.session_helpers[session_id] = helper
+        if previous:
+            previous.close()
+        try:
+            answer = answer_host_offer(helper, offer_sdp)
+            self.mark_media_connected(session_id)
+            return answer
+        except MediaHelperError:
+            helper.close()
+            with self.sessions_lock:
+                self.session_helpers.pop(session_id, None)
+            raise
+
     def activate_session(self, session_id: str) -> tuple[int, dict]:
         session = self.get_session(session_id)
         if not session:
             return HTTPStatus.NOT_FOUND, {"error": "session not found or expired"}
-        if session["media"]["status"] != "connected":
+        media = session.get("media") or {}
+        if media.get("status") != "connected":
             return HTTPStatus.CONFLICT, {"error": "media channel is not connected"}
         if session["state"] == "running":
             return HTTPStatus.OK, session
@@ -388,6 +586,9 @@ class HostService:
             metadata = ["protocol=1", f"tls={int(self.tls)}"]
             if self.fingerprint:
                 metadata.append(f"fingerprint={self.fingerprint}")
+            offer = stream_offer(self.config)
+            if offer.get("protocol") == "kabin":
+                metadata.append("streaming=kabin")
             self.publisher = subprocess.Popen(
                 [executable, name, SERVICE_TYPE, str(port), *metadata],
                 stdout=subprocess.DEVNULL,
@@ -397,6 +598,11 @@ class HostService:
             self.publisher = None
 
     def stop(self):
+        with self.sessions_lock:
+            helpers = list(self.session_helpers.values())
+            self.session_helpers.clear()
+        for helper in helpers:
+            helper.close()
         if self.publisher:
             self.publisher.terminate()
             self.publisher = None
@@ -405,6 +611,78 @@ class HostService:
             self.server.server_close()
             self.server = None
         self.thread = None
+
+
+def is_safe_artwork_file(path) -> bool:
+    """Refuse symlinks so a cover named next to a ROM cannot point at arbitrary files."""
+    if not path:
+        return False
+    candidate = Path(path)
+    try:
+        if candidate.is_symlink():
+            return False
+        resolved = candidate.resolve()
+    except OSError:
+        return False
+    return resolved.is_file() and not resolved.is_symlink()
+
+
+def artwork_file_for_item(item) -> str | None:
+    icon_path = getattr(item, "icon_path", None)
+    if icon_path and is_safe_artwork_file(icon_path):
+        return str(icon_path)
+    extra = getattr(item, "extra", None) or {}
+    appid = extra.get("appid")
+    if appid:
+        from .icons import cached_path
+
+        cached = cached_path(str(appid))
+        if cached and is_safe_artwork_file(cached):
+            return str(cached)
+    return None
+
+
+def media_file_for_item(item, media_dirs, track: int = 0) -> str | None:
+    tracks = playable_tracks(item)
+    if not tracks:
+        return None
+    index = max(0, min(int(track or 0), len(tracks) - 1))
+    path = tracks[index]
+    if not is_safe_media_file(path, media_dirs):
+        return None
+    return str(path)
+
+
+def media_stream_url(host: dict, item_id: str, track: int = 0) -> str:
+    query = f"id={urllib.parse.quote(item_id, safe='')}"
+    if track:
+        query += f"&track={int(track)}"
+    return host_url(host, f"/v1/media/stream?{query}")
+
+
+def push_remote_progress(host: dict, token: str, item_id: str, position: float, duration: float, track: int = 0, timeout=5) -> dict:
+    url = host_url(host, "/v1/media/progress")
+    body = json.dumps(
+        {
+            "id": item_id,
+            "position": position,
+            "duration": duration,
+            "track": track,
+        }
+    ).encode()
+    request = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(
+        request, timeout=timeout, context=pinned_tls_context(host, timeout)
+    ) as response:
+        return json.loads(response.read())
 
 
 def parse_avahi_hosts(output: str) -> list[dict]:
@@ -498,6 +776,26 @@ def fetch_remote_library(host: dict, token: str, timeout=5) -> dict:
 def prepare_remote_session(host: dict, token: str, game_id: str, timeout=5) -> dict:
     url = host_url(host, "/v1/sessions")
     body = json.dumps({"game_id": game_id}).encode()
+    request = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(
+        request, timeout=timeout, context=pinned_tls_context(host, timeout)
+    ) as response:
+        return json.loads(response.read())
+
+
+def signal_remote_session(
+    host: dict, token: str, session_id: str, offer_sdp: str, timeout=20
+) -> dict:
+    url = host_url(host, f"/v1/sessions/{urllib.parse.quote(session_id, safe='')}/signal")
+    body = json.dumps({"type": "offer", "sdp": offer_sdp}).encode()
     request = urllib.request.Request(
         url,
         data=body,

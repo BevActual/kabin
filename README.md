@@ -2,10 +2,10 @@
 
 Your games and media live here.
 
-Kabin is a personal media cabinet that starts with a polished game library for
-Steam, installed apps, and ROMs. Its paired host and generic catalog foundation
-are expanding toward ebooks, comics, music, movies, and TV without requiring a
-different server and interface for every kind of media.
+Kabin is a personal media host and player — the same class of program as
+Jellyfin or Plex, starting from a game cabinet. One app scans your library,
+serves it to paired Kabin devices, and plays music and video itself. Books
+and comics still open in your reader until Kabin grows its own.
 
 This is not an Omarchy shell plugin. It's a regular GTK4/libadwaita app you
 launch like any other, and it isn't tied to the Quickshell bar.
@@ -19,6 +19,13 @@ launch like any other, and it isn't tied to the Quickshell bar.
   Games launch via `steam steam://rungameid/<appid>`.
 - **Other apps** — any installed `.desktop` entry with `Categories=Game`
   (catches things like custom shortcuts for non-Steam games).
+- **Books, comics, music, and movies** — add a folder in Settings → Library.
+  Kabin groups music by album folder, plays music and video in
+  `kabin-media-helper`, and remembers resume position on this device and the
+  host. Albums play through as a queue. Space pauses; the bottom bar seeks,
+  skips tracks, and stops. Books and comics open in your default reader.
+  The cabinet uses a poster wall for mixed views, square album cards in
+  Music, and widescreen cards in Movies.
 - **Emulation Center** — choose a game system and ROM folder; Kabin supplies
   the correct file types and detects compatible native or Flatpak emulators.
   standalone emulators are discovered automatically, and advanced users can
@@ -64,17 +71,24 @@ mDNS/Avahi. Kabin generates a local host certificate, advertises its SHA-256
 fingerprint during discovery, and pins that certificate before sending pairing
 codes or device tokens.
 
-The initial host protocol intentionally shares catalog metadata only. Local
-file paths, emulator commands, and credentials are never included in library
-responses. Remote pairing, artwork transfer, launching, save sync, and native
-GStreamer/WebRTC streaming build on this API in subsequent milestones.
+The host protocol shares catalog metadata only. Local file paths, emulator
+commands, and credentials are never included in library responses. Paired
+clients play music and video through `GET /v1/media/stream`, which sends the
+file bytes (including HTTP Range) after the same Bearer check. Album tracks
+are selected with `track=`. `GET`/`POST /v1/media/progress` keeps Continue
+in sync across paired Kabin devices. The catalog marks titles `playable`
+and includes resume metadata without exposing a path.
 
-Native WebRTC SDP handling runs in the small Kabin-owned
-`kabin-media-helper`, keeping unstable GStreamer C objects out of the Python UI
-process. `scripts/install.sh` builds the helper automatically, and
-`scripts/build-media-helper.sh` can rebuild it directly during development.
-Kabin enables streaming only after the helper completes an isolated offer and
-answer loopback test successfully.
+Remote game play is a Kabin layer, not a second app. The host captures the
+desktop with PipeWire or X11, encodes it, and sends WebRTC over the existing
+Kabin TLS API. The client decodes that stream in `kabin-media-helper` — the
+same native process used for local Watch/Listen — so Stream never launches
+Sunshine, Moonlight, VLC, or any other external player.
+
+Build the helper with `./scripts/build-media-helper.sh` (install also does
+this). It needs GStreamer WebRTC plus a capture plugin (`pipewiresrc` or
+`ximagesrc`) and an encoder (`nvh264enc`, `vah264enc`, `openh264enc`, or
+`vp8enc`). Settings → Network shows whether that stack is ready.
 
 ## Install
 
@@ -100,9 +114,18 @@ per-source enable/disable, hidden game ids).
 
 ## Shortcuts
 
+A controller can browse the cabinet. D-pad or left stick moves, A opens a
+title, B goes back, Y favorites, LB/RB change library, L3 picks a random
+title, and Start opens Settings. Letter keys jump to that letter in the
+current list, like ES-DE.
+
 - `Ctrl+F` or `/` — focus search
-- `Esc` — clear search, then leave fullscreen
-- `Ctrl+,` — open Settings
+- `A`–`Z` or `0`–`9` — jump to the first matching title
+- `F2` — surprise me (random title in the current view)
+- `Enter` — open the selected title, then play, read, listen, or watch
+- `Esc` — back, then clear search, then leave fullscreen
+- `Page Up` / `Page Down` — previous or next library
+- `F1` or `Ctrl+,` — open Settings
 - `F11` — toggle fullscreen
 
 ## Tests

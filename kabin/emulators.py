@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .managed import installed_executable
-from .systems import SystemDefinition
+from .systems import SystemDefinition, firmware_files
 
 
 @dataclass(frozen=True)
@@ -83,10 +83,19 @@ def emulator_command(profile: dict) -> list[str]:
     return [executable] if runtime in {"native", "managed"} else ["flatpak", "run", executable]
 
 
+_BIOS_DATA_DIRS = {
+    "duckstation": ("duckstation", "bios"),
+    "pcsx2": ("PCSX2", "bios"),
+}
+
+
 def build_command(profile: dict, rom_path: Path, settings: dict | None = None) -> list[str]:
     command = emulator_command(profile)
     emulator_id = profile.get("id")
-    fullscreen = bool((settings or {}).get("fullscreen", False))
+    options = settings or {}
+    fullscreen = bool(options.get("fullscreen", False))
+    vsync = bool(options.get("vsync", False))
+    integer_scaling = bool(options.get("integer_scaling", False))
     if emulator_id == "dolphin":
         command.extend(["--batch", "--exec"])
         if fullscreen:
@@ -102,6 +111,8 @@ def build_command(profile: dict, rom_path: Path, settings: dict | None = None) -
     elif emulator_id == "mame":
         if fullscreen:
             command.append("-nowindow")
+        if vsync:
+            command.append("-waitvsync")
         command.extend(["-rompath", str(rom_path.parent), rom_path.stem])
         return command
     elif fullscreen:
@@ -116,21 +127,53 @@ def build_command(profile: dict, rom_path: Path, settings: dict | None = None) -
         flag = fullscreen_flags.get(emulator_id)
         if flag:
             command.append(flag)
+    if emulator_id == "mupen64plus":
+        if vsync:
+            command.extend(["--set", "Video-General[VerticalSync]=True"])
+        if integer_scaling:
+            command.extend(["--set", "Video-General[IntegerScaling]=True"])
     command.append(str(rom_path))
     return command
 
 
-def launch_environment(profile: dict) -> dict | None:
-    if profile.get("runtime") != "managed":
-        return None
-    root = Path(profile["executable"]).parent / "profile"
-    directories = {
-        "XDG_CONFIG_HOME": root / "config",
-        "XDG_DATA_HOME": root / "data",
-        "XDG_CACHE_HOME": root / "cache",
-    }
-    for directory in directories.values():
-        directory.mkdir(parents=True, exist_ok=True)
-    environment = os.environ.copy()
-    environment.update({key: str(value) for key, value in directories.items()})
+def launch_environment(profile: dict, bios_path=None) -> dict | None:
+    environment = None
+    if profile.get("runtime") == "managed":
+        root = Path(profile["executable"]).parent / "profile"
+        directories = {
+            "XDG_CONFIG_HOME": root / "config",
+            "XDG_DATA_HOME": root / "data",
+            "XDG_CACHE_HOME": root / "cache",
+        }
+        for directory in directories.values():
+            directory.mkdir(parents=True, exist_ok=True)
+        environment = os.environ.copy()
+        environment.update({key: str(value) for key, value in directories.items()})
+    prepare_bios(profile, bios_path, environment)
     return environment
+
+
+def prepare_bios(profile: dict, bios_path, environment: dict | None = None) -> None:
+    """Link dumped firmware into the emulator's expected bios folder."""
+    emulator_id = profile.get("id")
+    layout = _BIOS_DATA_DIRS.get(emulator_id)
+    if not bios_path or not layout:
+        return
+    files = firmware_files(bios_path)
+    if not files:
+        return
+    if environment and environment.get("XDG_DATA_HOME"):
+        data_home = Path(environment["XDG_DATA_HOME"])
+    else:
+        data_home = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
+    destination = data_home.joinpath(*layout)
+    destination.mkdir(parents=True, exist_ok=True)
+    for source in files:
+        target = destination / source.name
+        if target.exists() or target.is_symlink():
+            continue
+        resolved = source.resolve()
+        try:
+            target.symlink_to(resolved)
+        except OSError:
+            shutil.copy2(resolved, target)
