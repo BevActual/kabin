@@ -31,20 +31,27 @@ from .home import (  # noqa: E402
     split_home_shelves,
 )
 from .kinds import CABINET_KIND, FOLDER_KINDS, KINDS, count_noun, get_kind, kind_for  # noqa: E402
+from .library import (  # noqa: E402
+    can_play_media,
+    compare_items,
+    is_playing,
+    item_progress,
+    matches,
+    matches_context,
+    play_button_label,
+    queue_for,
+    resume_hint,
+)
 from .media import MediaHelperError, MediaHelperSession, PlaybackSession, create_client_offer  # noqa: E402
-from .network import HostService, media_stream_url, prepare_remote_session, push_remote_progress, signal_remote_session  # noqa: E402
+from .network import HostService, prepare_remote_session, push_remote_progress, signal_remote_session  # noqa: E402
 from .playback import (  # noqa: E402
     adopt_progress,
     format_clock,
     helper_ready,
-    local_queue,
-    playable_file,
     plays_in_kabin,
-    progress_ratio,
     resume_seconds,
     resume_track,
     save_progress,
-    should_resume,
     track_count,
 )
 from .settings import SettingsWindow  # noqa: E402
@@ -1411,61 +1418,24 @@ class MainWindow(Adw.ApplicationWindow):
     # -- filtering & interaction -------------------------------------------
 
     def _matches_context(self, game) -> bool:
-        if self._search_text and self._search_text not in game.search_text:
-            return False
-        kind, value = self._category
-        if kind in ("home", "all"):
-            return True
-        if kind == "type":
-            return kind_for(game).id == value
-        if kind == "preset" and value == "unplayed":
-            return game.id not in self.config.recent
-        if kind == "favorite":
-            return self.config.is_favorite(game.id)
-        if kind == "source":
-            return game.source == value
-        if kind == "system":
-            return game.source == "roms" and game.subtitle == value
-        if kind == "host":
-            return game.source == "remote" and game.subtitle == value
-        return True
+        return matches_context(game, self._search_text, self._category, self.config)
 
     def _matches(self, game) -> bool:
-        if not self._matches_context(game):
-            return False
-        if self._favorites_only and not self.config.is_favorite(game.id):
-            return False
-        if self._unplayed_only and game.id in self.config.recent:
-            return False
-        if self._location_filter == "local" and game.source == "remote":
-            return False
-        if self._location_filter == "remote" and game.source != "remote":
-            return False
-        return True
+        return matches(
+            game,
+            self._search_text,
+            self._category,
+            self.config,
+            favorites_only=self._favorites_only,
+            unplayed_only=self._unplayed_only,
+            location_filter=self._location_filter,
+        )
 
     def _filter_item(self, item: GameItem, *_user_data) -> bool:
         return self._matches(item.game)
 
     def _compare_items(self, item_a: GameItem, item_b: GameItem, *_user_data) -> int:
-        game_a, game_b = item_a.game, item_b.game
-        if self._sort_mode == "recent":
-            recent = self.config.recent
-            time_a = recent.get(game_a.id, 0)
-            time_b = recent.get(game_b.id, 0)
-            if time_a != time_b:
-                return -1 if time_a > time_b else 1
-        elif self._sort_mode == "added":
-            time_a = game_a.extra.get("added_at", 0)
-            time_b = game_b.extra.get("added_at", 0)
-            if time_a != time_b:
-                return -1 if time_a > time_b else 1
-        elif self._sort_mode == "opened":
-            count_a = self.config.play_count(game_a.id)
-            count_b = self.config.play_count(game_b.id)
-            if count_a != count_b:
-                return -1 if count_a > count_b else 1
-        key_a, key_b = game_a.sort_key, game_b.sort_key
-        return -1 if key_a < key_b else (1 if key_a > key_b else 0)
+        return compare_items(item_a.game, item_b.game, self._sort_mode, self.config)
 
     def _bind_game_tile(self, _factory, list_item):
         game = list_item.get_item().game
@@ -1736,24 +1706,20 @@ class MainWindow(Adw.ApplicationWindow):
             self._toast(f"Could not launch {game.title} · {exc}")
 
     def _can_play_media(self, game) -> bool:
-        if not plays_in_kabin(game):
-            return False
-        if game.source == "remote":
-            return bool(game.extra.get("playable"))
-        return playable_file(game) is not None
+        return can_play_media(game)
 
     def _is_playing(self, game) -> bool:
-        return bool(game) and self._playback_item is game
+        return is_playing(game, self._playback_item)
 
     def _item_progress(self, game) -> float:
-        if not game or not plays_in_kabin(game):
-            return 0
-        if self._is_playing(game) and self._playback:
-            duration = self._playback.duration
-            frac = (self._playback.position / duration) if duration else 0
-            total = max(1, len(self._playback_queue))
-            return min(1.0, (self._playback_index + max(0.0, frac)) / total)
-        return progress_ratio(self.config, game.id, track_count(game))
+        return item_progress(
+            game,
+            self.config,
+            is_current=self._is_playing(game),
+            playback=self._playback,
+            playback_index=self._playback_index,
+            queue_length=len(self._playback_queue),
+        )
 
     def _rebuild_track_list(self, game):
         if not hasattr(self, "details_tracks"):
@@ -1820,43 +1786,18 @@ class MainWindow(Adw.ApplicationWindow):
             self._highlight_current_track()
 
     def _resume_hint(self, game) -> str:
-        total = track_count(game)
-        if not should_resume(self.config, game.id, total):
-            return ""
-        track = resume_track(self.config, game.id, total)
-        start = resume_seconds(self.config, game.id)
-        if total > 1:
-            place = f"track {track + 1}"
-            if start:
-                place += f", {format_clock(start)}"
-            return f" Resume from {place}."
-        if start:
-            return f" Resume from {format_clock(start)}."
-        return ""
+        return resume_hint(game, self.config)
 
     def _queue_for(self, game) -> list[dict]:
-        if game.source == "remote" and game.extra.get("playable"):
-            host = game.extra.get("host") or {}
-            remote_id = game.extra.get("remote_id", "")
-            count = max(1, track_count(game))
-            return [
-                {
-                    "track": index,
-                    "title": game.title if count == 1 else f"{game.title} · {index + 1}",
-                    "uri": media_stream_url(host, remote_id, index),
-                }
-                for index in range(count)
-            ]
-        return local_queue(game)
+        return queue_for(game)
 
     def _play_button_label(self, game) -> str:
-        if self._playback_item is game:
-            return "Resume" if self._playback and self._playback.paused else "Pause"
-        if plays_in_kabin(game) and should_resume(self.config, game.id, track_count(game)):
-            return "Resume"
-        if game.source == "remote" and kind_for(game).id == "game":
-            return "Stream"
-        return kind_for(game).verb
+        return play_button_label(
+            game,
+            self.config,
+            is_current=self._playback_item is game,
+            playback=self._playback,
+        )
 
     def _sync_play_button(self, game):
         if self._selected_game is not game:

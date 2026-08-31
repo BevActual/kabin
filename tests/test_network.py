@@ -1,4 +1,5 @@
 import json
+import socket
 import tempfile
 import unittest
 import urllib.error
@@ -491,6 +492,28 @@ class TestNetwork(unittest.TestCase):
                 urllib.request.urlopen(request)
             self.assertEqual(missing.exception.code, 404)
             missing.exception.close()
+
+    def test_negative_content_length_is_rejected_instead_of_hanging(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            config.network["port"] = 0
+            service = HostService(config, lambda: [], tls=False)
+            with patch.object(service, "_publish"):
+                service.start()
+            self.addCleanup(service.stop)
+
+            with socket.create_connection(
+                ("127.0.0.1", service.server.server_port), timeout=5
+            ) as sock:
+                sock.sendall(
+                    b"POST /v1/pair HTTP/1.1\r\n"
+                    b"Host: 127.0.0.1\r\n"
+                    b"Content-Length: -1\r\n"
+                    b"Connection: close\r\n\r\n"
+                )
+                sock.settimeout(5)
+                response = sock.recv(200)
+        self.assertIn(b"400", response)
 
     def test_pairing_locks_after_repeated_failures(self):
         with tempfile.TemporaryDirectory() as tmp:

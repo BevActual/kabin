@@ -443,7 +443,10 @@ class HostService:
 
             def _read_payload(self):
                 try:
-                    length = min(int(self.headers.get("Content-Length", "0")), 4096)
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length < 0:
+                        raise ValueError("negative content length")
+                    length = min(length, 4096)
                     return json.loads(self.rfile.read(length) or b"{}")
                 except (ValueError, json.JSONDecodeError):
                     self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid request"})

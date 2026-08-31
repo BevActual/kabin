@@ -1,11 +1,12 @@
 import os
-import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Callable, Optional
 
 from gi.repository import GLib
+
+from .artwork_queue import ArtworkQueue
 
 _CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "kabin" / "steam"
 _LEGACY_CACHE_ROOT = (
@@ -28,9 +29,6 @@ _ASSET_SPECS = {
     },
 }
 
-_lock = threading.Lock()
-_inflight: dict[tuple, list[Callable]] = {}
-
 
 def _supported_image(data: bytes) -> bool:
     return (
@@ -49,6 +47,34 @@ def cached_path(appid: str, kind: str = "cover") -> Optional[Path]:
     return legacy if legacy.exists() else None
 
 
+def _download(appid: str, kind: str) -> Optional[Path]:
+    spec = _ASSET_SPECS[kind]
+    cache_dir = _CACHE_ROOT / kind
+    dest = cache_dir / f"{appid}.{spec['ext']}"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    for template in spec["urls"]:
+        url = template.format(appid=appid)
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "kabin/0.1"})
+            with urllib.request.urlopen(request, timeout=6) as resp:
+                data = resp.read(15 * 1024 * 1024 + 1)
+            if not data or len(data) > 15 * 1024 * 1024 or not _supported_image(data):
+                continue
+            tmp = dest.with_suffix(".tmp")
+            tmp.write_bytes(data)
+            tmp.replace(dest)
+            return dest
+        except (urllib.error.URLError, OSError, TimeoutError):
+            continue
+    return None
+
+
+_steam_artwork = ArtworkQueue(
+    _download,
+    lambda callback, result: GLib.idle_add(callback, result),
+)
+
+
 def fetch_async(appid: str, on_done: Callable[[Optional[Path]], None], kind: str = "cover") -> None:
     """Downloads Steam grid/logo artwork in a background thread.
 
@@ -56,41 +82,4 @@ def fetch_async(appid: str, on_done: Callable[[Optional[Path]], None], kind: str
     is "cover" (portrait library art) or "logo" (transparent clear-logo).
     Duplicate in-flight requests share one download and every listener is notified.
     """
-    key = (kind, appid)
-    with _lock:
-        listeners = _inflight.get(key)
-        if listeners is not None:
-            listeners.append(on_done)
-            return
-        _inflight[key] = [on_done]
-
-    spec = _ASSET_SPECS[kind]
-    cache_dir = _CACHE_ROOT / kind
-
-    def worker():
-        dest = cache_dir / f"{appid}.{spec['ext']}"
-        result = None
-        try:
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            for template in spec["urls"]:
-                url = template.format(appid=appid)
-                try:
-                    request = urllib.request.Request(url, headers={"User-Agent": "kabin/0.1"})
-                    with urllib.request.urlopen(request, timeout=6) as resp:
-                        data = resp.read(15 * 1024 * 1024 + 1)
-                    if not data or len(data) > 15 * 1024 * 1024 or not _supported_image(data):
-                        continue
-                    tmp = dest.with_suffix(".tmp")
-                    tmp.write_bytes(data)
-                    tmp.replace(dest)
-                    result = dest
-                    break
-                except (urllib.error.URLError, OSError, TimeoutError):
-                    continue
-        finally:
-            with _lock:
-                callbacks = _inflight.pop(key, [])
-            for callback in callbacks:
-                GLib.idle_add(callback, result)
-
-    threading.Thread(target=worker, daemon=True).start()
+    _steam_artwork.request_job((kind, appid), (appid, kind), on_done)
