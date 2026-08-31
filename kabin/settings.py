@@ -873,6 +873,7 @@ class SettingsWindow(Adw.PreferencesWindow):
                 icon_name="user-trash-symbolic",
                 valign=Gtk.Align.CENTER,
                 css_classes=["flat"],
+                tooltip_text="Remove this game library",
             )
             remove_button.connect("clicked", lambda _b, i=index: self._on_remove_rom_dir(i))
             row.add_suffix(remove_button)
@@ -921,6 +922,7 @@ class SettingsWindow(Adw.PreferencesWindow):
                 icon_name="user-trash-symbolic",
                 valign=Gtk.Align.CENTER,
                 css_classes=["flat"],
+                tooltip_text="Remove this media folder",
             )
             remove_button.connect("clicked", lambda _b, i=index: self._on_remove_media_dir(i))
             row.add_suffix(remove_button)
