@@ -399,6 +399,7 @@ class SettingsWindow(Adw.PreferencesWindow):
         network_group.add(self.stream_resolution_row)
 
         pairing_row = Adw.ButtonRow(title="Create Pairing Code")
+        pairing_row.add_css_class("suggested-action")
         pairing_row.connect("activated", self._on_create_pairing_code)
         network_group.add(pairing_row)
         self.pairing_status_row = Adw.ActionRow(
@@ -407,6 +408,7 @@ class SettingsWindow(Adw.PreferencesWindow):
         network_group.add(self.pairing_status_row)
 
         discover_row = Adw.ButtonRow(title="Find Kabin Hosts")
+        discover_row.add_css_class("suggested-action")
         discover_row.connect("activated", self._on_discover_hosts)
         network_group.add(discover_row)
         self.remote_code_row = Adw.EntryRow(title="Pairing code from host")
@@ -562,6 +564,7 @@ class SettingsWindow(Adw.PreferencesWindow):
             description="Add or remove the folders Kabin scans for games.",
         )
         add_row = Adw.ButtonRow(title="Add Game Library")
+        add_row.add_css_class("suggested-action")
         add_row.connect("activated", self._on_add_rom_dir)
         self.roms_group.add(add_row)
         self.library_page.add(self.roms_group)
@@ -571,6 +574,7 @@ class SettingsWindow(Adw.PreferencesWindow):
             description="Books, comics, music, and movies. Kabin hosts and plays music and video, queues albums, and syncs resume to the host. Books and comics still open in your reader.",
         )
         add_media = Adw.ButtonRow(title="Add Media Folder")
+        add_media.add_css_class("suggested-action")
         add_media.connect("activated", self._on_add_media_dir)
         self.media_group.add(add_media)
         self.library_page.add(self.media_group)
