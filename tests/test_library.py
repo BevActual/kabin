@@ -11,6 +11,7 @@ from kabin.library import (
     item_progress,
     matches,
     matches_context,
+    next_queue_index,
     play_button_label,
     queue_for,
     resume_hint,
@@ -337,6 +338,24 @@ class TestPlayButtonLabel(unittest.TestCase):
         self.assertEqual(
             play_button_label(game, self.config, is_current=False, playback=None), "Play"
         )
+
+
+class TestNextQueueIndex(unittest.TestCase):
+    def test_advances_by_one_within_bounds(self):
+        self.assertEqual(next_queue_index(0, 3), 1)
+        self.assertEqual(next_queue_index(1, 3), 2)
+
+    def test_none_past_the_last_track(self):
+        self.assertIsNone(next_queue_index(2, 3))
+
+    def test_none_before_the_first_track(self):
+        self.assertIsNone(next_queue_index(0, 3, delta=-1))
+
+    def test_steps_backward_within_bounds(self):
+        self.assertEqual(next_queue_index(2, 3, delta=-1), 1)
+
+    def test_empty_queue_is_always_out_of_range(self):
+        self.assertIsNone(next_queue_index(0, 0))
 
 
 if __name__ == "__main__":

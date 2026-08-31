@@ -148,3 +148,9 @@ def play_button_label(game, config, *, is_current: bool, playback) -> str:
     if game.source == "remote" and kind_for(game).id == "game":
         return "Stream"
     return kind_for(game).verb
+
+
+def next_queue_index(index: int, queue_length: int, delta: int = 1) -> int | None:
+    """Index to move to within the playback queue, or None if `delta` runs off either end."""
+    target = index + delta
+    return target if 0 <= target < queue_length else None

@@ -38,6 +38,7 @@ from .library import (  # noqa: E402
     item_progress,
     matches,
     matches_context,
+    next_queue_index,
     play_button_label,
     queue_for,
     resume_hint,
@@ -1915,21 +1916,21 @@ class MainWindow(Adw.ApplicationWindow):
             self._persist_progress(self._playback_item, self._playback)
 
     def _skip_playback(self, delta: int):
-        next_index = self._playback_index + delta
-        if not (0 <= next_index < len(self._playback_queue)):
+        next_index = next_queue_index(self._playback_index, len(self._playback_queue), delta)
+        if next_index is None:
             if delta > 0:
                 self._stop_playback()
             return
-        start = 0
-        self._start_queue_index(next_index, start)
+        self._start_queue_index(next_index, 0)
 
     def _poll_playback(self):
         session = self._playback
         if session is None:
             return False
         if session.ended or session.process.poll() is not None:
-            if self._playback_index + 1 < len(self._playback_queue):
-                self._start_queue_index(self._playback_index + 1, 0)
+            next_index = next_queue_index(self._playback_index, len(self._playback_queue))
+            if next_index is not None:
+                self._start_queue_index(next_index, 0)
                 return False
             self._stop_playback()
             return False
