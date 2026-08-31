@@ -930,7 +930,7 @@ class MainWindow(Adw.ApplicationWindow):
         panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         panel.add_css_class("kabin-details-page")
 
-        back_button = Gtk.Button(label="Library", icon_name="go-previous-symbolic")
+        back_button = Gtk.Button(child=Adw.ButtonContent(icon_name="go-previous-symbolic", label="Library"))
         back_button.set_halign(Gtk.Align.START)
         back_button.add_css_class("flat")
         back_button.add_css_class("kabin-details-back")
