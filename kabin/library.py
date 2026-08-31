@@ -154,3 +154,33 @@ def next_queue_index(index: int, queue_length: int, delta: int = 1) -> int | Non
     """Index to move to within the playback queue, or None if `delta` runs off either end."""
     target = index + delta
     return target if 0 <= target < queue_length else None
+
+
+def empty_state_message(kind, value, title, media, category_count: int, host_status=None) -> tuple[str, str]:
+    """Title/description for the library's no-matches status page.
+
+    `category_count` must ignore search text and extra filters (favorites,
+    unplayed, location) - it answers "is this category itself empty",
+    which is a different question from "did this search/filter match
+    anything". Conflating the two makes an unmatched search on a full
+    library claim the library has nothing in it.
+    """
+    if kind == "type" and category_count == 0:
+        return f"No {media.plural.lower()} yet", media.empty_hint
+    if kind == "system" and category_count == 0:
+        return (
+            f"No {title} games found",
+            "Add supported game files to this console library, then refresh Kabin.",
+        )
+    if kind == "host" and (host_status or {}).get("state") != "online":
+        state = (host_status or {}).get("state")
+        if state == "auth":
+            return (
+                "Pair with this host again",
+                "Open Network & Hosts to pair again and verify this host's identity.",
+            )
+        return (
+            f"{value} is offline",
+            "Check that Kabin Host is running on the other device, then use Refresh.",
+        )
+    return "No matches", "Try a different search, category, or filter."

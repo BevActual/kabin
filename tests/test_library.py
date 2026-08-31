@@ -4,9 +4,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from kabin.config import Config
+from kabin.kinds import get_kind
 from kabin.library import (
     can_play_media,
     compare_items,
+    empty_state_message,
     is_playing,
     item_progress,
     matches,
@@ -356,6 +358,60 @@ class TestNextQueueIndex(unittest.TestCase):
 
     def test_empty_queue_is_always_out_of_range(self):
         self.assertIsNone(next_queue_index(0, 0))
+
+
+class TestEmptyStateMessage(unittest.TestCase):
+    def test_genuinely_empty_type_category_invites_adding_content(self):
+        game_kind = get_kind("game")
+        title, description = empty_state_message("type", "game", "Games", game_kind, 0)
+        self.assertEqual(title, "No games yet")
+        self.assertEqual(description, game_kind.empty_hint)
+
+    def test_unmatched_search_on_a_nonempty_library_is_not_reported_as_empty(self):
+        # Regression: this used to be driven by the post-search/post-filter
+        # count, so searching for something nobody owns claimed the whole
+        # library had nothing in it instead of just this search.
+        game_kind = get_kind("game")
+        title, description = empty_state_message("type", "game", "Games", game_kind, 12)
+        self.assertEqual(title, "No matches")
+        self.assertEqual(description, "Try a different search, category, or filter.")
+
+    def test_genuinely_empty_system_category(self):
+        title, _description = empty_state_message("system", None, "Nintendo 64", None, 0)
+        self.assertEqual(title, "No Nintendo 64 games found")
+
+    def test_unmatched_search_on_a_nonempty_system_category(self):
+        title, _description = empty_state_message("system", None, "Nintendo 64", None, 6)
+        self.assertEqual(title, "No matches")
+
+    def test_offline_host(self):
+        title, description = empty_state_message(
+            "host", "Living Room", "Living Room", None, 3, {"state": "offline"}
+        )
+        self.assertEqual(title, "Living Room is offline")
+        self.assertIn("Refresh", description)
+
+    def test_host_needing_reauthorization(self):
+        title, description = empty_state_message(
+            "host", "Living Room", "Living Room", None, 3, {"state": "auth"}
+        )
+        self.assertEqual(title, "Pair with this host again")
+        self.assertIn("pair again", description)
+
+    def test_online_host_falls_through_to_default(self):
+        title, _description = empty_state_message(
+            "host", "Living Room", "Living Room", None, 0, {"state": "online"}
+        )
+        self.assertEqual(title, "No matches")
+
+    def test_host_with_no_status_yet_is_treated_as_offline(self):
+        title, _description = empty_state_message("host", "Living Room", "Living Room", None, 3, None)
+        self.assertEqual(title, "Living Room is offline")
+
+    def test_favorites_and_other_categories_use_the_generic_message(self):
+        title, description = empty_state_message("favorite", None, "Favorites", None, 0)
+        self.assertEqual(title, "No matches")
+        self.assertEqual(description, "Try a different search, category, or filter.")
 
 
 if __name__ == "__main__":

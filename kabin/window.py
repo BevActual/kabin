@@ -34,6 +34,7 @@ from .kinds import CABINET_KIND, FOLDER_KINDS, KINDS, count_noun, get_kind, kind
 from .library import (  # noqa: E402
     can_play_media,
     compare_items,
+    empty_state_message,
     is_playing,
     item_progress,
     matches,
@@ -1613,6 +1614,9 @@ class MainWindow(Adw.ApplicationWindow):
             title, context = "Library", ""
         count = sum(1 for game in self._games if self._matches(game))
         context_count = sum(1 for game in self._games if self._matches_context(game))
+        category_count = sum(
+            1 for game in self._games if matches_context(game, "", self._category, self.config)
+        )
         noun = count_noun(count, media if kind == "type" else CABINET_KIND)
         if kind != "type":
             noun = "title" if count == 1 else "titles"
@@ -1627,30 +1631,11 @@ class MainWindow(Adw.ApplicationWindow):
         self.library_subtitle.set_label(
             f"{context} · {count_text}" if context else count_text
         )
-        if kind == "type" and count == 0:
-            self.no_matches_status.set_title(f"No {media.plural.lower()} yet")
-            self.no_matches_status.set_description(media.empty_hint)
-        elif kind == "system" and count == 0:
-            self.no_matches_status.set_title(f"No {title} games found")
-            self.no_matches_status.set_description(
-                "Add supported game files to this console library, then refresh Kabin."
-            )
-        elif kind == "host" and self._host_statuses.get(value, {}).get("state") != "online":
-            status = self._host_statuses.get(value, {})
-            state = status.get("state")
-            title = "Pair with this host again" if state == "auth" else f"{value} is offline"
-            description = (
-                "Open Network & Hosts to pair again and verify this host's identity."
-                if state == "auth"
-                else "Check that Kabin Host is running on the other device, then use Refresh."
-            )
-            self.no_matches_status.set_title(title)
-            self.no_matches_status.set_description(description)
-        else:
-            self.no_matches_status.set_title("No matches")
-            self.no_matches_status.set_description(
-                "Try a different search, category, or filter."
-            )
+        no_matches_title, no_matches_description = empty_state_message(
+            kind, value, title, media, category_count, self._host_statuses.get(value)
+        )
+        self.no_matches_status.set_title(no_matches_title)
+        self.no_matches_status.set_description(no_matches_description)
 
     def _on_search_changed(self, entry):
         self._search_text = entry.get_text().strip().casefold()
