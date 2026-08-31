@@ -36,6 +36,7 @@ SERVICE_TYPE = "_kabin._tcp"
 SESSION_TTL = 600
 PAIR_WINDOW = 30
 PAIR_MAX_FAILURES = 8
+MAX_PAYLOAD_BYTES = 65536  # WebRTC offers with several ICE candidates can exceed a few KB
 
 
 def network_identity_root() -> Path:
@@ -446,7 +447,7 @@ class HostService:
                     length = int(self.headers.get("Content-Length", "0"))
                     if length < 0:
                         raise ValueError("negative content length")
-                    length = min(length, 4096)
+                    length = min(length, MAX_PAYLOAD_BYTES)
                     return json.loads(self.rfile.read(length) or b"{}")
                 except (ValueError, json.JSONDecodeError):
                     self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid request"})

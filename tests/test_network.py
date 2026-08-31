@@ -196,6 +196,42 @@ class TestNetwork(unittest.TestCase):
             self.assertEqual(answer["sdp"], "v=0 answer")
             self.assertEqual(launched, [True])
 
+    def test_signal_accepts_realistic_multi_candidate_sdp_offers(self):
+        # A real WebRTC offer with several ICE candidates and codec lines routinely
+        # exceeds a few KB; the request-body cap must not silently truncate it.
+        large_sdp = "v=0\r\no=- 1 1 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\n" + (
+            "a=candidate:1 1 udp 2 10.0.0.1 5000 typ host\r\n" * 120
+        )
+        self.assertGreater(len(large_sdp), 4096)
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            config.network["port"] = 0
+            game = SimpleNamespace(
+                id="steam:1",
+                title="Game",
+                source="steam",
+                subtitle="Steam",
+                icon_path=None,
+                launch=lambda: None,
+            )
+            service = HostService(config, lambda: [game], tls=False)
+            with patch.object(service, "_publish"):
+                service.start()
+            self.addCleanup(service.stop)
+            host = {"name": "Host", "address": "127.0.0.1", "port": service.server.server_port}
+            token = config.ensure_network_token()
+            with patch(
+                "kabin.network.stream_offer",
+                return_value={"status": "awaiting-negotiation", "protocol": "kabin", "transport": "webrtc"},
+            ):
+                session = prepare_remote_session(host, token, game.id)
+            with patch("kabin.network.MediaHelperSession"), patch(
+                "kabin.network.answer_host_offer", return_value="v=0 answer"
+            ) as answer_host_offer:
+                answer = signal_remote_session(host, token, session["id"], large_sdp)
+            self.assertEqual(answer["sdp"], "v=0 answer")
+            self.assertEqual(answer_host_offer.call_args.args[1], large_sdp)
+
     def test_remote_session_is_prepared_without_launching_game(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = Config(path=Path(tmp) / "config.json")
