@@ -44,24 +44,25 @@ BUTTON_ACTIONS = {
     BTN_THUMBL: "random",
 }
 
-EVENT_LAYOUTS = (
-    ("llHHi", 24),
-    ("iiHHi", 16),
-)
+# The kernel's struct input_event is two word-sized time fields followed
+# by __u16 type, __u16 code, __s32 value. Python's native "l" is exactly
+# C's long, so calcsize matches the running ABI (24 bytes on 64-bit, 16 on
+# 32-bit) rather than guessing the layout from how many bytes a read
+# happened to return - which was ambiguous at any length divisible by both
+# sizes, and outright broke on 32-bit userspace where the hardcoded 24
+# never matched native sizing.
+EVENT_FORMAT = "llHHi"
+EVENT_SIZE = struct.calcsize(EVENT_FORMAT)
 
 
 def unpack_events(blob: bytes) -> list[tuple[int, int, int]]:
     """Turn raw evdev bytes into (type, code, value) tuples."""
-    if not blob:
+    if not blob or len(blob) % EVENT_SIZE:
         return []
-    for fmt, size in EVENT_LAYOUTS:
-        if len(blob) % size == 0:
-            events = []
-            for offset in range(0, len(blob), size):
-                _sec, _usec, etype, code, value = struct.unpack(fmt, blob[offset : offset + size])
-                events.append((etype, code, value))
-            return events
-    return []
+    return [
+        struct.unpack(EVENT_FORMAT, blob[offset : offset + EVENT_SIZE])[2:]
+        for offset in range(0, len(blob), EVENT_SIZE)
+    ]
 
 
 def axis_to_action(code: int, value: int, deadzone: int = STICK_DEADZONE) -> str | None:
@@ -224,7 +225,7 @@ class GamepadMonitor:
                 continue
             for fd in readable:
                 try:
-                    blob = os.read(fd, 24 * 32)
+                    blob = os.read(fd, EVENT_SIZE * 32)
                 except OSError:
                     try:
                         os.close(fd)
