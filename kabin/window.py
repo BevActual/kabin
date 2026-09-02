@@ -34,6 +34,7 @@ from .home import (  # noqa: E402
 from .kinds import CABINET_KIND, FOLDER_KINDS, KINDS, count_noun, get_kind, kind_for  # noqa: E402
 from .library import (  # noqa: E402
     can_play_media,
+    can_read_remote,
     compare_items,
     empty_state_message,
     is_playing,
@@ -43,10 +44,18 @@ from .library import (  # noqa: E402
     next_queue_index,
     play_button_label,
     queue_for,
+    reader_progress_targets,
+    related_items,
     resume_hint,
 )
 from .media import MediaHelperError, MediaHelperSession, PlaybackSession, create_client_offer  # noqa: E402
-from .network import HostService, prepare_remote_session, push_remote_progress, signal_remote_session  # noqa: E402
+from .network import (  # noqa: E402
+    HostService,
+    fetch_remote_media,
+    prepare_remote_session,
+    push_remote_progress,
+    signal_remote_session,
+)
 from .playback import (  # noqa: E402
     adopt_progress,
     format_clock,
@@ -59,12 +68,22 @@ from .playback import (  # noqa: E402
     track_count,
 )
 from .reader import (  # noqa: E402
+    HTML_READER_BACKENDS,
+    PDF_RENDER_WIDTH,
+    apply_reader_webview_settings,
     opens_in_kabin_reader,
     open_reader_pages,
     reader_backend_for,
+    reader_cache_root,
+    reader_uri_allowed,
+    remote_read_cache_path,
+    remote_read_suffix,
     resume_page,
     save_page_progress,
+    scroll_adjustment,
+    step_adjustment,
     sync_progress_from_remote,
+    uses_tap_zones,
 )
 from .settings import SettingsWindow  # noqa: E402
 from .sources import discover_all_with_status  # noqa: E402
@@ -107,8 +126,6 @@ _SIDEBAR_ICON_CANDIDATES = {
 
 CATEGORY_FAVORITES = ("favorite", None)
 _BRAND_MARK = Path(__file__).resolve().parent.parent / "data" / "kabin-mark.svg"
-
-_HTML_READER_BACKENDS = frozenset({"epub", "fb2"})
 
 # Long enough to collapse a burst of typing into one re-filter, short
 # enough that results still feel live.
@@ -732,8 +749,8 @@ class MainWindow(Adw.ApplicationWindow):
         compact.add_setter(split_view, "collapsed", True)
         compact.add_setter(self.details_content, "orientation", Gtk.Orientation.VERTICAL)
         compact.add_setter(self.details_content, "spacing", 20)
-        compact.add_setter(self.details_content, "margin-start", 20)
-        compact.add_setter(self.details_content, "margin-end", 20)
+        compact.add_setter(self.details_column, "margin-start", 20)
+        compact.add_setter(self.details_column, "margin-end", 20)
         compact.add_setter(self.details_art_frame, "width-request", 240)
         compact.add_setter(self.details_art_frame, "height-request", 322)
         compact.add_setter(self.details_info, "width-request", -1)
@@ -979,10 +996,6 @@ class MainWindow(Adw.ApplicationWindow):
         self.details_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=32)
         self.details_content.set_halign(Gtk.Align.START)
         self.details_content.set_valign(Gtk.Align.START)
-        self.details_content.set_margin_top(8)
-        self.details_content.set_margin_bottom(40)
-        self.details_content.set_margin_start(32)
-        self.details_content.set_margin_end(32)
 
         self.details_picture = Gtk.Picture()
         self.details_picture.set_can_shrink(True)
@@ -1086,7 +1099,20 @@ class MainWindow(Adw.ApplicationWindow):
         self.details_info.append(self.details_tracks)
         self.details_content.append(self.details_info)
 
-        scroller.set_child(self.details_content)
+        self.details_column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=28)
+        self.details_column.set_margin_top(8)
+        self.details_column.set_margin_bottom(40)
+        self.details_column.set_margin_start(32)
+        self.details_column.set_margin_end(32)
+        self.details_column.append(self.details_content)
+
+        self.details_related_section, self.details_related_shelf = self._build_shelf(
+            "More in this series", 280
+        )
+        self.details_related_header = self.details_related_section.get_first_child()
+        self.details_column.append(self.details_related_section)
+
+        scroller.set_child(self.details_column)
         panel.append(scroller)
 
         return panel
@@ -1142,41 +1168,41 @@ class MainWindow(Adw.ApplicationWindow):
         self.reader_text_view.set_right_margin(48)
         self.reader_text_view.set_top_margin(32)
         self.reader_text_view.set_bottom_margin(32)
-        reader_text_scroller = Gtk.ScrolledWindow()
-        reader_text_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        reader_text_scroller.set_child(self.reader_text_view)
+        self.reader_text_scroller = Gtk.ScrolledWindow()
+        self.reader_text_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.reader_text_scroller.set_child(self.reader_text_view)
 
         self.reader_content_stack = Gtk.Stack()
         self.reader_content_stack.add_named(self.reader_status, "status")
         self.reader_content_stack.add_named(self.reader_picture, "page")
-        self.reader_content_stack.add_named(reader_text_scroller, "text")
+        self.reader_content_stack.add_named(self.reader_text_scroller, "text")
         self.reader_webview = None
 
-        prev_zone = Gtk.Button()
-        prev_zone.add_css_class("flat")
-        prev_zone.add_css_class("kabin-reader-zone")
-        prev_zone.set_hexpand(True)
-        prev_zone.set_vexpand(True)
-        prev_zone.set_tooltip_text("Previous page")
-        prev_zone.connect("clicked", lambda *_: self._reader_turn(-1))
+        self.reader_prev_zone = Gtk.Button()
+        self.reader_prev_zone.add_css_class("flat")
+        self.reader_prev_zone.add_css_class("kabin-reader-zone")
+        self.reader_prev_zone.set_hexpand(True)
+        self.reader_prev_zone.set_vexpand(True)
+        self.reader_prev_zone.set_tooltip_text("Previous page")
+        self.reader_prev_zone.connect("clicked", lambda *_: self._reader_turn(-1))
 
-        next_zone = Gtk.Button()
-        next_zone.add_css_class("flat")
-        next_zone.add_css_class("kabin-reader-zone")
-        next_zone.set_hexpand(True)
-        next_zone.set_vexpand(True)
-        next_zone.set_tooltip_text("Next page")
-        next_zone.connect("clicked", lambda *_: self._reader_turn(1))
+        self.reader_next_zone = Gtk.Button()
+        self.reader_next_zone.add_css_class("flat")
+        self.reader_next_zone.add_css_class("kabin-reader-zone")
+        self.reader_next_zone.set_hexpand(True)
+        self.reader_next_zone.set_vexpand(True)
+        self.reader_next_zone.set_tooltip_text("Next page")
+        self.reader_next_zone.connect("clicked", lambda *_: self._reader_turn(1))
 
-        zones = Gtk.Box(spacing=0)
-        zones.set_hexpand(True)
-        zones.set_vexpand(True)
-        zones.append(prev_zone)
-        zones.append(next_zone)
+        self.reader_zones = Gtk.Box(spacing=0)
+        self.reader_zones.set_hexpand(True)
+        self.reader_zones.set_vexpand(True)
+        self.reader_zones.append(self.reader_prev_zone)
+        self.reader_zones.append(self.reader_next_zone)
 
         overlay = Gtk.Overlay()
         overlay.set_child(self.reader_content_stack)
-        overlay.add_overlay(zones)
+        overlay.add_overlay(self.reader_zones)
         overlay.set_vexpand(True)
         panel.append(overlay)
 
@@ -1519,6 +1545,8 @@ class MainWindow(Adw.ApplicationWindow):
             return
         if plays_in_kabin(game) and self._can_play_media(game):
             self._play_media(game)
+        elif self._opens_in_reader(game):
+            self._open_reader(game)
         elif game.source == "remote":
             self._open_details(game)
         else:
@@ -1990,6 +2018,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.details_play_button.set_sensitive(
             bool(game.launch)
             or self._can_play_media(game)
+            or self._opens_in_reader(game)
             or (game.source == "remote" and kind_for(game).id == "game")
         )
 
@@ -2264,7 +2293,10 @@ class MainWindow(Adw.ApplicationWindow):
         if plays_in_kabin(game):
             self._play_media(game)
             return
-        if game.source == "remote":
+        if self._opens_in_reader(game):
+            self._open_reader(game)
+            return
+        if game.source == "remote" and kind_for(game).id == "game":
             self._prepare_remote_selected()
             return
         self._launch_game(game)
@@ -2344,14 +2376,17 @@ class MainWindow(Adw.ApplicationWindow):
             self.main_stack.set_visible_child_name("library")
 
     def _opens_in_reader(self, game) -> bool:
-        return opens_in_kabin_reader(game)
+        return opens_in_kabin_reader(game) or can_read_remote(game)
 
     def _open_reader(self, item):
         current = self.main_stack.get_visible_child_name()
         if current != "reader":
             self._reader_return_stack = current
-        if self._reader_item is item:
+        if self._reader_item is item and self._reader_pages:
             self.main_stack.set_visible_child_name("reader")
+            return
+        if can_read_remote(item) and playable_file(item) is None:
+            self._fetch_remote_reader(item)
             return
         backend = reader_backend_for(item)
         path = playable_file(item)
@@ -2361,6 +2396,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._close_reader_resources()
         self._reader_item = item
         self._reader_backend = backend
+        self._sync_reader_zones()
         self.reader_title.set_label(item.title)
         self.reader_page_label.set_label("")
         self.reader_toc_button.set_visible(False)
@@ -2372,6 +2408,66 @@ class MainWindow(Adw.ApplicationWindow):
         # see _reader_render_loop for why (concurrent Poppler/cairo calls
         # from different threads are not safe).
         self._reader_render_queue.put(("open", path, backend, item))
+
+    def _fetch_remote_reader(self, item):
+        host = (item.extra or {}).get("host") or {}
+        token = host.get("token", "")
+        remote_id = (item.extra or {}).get("remote_id") or ""
+        if not token or not remote_id:
+            self._toast(f"Could not open {item.title}")
+            return
+        host_key = f"{host.get('address', '')}:{host.get('port', '')}"
+        dest = remote_read_cache_path(
+            host_key, remote_id, int((item.extra or {}).get("size") or 0), remote_read_suffix(item)
+        )
+        try:
+            if dest.is_file() and (
+                not item.extra.get("size") or dest.stat().st_size == int(item.extra.get("size") or 0)
+            ):
+                item.extra["path"] = str(dest)
+                self._open_reader(item)
+                return
+        except OSError:
+            pass
+        self._close_reader_resources()
+        self._reader_item = item
+        self.reader_title.set_label(item.title)
+        self.reader_page_label.set_label("")
+        self.reader_toc_button.set_visible(False)
+        self.reader_status.set_title("Opening…")
+        self.reader_status.set_description("Fetching this title from the host…")
+        self.reader_content_stack.set_visible_child_name("status")
+        self.main_stack.set_visible_child_name("reader")
+
+        def worker():
+            try:
+                fetch_remote_media(host, token, remote_id, dest)
+                error = None
+            except Exception as exc:
+                error = exc
+            GLib.idle_add(self._on_remote_reader_fetched, item, dest, error)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_remote_reader_fetched(self, item, dest, error):
+        if self._closing or self._reader_item is not item:
+            return False
+        if error:
+            self.reader_status.set_title("Could not open this file")
+            self.reader_status.set_description(str(error))
+            self.reader_content_stack.set_visible_child_name("status")
+            self._toast(f"Could not open {item.title} · {error}")
+            return False
+        item.extra["path"] = str(dest)
+        self._open_reader(item)
+        return False
+
+    def _sync_reader_zones(self):
+        visible = uses_tap_zones(self._reader_backend)
+        if hasattr(self, "reader_zones"):
+            self.reader_zones.set_can_target(visible)
+            self.reader_prev_zone.set_visible(visible)
+            self.reader_next_zone.set_visible(visible)
 
     def _on_reader_opened(self, item, pages, count, error):
         if self._closing or self._reader_item is not item:
@@ -2441,9 +2537,48 @@ class MainWindow(Adw.ApplicationWindow):
         webview = WebKit.WebView()
         webview.set_hexpand(True)
         webview.set_vexpand(True)
+        apply_reader_webview_settings(webview.get_settings())
+        webview.connect("decide-policy", self._on_reader_decide_policy)
         self.reader_content_stack.add_named(webview, "html")
         self.reader_webview = webview
         return webview
+
+    def _reader_allowed_roots(self) -> list:
+        root = reader_cache_root(self._reader_pages)
+        return [root] if root else []
+
+    def _on_reader_decide_policy(self, _webview, decision, decision_type):
+        from gi.repository import WebKit
+
+        roots = self._reader_allowed_roots()
+        if decision_type == WebKit.PolicyDecisionType.NAVIGATION_ACTION:
+            uri = decision.get_navigation_action().get_request().get_uri()
+            if reader_uri_allowed(uri, roots):
+                decision.use()
+            else:
+                decision.ignore()
+            return True
+        if decision_type == WebKit.PolicyDecisionType.NEW_WINDOW_ACTION:
+            decision.ignore()
+            return True
+        if decision_type == WebKit.PolicyDecisionType.RESPONSE:
+            uri = decision.get_request().get_uri()
+            if reader_uri_allowed(uri, roots):
+                decision.use()
+            else:
+                decision.ignore()
+            return True
+        return False
+
+
+    def _reader_target_width(self) -> int:
+        """Pixel width to rasterize PDF pages at, matching the reader pane."""
+        widget = getattr(self, "reader_picture", None)
+        width = widget.get_width() if widget is not None else 0
+        if width <= 1:
+            width = PDF_RENDER_WIDTH
+        scale = self.get_scale_factor() if hasattr(self, "get_scale_factor") else 1.0
+        return max(320, int(width * max(1.0, float(scale))))
 
     def _reader_show_page(self, index: int):
         pages = self._reader_pages
@@ -2463,7 +2598,8 @@ class MainWindow(Adw.ApplicationWindow):
         # (confirmed by crashing them that way), so every reader render —
         # opening a file or turning a page, PDF or not — is serialized
         # through one worker to rule that out.
-        self._reader_render_queue.put(("page", request_id, pages, backend, item, index, total))
+        target_width = self._reader_target_width() if backend == "pdf" else None
+        self._reader_render_queue.put(("page", request_id, pages, backend, item, index, total, target_width))
 
     def _reader_render_loop(self):
         while True:
@@ -2487,10 +2623,13 @@ class MainWindow(Adw.ApplicationWindow):
                     open_result = (None, 0, exc)
                 GLib.idle_add(self._on_reader_opened, item, *open_result)
                 continue
-            _, request_id, pages, backend, item, index, total = job
+            _, request_id, pages, backend, item, index, total, target_width = job
             try:
-                data = pages.page_bytes(index)
-                base_uri = pages.page_base_uri(index) if backend in _HTML_READER_BACKENDS else None
+                if backend == "pdf":
+                    data = pages.page_bytes(index, target_width=target_width or PDF_RENDER_WIDTH)
+                else:
+                    data = pages.page_bytes(index)
+                base_uri = pages.page_base_uri(index) if backend in HTML_READER_BACKENDS else None
                 result = (data, base_uri, None)
             except Exception as exc:
                 result = (None, None, exc)
@@ -2504,7 +2643,7 @@ class MainWindow(Adw.ApplicationWindow):
             self._toast(f"Could not render this page · {error}")
             return False
         backend = self._reader_backend
-        if backend in _HTML_READER_BACKENDS:
+        if backend in HTML_READER_BACKENDS:
             try:
                 webview = self._ensure_reader_webview()
                 # Force the HTML5 parser (not strict application/xhtml+xml
@@ -2532,8 +2671,35 @@ class MainWindow(Adw.ApplicationWindow):
         self._reader_page_index = index
         self.reader_page_label.set_label(f"{index + 1} / {total}")
         self.reader_seek.set_value(index)
-        save_page_progress(self.config, item.id, index, total)
+        self._persist_reader_progress(item)
         return False
+
+    def _persist_reader_progress(self, item):
+        if not item or not self._reader_pages or not self._reader_page_count:
+            return
+        save_page_progress(self.config, item.id, self._reader_page_index, self._reader_page_count)
+        page = self._reader_page_index
+        total = self._reader_page_count
+        for host, item_id in reader_progress_targets(item, getattr(self, "_games", [])):
+            token = host.get("token", "")
+
+            def worker(target_host=host, target_token=token, target_id=item_id):
+                try:
+                    push_remote_progress(target_host, target_token, target_id, page, total, 0)
+                except Exception:
+                    pass
+
+            threading.Thread(target=worker, daemon=True).start()
+
+    def _reader_scroll(self, direction: int) -> bool:
+        if uses_tap_zones(self._reader_backend):
+            return False
+        widget = None
+        if self._reader_backend == "text":
+            widget = getattr(self, "reader_text_scroller", None)
+        elif self._reader_backend in HTML_READER_BACKENDS:
+            widget = self.reader_webview
+        return step_adjustment(scroll_adjustment(widget), direction)
 
     def _reader_turn(self, delta: int):
         if not self._reader_pages:
@@ -2549,16 +2715,18 @@ class MainWindow(Adw.ApplicationWindow):
     def _close_reader_resources(self):
         if self._reader_pages:
             self._reader_pages.close()
-        if self._reader_backend in _HTML_READER_BACKENDS and self.reader_webview is not None:
+        if self._reader_backend in HTML_READER_BACKENDS and self.reader_webview is not None:
             self.reader_webview.load_uri("about:blank")
         self._reader_pages = None
         self._reader_backend = None
         self._reader_page_count = 0
         self._reader_page_index = 0
+        self._sync_reader_zones()
 
     def _close_reader(self):
         item = self._reader_item
         if item and self._reader_pages and self._reader_page_count:
+            self._persist_reader_progress(item)
             self._sync_play_button(item)
             self._rebuild_recent_shelf(self._games)
         self._close_reader_resources()
@@ -2728,6 +2896,16 @@ class MainWindow(Adw.ApplicationWindow):
                 "Play in Kabin. The host streams the file; this device decodes it."
                 + self._resume_hint(game)
             )
+        elif self._opens_in_reader(game):
+            if game.source == "remote":
+                self.details_description.set_label(
+                    "Kabin fetches this from the host and reads it here."
+                    + self._resume_hint(game)
+                )
+            else:
+                self.details_description.set_label(
+                    "Kabin reads this here and remembers your place." + self._resume_hint(game)
+                )
         elif game.source == "remote":
             self.details_play_button.set_sensitive(False)
             self.details_description.set_label(
@@ -2779,6 +2957,31 @@ class MainWindow(Adw.ApplicationWindow):
         self.details_meta.set_label(" · ".join(meta_parts))
         self._update_favorite_button()
         self._rebuild_track_list(game)
+        self._rebuild_related_shelf(game)
+
+    def _rebuild_related_shelf(self, game):
+        if not hasattr(self, "details_related_shelf"):
+            return
+        self._clear_box(self.details_related_shelf)
+        related = related_items(game, getattr(self, "_games", []))
+        if not related:
+            self.details_related_section.set_visible(False)
+            return
+        series = (getattr(game, "series", None) or "").strip()
+        if self.details_related_header is not None:
+            self.details_related_header.set_label(
+                f"More in {series}" if series else "More in this series"
+            )
+        for item in related:
+            button = _build_shelf_button(
+                item,
+                self._open_details,
+                self._item_progress(item),
+                self._is_playing(item),
+                show_badge=False,
+            )
+            self.details_related_shelf.append(button)
+        self.details_related_section.set_visible(True)
 
     def _on_remote_details_art_ready(self, game, path):
         if path and self._selected_game is game:
@@ -2941,6 +3144,10 @@ class MainWindow(Adw.ApplicationWindow):
                 self._reader_turn(-1)
             elif action in ("right", "next"):
                 self._reader_turn(1)
+            elif action in ("up", "down"):
+                direction = -1 if action == "up" else 1
+                if not self._reader_scroll(direction):
+                    self._reader_turn(direction)
             return False
 
         on_details = self.main_stack.get_visible_child_name() == "details"

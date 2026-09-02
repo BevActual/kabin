@@ -22,7 +22,7 @@ from kabin.network import (
     serialize_game,
     signal_remote_session,
 )
-from kabin.playback import save_progress
+from kabin.playback import progress_for, save_progress
 
 
 class TestNetwork(unittest.TestCase):
@@ -583,6 +583,68 @@ class TestNetwork(unittest.TestCase):
             # paths, which two libraries can collide on.
             self.assertEqual(by_id["book:novel.epub"]["size"], book_path.stat().st_size)
             self.assertNotIn(str(book_path), json.dumps(catalog))
+            self.assertFalse(by_id["book:novel.epub"]["playable"])
+
+    def test_library_marks_books_playable_when_inside_media_dirs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            library = Path(tmp) / "books"
+            library.mkdir()
+            book_path = library / "novel.epub"
+            book_path.write_bytes(b"pk")
+            config = Config(path=Path(tmp) / "config.json")
+            config.network["port"] = 0
+            config.media_dirs.append({"path": str(library), "media_type": "book"})
+            book = SimpleNamespace(
+                id="book:novel.epub",
+                title="Novel",
+                source="book",
+                subtitle="Book",
+                icon_path=None,
+                extra={"path": str(book_path)},
+                media_type="book",
+            )
+            public = serialize_game(book, media_dirs=config.media_dirs)
+            self.assertTrue(public["playable"])
+
+    def test_media_progress_accepts_book_page_updates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            library = Path(tmp) / "books"
+            library.mkdir()
+            book_path = library / "novel.epub"
+            book_path.write_bytes(b"pk")
+            config = Config(path=Path(tmp) / "config.json")
+            config.network["port"] = 0
+            config.media_dirs.append({"path": str(library), "media_type": "book"})
+            book = SimpleNamespace(
+                id="book:novel.epub",
+                title="Novel",
+                source="book",
+                subtitle="Book",
+                icon_path=None,
+                extra={"path": str(book_path)},
+                media_type="book",
+            )
+            service = HostService(config, lambda: [book], tls=False)
+            with patch.object(service, "_publish"):
+                service.start()
+            self.addCleanup(service.stop)
+            token = config.ensure_network_token()
+            body = json.dumps(
+                {"id": "book:novel.epub", "position": 12, "duration": 40, "track": 0}
+            ).encode()
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{service.server.server_port}/v1/media/progress",
+                data=body,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(request) as response:
+                stored = json.loads(response.read())
+            self.assertEqual(stored["position"], 12)
+            self.assertEqual(progress_for(config, "book:novel.epub")["position"], 12)
 
     def test_media_stream_serves_album_tracks_and_stores_progress(self):
         with tempfile.TemporaryDirectory() as tmp:

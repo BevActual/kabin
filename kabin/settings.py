@@ -414,18 +414,6 @@ class SettingsWindow(Adw.PreferencesWindow):
         )
         network_group.add(self.media_status_row)
 
-        self.stream_resolution_row = Adw.ComboRow(
-            title="Preferred stream resolution",
-            model=Gtk.StringList.new(["720p", "1080p", "1440p", "4K"]),
-        )
-        self._resolution_ids = ["720", "1080", "1440", "4k"]
-        current_res = str(self.config.streaming.get("resolution", "1080")).casefold()
-        self.stream_resolution_row.set_selected(
-            self._resolution_ids.index(current_res) if current_res in self._resolution_ids else 1
-        )
-        self.stream_resolution_row.connect("notify::selected", self._on_stream_resolution_changed)
-        network_group.add(self.stream_resolution_row)
-
         pairing_row = Adw.ButtonRow(title="Create Pairing Code")
         pairing_row.add_css_class("suggested-action")
         pairing_row.connect("activated", self._on_create_pairing_code)
@@ -474,11 +462,13 @@ class SettingsWindow(Adw.PreferencesWindow):
         play_group.add(self.preset_row)
 
         self._play_switches = {}
+        # Rewind stays in the preset/config dict for forward compatibility,
+        # but no adapter reads it yet — keep it out of the UI so Settings
+        # only shows switches that actually change a launch.
         for key, title, subtitle in (
             ("fullscreen", "Start fullscreen", "Launch games directly into fullscreen mode."),
             ("vsync", "Vertical sync", "Reduce tearing by synchronizing frames with the display."),
             ("integer_scaling", "Integer scaling", "Keep classic pixels evenly sized."),
-            ("rewind", "Rewind", "Allow supported emulators to retain recent gameplay history."),
         ):
             row = Adw.SwitchRow(title=title, subtitle=subtitle)
             row.set_active(bool(self.config.emulation.get(key, False)))
@@ -845,12 +835,6 @@ class SettingsWindow(Adw.PreferencesWindow):
     def _on_openlibrary_changed(self, row, _pspec):
         self.config.artwork["openlibrary_covers"] = bool(row.get_active())
         self.config.save()
-
-    def _on_stream_resolution_changed(self, row, _pspec):
-        selected = row.get_selected()
-        if 0 <= selected < len(self._resolution_ids):
-            self.config.streaming["resolution"] = self._resolution_ids[selected]
-            self.config.save()
 
     def _make_source_toggle_handler(self, source_id):
         def handler(row, _pspec):

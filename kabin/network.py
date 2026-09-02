@@ -91,13 +91,9 @@ def _pairing_bytes(value) -> bytes:
 
 
 def _tracks_progress(item) -> bool:
-    """Whether the host should publish `item`'s saved position in the
-    public catalog — video/music (play position) and book/comic (page
-    position) alike. Read-only: books/comics aren't streamed the way
-    video/music are, so there's no POST /v1/media/progress path for them —
-    a paired device with its own local copy of the same file pulls this
-    from the catalog and adopts it onto that local copy instead (see
-    reader.sync_progress_from_remote)."""
+    """Whether the host should publish `item`'s saved position and accept
+    POST /v1/media/progress for it — video/music (play position) and
+    book/comic (page position) alike."""
     return plays_in_kabin(item) or kind_for(item).id in READABLE_KINDS
 
 
@@ -159,7 +155,10 @@ def serialize_item(item, media_dirs=None, progress=None) -> dict:
         "system": item.subtitle if media_type == "game" else "",
         "appid": appid,
         "has_artwork": bool(getattr(item, "icon_path", None)) or bool(appid),
-        "playable": plays_in_kabin(item) and media_file_for_item(item, media_dirs) is not None,
+        "playable": (
+            (plays_in_kabin(item) or kind_for(item).id in READABLE_KINDS)
+            and media_file_for_item(item, media_dirs) is not None
+        ),
         "track_count": track_count(item) if plays_in_kabin(item) else 0,
     }
     if progress is not None:
@@ -486,7 +485,7 @@ class HostService:
                         (entry for entry in service.catalog_provider() if entry.id == item_id),
                         None,
                     )
-                    if not item or not plays_in_kabin(item):
+                    if not item or not _tracks_progress(item):
                         self._json(HTTPStatus.NOT_FOUND, {"error": "media not found"})
                         return
                     save_progress(
@@ -790,6 +789,27 @@ def media_stream_url(host: dict, item_id: str, track: int = 0) -> str:
     if track:
         query += f"&track={int(track)}"
     return host_url(host, f"/v1/media/stream?{query}")
+
+
+def fetch_remote_media(host: dict, token: str, item_id: str, dest: Path, timeout=60) -> Path:
+    """Download a host stream to `dest` (used to open remote books locally)."""
+    dest = Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.name + ".tmp")
+    request = urllib.request.Request(
+        media_stream_url(host, item_id),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(
+            request, timeout=timeout, context=pinned_tls_context(host, timeout)
+        ) as response, tmp.open("wb") as out:
+            shutil.copyfileobj(response, out)
+        tmp.replace(dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+    return dest
 
 
 def push_remote_progress(host: dict, token: str, item_id: str, position: float, duration: float, track: int = 0, timeout=5) -> dict:

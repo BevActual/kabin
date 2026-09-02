@@ -19,15 +19,21 @@ from kabin.reader import (
     FB2Pages,
     PdfPages,
     TextPages,
+    apply_reader_webview_settings,
     open_comic_pages,
     open_reader_pages,
     parse_xml,
     prune_cache,
     opens_in_kabin_reader,
     reader_backend_for,
+    reader_uri_allowed,
+    remote_read_cache_path,
+    remote_read_suffix,
     resume_page,
     save_page_progress,
+    step_adjustment,
     sync_progress_from_remote,
+    uses_tap_zones,
 )
 
 _BSDTAR_AVAILABLE = shutil.which("bsdtar") is not None
@@ -364,6 +370,64 @@ class TestComicArchivePages(unittest.TestCase):
             self.assertIsInstance(pages, ComicArchivePages)
             self.assertEqual(pages.page_bytes(0), b"one")
             pages.close()
+
+
+
+class TestReaderPageCache(unittest.TestCase):
+    @unittest.skipUnless(_BSDTAR_AVAILABLE, "bsdtar not installed")
+    def test_comic_archive_pages_cache_repeated_reads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "src"
+            src.mkdir()
+            (src / "page1.jpg").write_bytes(b"one")
+            (src / "page2.jpg").write_bytes(b"two")
+            cb7 = Path(tmp) / "issue.cb7"
+            subprocess.run(
+                ["bsdtar", "-cf", str(cb7), "--format=7zip", "-C", str(src), "page1.jpg", "page2.jpg"],
+                check=True,
+            )
+            pages = open_reader_pages(cb7, "comic-7z")
+            calls = {"n": 0}
+            from kabin import reader as reader_mod
+
+            original = reader_mod._bsdtar_extract
+
+            def counting_extract(path, member):
+                calls["n"] += 1
+                return original(path, member)
+
+            with patch.object(reader_mod, "_bsdtar_extract", side_effect=counting_extract):
+                first = pages.page_bytes(0)
+                second = pages.page_bytes(0)
+                third = pages.page_bytes(1)
+            pages.close()
+            self.assertEqual(first, second)
+            self.assertEqual(first, b"one")
+            self.assertEqual(third, b"two")
+            self.assertEqual(calls["n"], 2)
+
+    def test_pdf_pages_cache_by_width(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pdf = Path(tmp) / "book.pdf"
+            pdf.write_bytes(_MINIMAL_PDF)
+            pages = open_reader_pages(pdf, "pdf")
+            renders = {"n": 0}
+            real_get_page = pages._document.get_page
+
+            def counting_get_page(index):
+                renders["n"] += 1
+                return real_get_page(index)
+
+            pages._document.get_page = counting_get_page
+            a = pages.page_bytes(0, target_width=80)
+            b = pages.page_bytes(0, target_width=80)
+            c = pages.page_bytes(0, target_width=120)
+            pages.close()
+            self.assertEqual(a, b)
+            self.assertTrue(a.startswith(b"\x89PNG"))
+            self.assertTrue(c.startswith(b"\x89PNG"))
+            self.assertEqual(renders["n"], 2)
+
 
 
 class TestTextPages(unittest.TestCase):
@@ -796,6 +860,89 @@ class TestSyncProgressFromRemote(unittest.TestCase):
         ]
         sync_progress_from_remote(games, self.config)
         self.assertEqual(self.config.data.get("progress", {}), {})
+
+
+class TestReaderWebViewPolicy(unittest.TestCase):
+    def test_tap_zones_only_on_image_backends(self):
+        self.assertTrue(uses_tap_zones("pdf"))
+        self.assertTrue(uses_tap_zones("comic-zip"))
+        self.assertFalse(uses_tap_zones("epub"))
+        self.assertFalse(uses_tap_zones("fb2"))
+        self.assertFalse(uses_tap_zones("text"))
+        self.assertFalse(uses_tap_zones(None))
+
+    def test_reader_uri_allows_only_in_book_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "book"
+            root.mkdir()
+            page = root / "OEBPS" / "chap1.xhtml"
+            page.parent.mkdir()
+            page.write_text("<p>hi</p>")
+            outside = Path(tmp) / "secret.txt"
+            outside.write_text("no")
+            self.assertTrue(reader_uri_allowed("about:blank", [root]))
+            self.assertTrue(reader_uri_allowed("data:text/html,hi", [root]))
+            self.assertTrue(reader_uri_allowed(page.resolve().as_uri(), [root]))
+            self.assertFalse(reader_uri_allowed(outside.resolve().as_uri(), [root]))
+            self.assertFalse(reader_uri_allowed("https://example.com/track", [root]))
+            self.assertFalse(reader_uri_allowed("javascript:alert(1)", [root]))
+            self.assertFalse(reader_uri_allowed(page.resolve().as_uri(), []))
+
+    def test_webview_settings_disable_script_and_file_access(self):
+        calls = {}
+
+        class Stub:
+            def __getattr__(self, name):
+                def setter(value, key=name):
+                    calls[key] = value
+
+                return setter
+
+        apply_reader_webview_settings(Stub())
+        self.assertFalse(calls["set_enable_javascript"])
+        self.assertFalse(calls["set_allow_universal_access_from_file_urls"])
+        self.assertFalse(calls["set_allow_file_access_from_file_urls"])
+
+    def test_remote_read_cache_path_changes_with_size(self):
+        first = remote_read_cache_path("host:1", "book:novel.epub", 10, ".epub")
+        second = remote_read_cache_path("host:1", "book:novel.epub", 11, ".epub")
+        self.assertNotEqual(first, second)
+        self.assertTrue(str(first).endswith("item.epub"))
+        item = SimpleNamespace(media_format="CBZ", extra={"remote_id": "comic:01.cbz"})
+        self.assertEqual(remote_read_suffix(item), ".cbz")
+
+    def test_step_adjustment_moves_within_bounds(self):
+        class Adj:
+            def __init__(self):
+                self.value = 0
+                self.lower = 0
+                self.upper = 200
+                self.page = 50
+
+            def get_value(self):
+                return self.value
+
+            def get_lower(self):
+                return self.lower
+
+            def get_upper(self):
+                return self.upper
+
+            def get_page_size(self):
+                return self.page
+
+            def set_value(self, value):
+                self.value = value
+
+        adj = Adj()
+        self.assertTrue(step_adjustment(adj, 1))
+        self.assertGreater(adj.value, 0)
+        adj.value = 150
+        self.assertFalse(step_adjustment(adj, 1))
+        self.assertEqual(adj.value, 150)
+        self.assertTrue(step_adjustment(adj, -1))
+        self.assertLess(adj.value, 150)
+        self.assertFalse(step_adjustment(None, 1))
 
 
 if __name__ == "__main__":

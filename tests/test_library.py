@@ -8,6 +8,7 @@ from kabin.config import Config
 from kabin.kinds import get_kind
 from kabin.library import (
     can_play_media,
+    can_read_remote,
     compare_items,
     empty_state_message,
     is_playing,
@@ -17,6 +18,8 @@ from kabin.library import (
     next_queue_index,
     play_button_label,
     queue_for,
+    reader_progress_targets,
+    related_items,
     resume_hint,
 )
 from kabin.playback import save_progress
@@ -29,7 +32,16 @@ def _cbz(tmp_dir) -> Path:
     return path
 
 
-def _game(item_id, source="steam", subtitle="", media_type="game", title="", extra=None):
+def _game(
+    item_id,
+    source="steam",
+    subtitle="",
+    media_type="game",
+    title="",
+    extra=None,
+    series="",
+    series_index=None,
+):
     return SimpleNamespace(
         id=item_id,
         title=title or item_id,
@@ -37,6 +49,8 @@ def _game(item_id, source="steam", subtitle="", media_type="game", title="", ext
         subtitle=subtitle,
         media_type=media_type,
         extra=extra or {},
+        series=series,
+        series_index=series_index,
         search_text=f"{title or item_id} {subtitle} {source}".casefold(),
         sort_key=(title or item_id).casefold(),
     )
@@ -180,6 +194,31 @@ class TestCanPlayMediaAndQueue(unittest.TestCase):
         playable = _game("g2", source="remote", media_type="video", extra={"playable": True})
         self.assertTrue(can_play_media(playable))
 
+    def test_remote_book_is_readable_when_host_marks_it_playable(self):
+        ghost = _game("remote:den:book:novel.epub", source="remote", media_type="book")
+        self.assertFalse(can_read_remote(ghost))
+        ready = _game(
+            "remote:den:book:novel.epub",
+            source="remote",
+            media_type="book",
+            extra={"playable": True},
+        )
+        self.assertTrue(can_read_remote(ready))
+        self.assertFalse(can_play_media(ready))
+
+    def test_reader_progress_targets_local_copy_and_remote_item(self):
+        host = {"address": "10.0.0.2", "port": 42424, "token": "abc"}
+        local = _game("book:novel.epub", media_type="book")
+        remote = _game(
+            "remote:den:book:novel.epub",
+            source="remote",
+            media_type="book",
+            extra={"host": host, "remote_id": "book:novel.epub", "playable": True},
+        )
+        self.assertEqual(reader_progress_targets(local, [local, remote]), [(host, "book:novel.epub")])
+        self.assertEqual(reader_progress_targets(remote, [local, remote]), [(host, "book:novel.epub")])
+        self.assertEqual(reader_progress_targets(local, [local]), [])
+
     def test_local_media_requires_a_resolvable_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             video_path = Path(tmp) / "movie.mkv"
@@ -237,6 +276,13 @@ class TestResumeHint(unittest.TestCase):
         game = _game("g1", media_type="music", extra={"track_count": 5})
         save_progress(self.config, game.id, 12, 200, track=2)
         self.assertEqual(resume_hint(game, self.config), " Resume from track 3, 0:12.")
+
+    def test_reader_item_hint_uses_page_wording_not_a_clock(self):
+        cbz = _cbz(self._tmp.name)
+        game = _game("c1", media_type="comic", extra={"path": str(cbz)})
+        save_progress(self.config, game.id, 41, 100)
+        self.assertEqual(resume_hint(game, self.config), " Resume from page 42.")
+        self.assertNotIn("0:41", resume_hint(game, self.config))
 
 
 class TestIsPlaying(unittest.TestCase):
@@ -312,6 +358,15 @@ class TestItemProgress(unittest.TestCase):
         )
         self.assertAlmostEqual(ratio, 0.4)
 
+    def test_reader_item_shows_progress_on_early_pages(self):
+        cbz = _cbz(self._tmp.name)
+        game = _game("c1", media_type="comic", extra={"path": str(cbz)})
+        save_progress(self.config, game.id, 3, 100)
+        ratio = item_progress(
+            game, self.config, is_current=False, playback=None, playback_index=0, queue_length=1
+        )
+        self.assertAlmostEqual(ratio, 0.03)
+
 
 class TestPlayButtonLabel(unittest.TestCase):
     def setUp(self):
@@ -367,6 +422,17 @@ class TestPlayButtonLabel(unittest.TestCase):
         save_progress(self.config, game.id, 5, 20)
         self.assertEqual(
             play_button_label(game, self.config, is_current=False, playback=None), "Resume"
+        )
+
+    def test_remote_playable_book_offers_read(self):
+        game = _game(
+            "remote:den:book:novel.epub",
+            source="remote",
+            media_type="book",
+            extra={"playable": True},
+        )
+        self.assertEqual(
+            play_button_label(game, self.config, is_current=False, playback=None), "Read"
         )
 
 
@@ -440,6 +506,30 @@ class TestEmptyStateMessage(unittest.TestCase):
         title, description = empty_state_message("favorite", None, "Favorites", None, 0)
         self.assertEqual(title, "No matches")
         self.assertEqual(description, "Try a different search, category, or filter.")
+
+
+
+class TestRelatedItems(unittest.TestCase):
+    def test_empty_without_series_or_siblings(self):
+        lone = _game("b1", media_type="book", title="Standalone", series="")
+        self.assertEqual(related_items(lone, [lone]), [])
+        series_of_one = _game("b2", media_type="book", title="Only One", series="Lonely")
+        self.assertEqual(related_items(series_of_one, [series_of_one]), [])
+
+    def test_orders_by_series_index_and_skips_self(self):
+        one = _game("b1", media_type="book", title="Stone", series="Harry Potter", series_index=1)
+        three = _game("b3", media_type="book", title="Azkaban", series="Harry Potter", series_index=3)
+        two = _game("b2", media_type="book", title="Chamber", series="harry potter", series_index=2)
+        other = _game("b9", media_type="book", title="Unrelated", series="Discworld", series_index=1)
+        related = related_items(two, [one, two, three, other])
+        self.assertEqual([item.id for item in related], ["b1", "b3"])
+
+    def test_unindexed_siblings_sort_after_numbered_ones(self):
+        numbered = _game("c1", media_type="comic", title="Vol 1", series="Naruto", series_index=1)
+        extra = _game("c0", media_type="comic", title="Artbook", series="Naruto")
+        related = related_items(numbered, [extra, numbered])
+        self.assertEqual([item.id for item in related], ["c0"])
+
 
 
 if __name__ == "__main__":

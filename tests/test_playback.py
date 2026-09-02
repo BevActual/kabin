@@ -14,6 +14,7 @@ from kabin.playback import (
     playable_tracks,
     plays_in_kabin,
     progress_for,
+    page_progress_ratio,
     progress_ratio,
     resume_seconds,
     resume_track,
@@ -107,6 +108,16 @@ class TestPlayback(unittest.TestCase):
             self.assertEqual(progress_ratio(config, "video:1"), 0)
             save_progress(config, "music:1", 60, 200, track=1)
             self.assertAlmostEqual(progress_ratio(config, "music:1", 4), 0.325)
+
+    def test_page_progress_ratio_keeps_early_pages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            save_progress(config, "book:1", 3, 100)
+            self.assertAlmostEqual(page_progress_ratio(config, "book:1"), 0.03)
+            save_progress(config, "book:1", 0, 100)
+            self.assertEqual(page_progress_ratio(config, "book:1"), 0)
+            save_progress(config, "book:1", 95, 100)
+            self.assertEqual(page_progress_ratio(config, "book:1"), 0)
 
     def test_format_clock(self):
         self.assertEqual(format_clock(75), "1:15")

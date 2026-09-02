@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections import OrderedDict
+
 import base64
 import hashlib
 import html
@@ -19,7 +21,142 @@ from . import playback
 from .kinds import kind_for
 
 READABLE_KINDS = frozenset({"book", "comic"})
+IMAGE_READER_BACKENDS = frozenset(
+    {"pdf", "comic-zip", "comic-tar", "comic-7z", "comic-rar"}
+)
+HTML_READER_BACKENDS = frozenset({"epub", "fb2"})
 COMIC_IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")
+_ALLOWED_READER_URI_SCHEMES = ("about:", "data:", "blob:")
+
+
+def uses_tap_zones(backend: str | None) -> bool:
+    """Left/right tap overlays belong on image pages, not scrollable text."""
+    return backend in IMAGE_READER_BACKENDS
+
+
+def _file_uri_path(uri: str) -> Path | None:
+    parsed = urllib.parse.urlparse(uri)
+    if parsed.scheme.casefold() != "file":
+        return None
+    path = urllib.parse.unquote(parsed.path)
+    return Path(path) if path else None
+
+
+def reader_uri_allowed(uri: str, allowed_roots=None) -> bool:
+    """Whether a WebView may load `uri` for a book page.
+
+    Only in-book resources: about/data/blob, and file: under an extracted
+    cache root. http(s), javascript:, and files outside the book are
+    refused so an EPUB cannot phone home or read the rest of the disk.
+    """
+    if not uri:
+        return False
+    lowered = uri.strip().casefold()
+    if lowered.startswith(_ALLOWED_READER_URI_SCHEMES):
+        return True
+    if not lowered.startswith("file:"):
+        return False
+    if not allowed_roots:
+        return False
+    path = _file_uri_path(uri)
+    if path is None:
+        return False
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return False
+    for root in allowed_roots:
+        try:
+            if resolved.is_relative_to(Path(root).resolve()):
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
+def reader_cache_root(pages) -> Path | None:
+    root = getattr(pages, "_root", None)
+    return Path(root) if root else None
+
+
+def apply_reader_webview_settings(settings) -> None:
+    """Harden a WebKit.Settings object. Extracted so tests can pass a stub."""
+    for name, value in (
+        ("set_enable_javascript", False),
+        ("set_enable_javascript_markup", False),
+        ("set_allow_file_access_from_file_urls", False),
+        ("set_allow_universal_access_from_file_urls", False),
+        ("set_enable_developer_extras", False),
+        ("set_enable_media", False),
+        ("set_enable_webaudio", False),
+        ("set_enable_webgl", False),
+        ("set_enable_html5_database", False),
+        ("set_enable_html5_local_storage", False),
+        ("set_enable_offline_web_application_cache", False),
+        ("set_enable_page_cache", False),
+        ("set_enable_dns_prefetching", False),
+    ):
+        setter = getattr(settings, name, None)
+        if callable(setter):
+            setter(value)
+
+
+def remote_read_cache_root() -> Path:
+    base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    return base / "kabin" / "remote-read"
+
+
+def remote_read_cache_path(host_key: str, remote_id: str, size: int, suffix: str) -> Path:
+    identity = f"{host_key}\0{remote_id}\0{int(size or 0)}"
+    digest = hashlib.sha256(identity.encode()).hexdigest()
+    ext = suffix if suffix.startswith(".") else (f".{suffix}" if suffix else "")
+    return remote_read_cache_root() / digest / f"item{ext}"
+
+
+def remote_read_suffix(item) -> str:
+    fmt = str(getattr(item, "media_format", "") or "").strip().lstrip(".")
+    if fmt and fmt.casefold() != "album":
+        return f".{fmt.casefold()}"
+    remote_id = str((getattr(item, "extra", None) or {}).get("remote_id") or "")
+    suffix = Path(remote_id.split(":")[-1]).suffix
+    return suffix.casefold()
+
+
+def scroll_adjustment(widget):
+    """Find a vertical Gtk.Adjustment under `widget`, if any."""
+    if widget is None:
+        return None
+    get_vadj = getattr(widget, "get_vadjustment", None)
+    if callable(get_vadj):
+        adj = get_vadj()
+        if adj is not None:
+            return adj
+    get_first = getattr(widget, "get_first_child", None)
+    if not callable(get_first):
+        return None
+    child = get_first()
+    while child is not None:
+        found = scroll_adjustment(child)
+        if found is not None:
+            return found
+        child = child.get_next_sibling()
+    return None
+
+
+def step_adjustment(adj, direction: int, fraction: float = 0.85) -> bool:
+    """Move a scroll adjustment by a page fraction. False if it could not move."""
+    if adj is None or not direction:
+        return False
+    page = adj.get_page_size()
+    step = page * fraction if page else 80
+    lower = adj.get_lower()
+    upper = adj.get_upper() - page
+    current = adj.get_value()
+    target = max(lower, min(upper, current + (step if direction > 0 else -step)))
+    if target == current:
+        return False
+    adj.set_value(target)
+    return True
 
 _NATURAL_CHUNK = re.compile(r"(\d+)")
 
@@ -183,6 +320,35 @@ def _bsdtar_extract(path: Path, member: str) -> bytes:
     return result.stdout
 
 
+
+class _PageCache:
+    """Tiny LRU for rendered/extracted reader pages.
+
+    Comic archives shell out to bsdtar per page; PDFs re-rasterize through
+    Poppler. Caching the last few keeps flipping back and forth from feeling
+    like a cold open every time.
+    """
+
+    def __init__(self, limit: int = 5):
+        self._limit = max(1, int(limit))
+        self._items: OrderedDict = OrderedDict()
+
+    def get(self, key):
+        if key not in self._items:
+            return None
+        self._items.move_to_end(key)
+        return self._items[key]
+
+    def put(self, key, value):
+        if key in self._items:
+            self._items.move_to_end(key)
+        self._items[key] = value
+        while len(self._items) > self._limit:
+            self._items.popitem(last=False)
+
+    def clear(self) -> None:
+        self._items.clear()
+
 class ComicArchivePages:
     """On-demand page access into any archive format `bsdtar` (libarchive)
     can read but Python's stdlib can't — CB7 (7z) and CBR (RAR). bsdtar
@@ -195,15 +361,22 @@ class ComicArchivePages:
             (name for name in _bsdtar_list(path) if _is_comic_image(name)),
             key=_natural_sort_key,
         )
+        self._cache = _PageCache(5)
 
     def __len__(self) -> int:
         return len(self.names)
 
-    def page_bytes(self, index: int) -> bytes:
-        return _bsdtar_extract(self._path, self.names[index])
+    def page_bytes(self, index: int, target_width: int | None = None) -> bytes:
+        del target_width  # image archives are already pixels; width is a PDF concern
+        cached = self._cache.get(index)
+        if cached is not None:
+            return cached
+        data = _bsdtar_extract(self._path, self.names[index])
+        self._cache.put(index, data)
+        return data
 
     def close(self) -> None:
-        pass
+        self._cache.clear()
 
 
 def open_comic_pages(path: Path, backend: str):
@@ -253,6 +426,7 @@ class PdfPages:
         from gi.repository import Poppler
 
         self._document = Poppler.Document.new_from_file(path.resolve().as_uri())
+        self._cache = _PageCache(4)
 
     def __len__(self) -> int:
         return self._document.get_n_pages()
@@ -262,11 +436,16 @@ class PdfPages:
 
         import cairo
 
+        width = max(1, int(target_width or PDF_RENDER_WIDTH))
+        cached = self._cache.get((index, width))
+        if cached is not None:
+            return cached
+
         page = self._document.get_page(index)
-        width, height = page.get_size()
-        scale = (target_width / width) if width else 1.0
-        pixel_width = max(1, round(width * scale))
-        pixel_height = max(1, round(height * scale))
+        page_width, page_height = page.get_size()
+        scale = (width / page_width) if page_width else 1.0
+        pixel_width = max(1, round(page_width * scale))
+        pixel_height = max(1, round(page_height * scale))
         surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, pixel_width, pixel_height)
         ctx = cairo.Context(surface)
         ctx.set_source_rgb(1, 1, 1)
@@ -276,9 +455,12 @@ class PdfPages:
         surface.flush()
         buffer = io.BytesIO()
         surface.write_to_png(buffer)
-        return buffer.getvalue()
+        data = buffer.getvalue()
+        self._cache.put((index, width), data)
+        return data
 
     def close(self) -> None:
+        self._cache.clear()
         self._document = None
 
 

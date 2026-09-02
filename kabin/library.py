@@ -9,6 +9,7 @@ from .network import media_stream_url
 from .playback import (
     format_clock,
     local_queue,
+    page_progress_ratio,
     playable_file,
     plays_in_kabin,
     progress_ratio,
@@ -17,7 +18,7 @@ from .playback import (
     should_resume,
     track_count,
 )
-from .reader import opens_in_kabin_reader, resume_page
+from .reader import READABLE_KINDS, opens_in_kabin_reader, resume_page
 
 
 def matches_context(game, search_text: str, category, config) -> bool:
@@ -93,6 +94,47 @@ def can_play_media(game) -> bool:
     return playable_file(game) is not None
 
 
+def can_read_remote(game) -> bool:
+    """A paired host marked this book/comic playable; we can fetch it."""
+    if getattr(game, "source", "") != "remote":
+        return False
+    if kind_for(game).id not in READABLE_KINDS:
+        return False
+    return bool((getattr(game, "extra", None) or {}).get("playable"))
+
+
+def opens_reader(game) -> bool:
+    return opens_in_kabin_reader(game) or can_read_remote(game)
+
+
+def reader_progress_targets(item, games) -> list[tuple[dict, str]]:
+    """(host, catalog_id) pairs that should receive this item's page progress."""
+    extra = getattr(item, "extra", None) or {}
+    if getattr(item, "source", "") == "remote":
+        host = extra.get("host") or {}
+        remote_id = extra.get("remote_id") or ""
+        if host.get("token") and remote_id:
+            return [(host, remote_id)]
+        return []
+    targets = []
+    seen = set()
+    for game in games or []:
+        if getattr(game, "source", "") != "remote":
+            continue
+        if (game.extra.get("remote_id") or "") != item.id:
+            continue
+        host = game.extra.get("host") or {}
+        token = host.get("token")
+        if not token:
+            continue
+        key = (host.get("address"), host.get("port"), token)
+        if key in seen:
+            continue
+        seen.add(key)
+        targets.append((host, item.id))
+    return targets
+
+
 def queue_for(game) -> list[dict]:
     if game.source == "remote" and game.extra.get("playable"):
         host = game.extra.get("host") or {}
@@ -110,6 +152,11 @@ def queue_for(game) -> list[dict]:
 
 
 def resume_hint(game, config) -> str:
+    if opens_reader(game):
+        page = resume_page(config, game.id)
+        if page <= 0:
+            return ""
+        return f" Resume from page {page + 1}."
     total = track_count(game)
     if not should_resume(config, game.id, total):
         return ""
@@ -140,8 +187,8 @@ def item_progress(game, config, *, is_current: bool, playback, playback_index: i
             total = max(1, queue_length)
             return min(1.0, (playback_index + max(0.0, frac)) / total)
         return progress_ratio(config, game.id, track_count(game))
-    if opens_in_kabin_reader(game):
-        return progress_ratio(config, game.id)
+    if opens_reader(game):
+        return page_progress_ratio(config, game.id)
     return 0
 
 
@@ -150,7 +197,7 @@ def play_button_label(game, config, *, is_current: bool, playback) -> str:
         return "Resume" if playback and playback.paused else "Pause"
     if plays_in_kabin(game) and should_resume(config, game.id, track_count(game)):
         return "Resume"
-    if opens_in_kabin_reader(game) and resume_page(config, game.id) > 0:
+    if opens_reader(game) and resume_page(config, game.id) > 0:
         return "Resume"
     if game.source == "remote" and kind_for(game).id == "game":
         return "Stream"
@@ -161,6 +208,44 @@ def next_queue_index(index: int, queue_length: int, delta: int = 1) -> int | Non
     """Index to move to within the playback queue, or None if `delta` runs off either end."""
     target = index + delta
     return target if 0 <= target < queue_length else None
+
+
+def related_items(item, games, *, limit: int = 12) -> list:
+    """Other library items that share `item`'s series, ordered by series index.
+
+    Series matching is case-insensitive on the already-parsed `series`
+    field — titles.py fills that for books/comics, and remote catalog
+    entries carry it through. Returns [] when there is no series or no
+    siblings, so the details page can hide the row entirely.
+    """
+    series = (getattr(item, "series", None) or "").strip()
+    if not series or limit <= 0:
+        return []
+    needle = series.casefold()
+    item_id = getattr(item, "id", None)
+    matches = []
+    for game in games or []:
+        if game is item:
+            continue
+        if item_id is not None and getattr(game, "id", None) == item_id:
+            continue
+        other = (getattr(game, "series", None) or "").strip()
+        if other.casefold() != needle:
+            continue
+        matches.append(game)
+
+    def sort_key(game):
+        index = getattr(game, "series_index", None)
+        title = getattr(game, "sort_key", None) or (getattr(game, "title", "") or "").casefold()
+        if index is None:
+            return (1, 0.0, title)
+        try:
+            return (0, float(index), title)
+        except (TypeError, ValueError):
+            return (1, 0.0, title)
+
+    matches.sort(key=sort_key)
+    return matches[:limit]
 
 
 def empty_state_message(kind, value, title, media, category_count: int, host_status=None) -> tuple[str, str]:

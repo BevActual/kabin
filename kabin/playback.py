@@ -95,6 +95,23 @@ def should_resume(config, item_id: str, track_total: int = 1) -> bool:
     return resume_seconds(config, item_id) > 0 or resume_track(config, item_id, track_total) > 0
 
 
+def page_progress_ratio(config, item_id: str) -> float:
+    """0–1 read amount for poster ticks. Page 0 and finished books return 0.
+
+    Unlike progress_ratio(), page 1 of a 200-page book is real progress —
+    RESUME_AFTER is a seconds gate for music/video and would hide the
+    first four pages of every book.
+    """
+    info = progress_for(config, item_id)
+    position = info["position"]
+    duration = info["duration"]
+    if position <= 0 or not duration:
+        return 0
+    if position >= duration * FINISHED_RATIO:
+        return 0
+    return min(1.0, position / duration)
+
+
 def progress_ratio(config, item_id: str, track_total: int = 1) -> float:
     """0–1 watched/listened amount for poster ticks. Finished titles return 0."""
     info = progress_for(config, item_id)

@@ -45,10 +45,10 @@ GameCube, Wii, and arcade libraries. Kabin detects dedicated emulators such as
 Mesen, Snes9x, RMG, mGBA, BlastEm, DuckStation, PCSX2, PPSSPP, Dolphin, and MAME.
 
 The Emulation Center also provides Balanced, Original Hardware, Quality, and
-Performance play profiles. Common fullscreen, VSync, integer-scaling, and
-rewind controls form Kabin's unified settings layer and are translated by each
-standalone emulator adapter as support is added. Connected Linux game
-controllers are shown alongside these defaults.
+Performance play profiles. Fullscreen, VSync, and integer-scaling controls
+form Kabin's unified settings layer and are translated by each standalone
+emulator adapter as support is added. Connected Linux game controllers are
+shown alongside these defaults.
 
 Optional console cover art comes from SteamGridDB. Add a personal API key in
 Settings → Artwork; Kabin then sends normalized game titles to the
@@ -91,11 +91,11 @@ are selected with `track=`. `GET`/`POST /v1/media/progress` keeps Continue
 in sync across paired Kabin devices. The catalog marks titles `playable`
 and includes resume metadata without exposing a path.
 
-Books and comics aren't streamed — a paired device with its own local copy
-of the same file (synced with Syncthing, say, or just copied by hand) picks
-up reading progress from the catalog automatically on refresh: whichever
-device has read further wins, applied to that device's own local copy. No
-separate setup beyond pairing normally.
+Paired clients read books and comics through the same `GET /v1/media/stream`
+endpoint, which Kabin caches locally and opens in the reader. Reading
+progress is pushed with `POST /v1/media/progress` and also published on
+the catalog, so a device that already has its own copy (Syncthing, or a
+hand copy) can adopt whichever side has read further on refresh.
 
 Remote game play is a Kabin layer, not a second app. The host captures the
 desktop with PipeWire or X11, encodes it, and sends WebRTC over the existing
