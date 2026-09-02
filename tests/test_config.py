@@ -1,4 +1,6 @@
+import json
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -104,6 +106,69 @@ class TestConfig(unittest.TestCase):
             config.save()
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
+    def test_favorite_lookups_stay_correct_as_favorites_change(self):
+        # is_favorite() is backed by a cached set (it runs once per library
+        # item in several passes), so it has to notice every way the
+        # underlying list changes: toggling, direct mutation, and a reload
+        # replacing the list wholesale.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            config = Config(path=path)
+            self.assertFalse(config.is_favorite("steam:1"))
+
+            config.toggle_favorite("steam:1")
+            self.assertTrue(config.is_favorite("steam:1"))
+            config.toggle_favorite("steam:1")
+            self.assertFalse(config.is_favorite("steam:1"))
+
+            # Direct mutation of the exposed list still reads back right.
+            config.favorites.append("steam:2")
+            self.assertTrue(config.is_favorite("steam:2"))
+            config.favorites.remove("steam:2")
+            self.assertFalse(config.is_favorite("steam:2"))
+
+            # A reload replaces the list object entirely.
+            config.toggle_favorite("roms:gba:zelda.gba")
+            reloaded = Config(path=path)
+            self.assertTrue(reloaded.is_favorite("roms:gba:zelda.gba"))
+            self.assertFalse(reloaded.is_favorite("steam:1"))
+
+    def test_concurrent_saves_do_not_corrupt_the_file(self):
+        # Regression: save() wrote through one fixed ".config.json.tmp"
+        # for every writer, so two racing saves - the GTK main thread
+        # (favorites/recent/progress) and a ThreadingHTTPServer handler
+        # thread while host mode is on - could leave a half-written
+        # config.json. A config that then fails to parse falls back to
+        # *all defaults*, dropping paired devices, remote hosts and
+        # favorites.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            config = Config(path=path)
+            config.favorites.append("steam:1")
+            errors = []
+
+            def hammer(worker):
+                for index in range(60):
+                    try:
+                        config.recent[f"worker{worker}:{index}"] = float(index)
+                        config.save()
+                        json.loads(path.read_text())
+                    except Exception as exc:  # noqa: BLE001 - recording, not handling
+                        errors.append(exc)
+
+            threads = [threading.Thread(target=hammer, args=(n,)) for n in range(4)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+            self.assertEqual(errors, [])
+            reloaded = Config(path=path)
+            self.assertEqual(reloaded.favorites, ["steam:1"])
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            leftovers = list(Path(tmp).glob(".config.json*.tmp"))
+            self.assertEqual(leftovers, [])
+
     def test_persists_chosen_cover_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.json"
@@ -150,6 +215,31 @@ class TestConfig(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.json"
             path.write_text("not json")
+            config = Config(path=path)
+            self.assertEqual(config.rom_dirs, [])
+
+    def test_wrong_typed_field_falls_back_to_its_default_instead_of_crashing(self):
+        # A hand-edited (or stale-schema) config.json can parse fine as
+        # JSON but have the wrong type for a field. Previously that value
+        # replaced the default outright and crashed the first thing that
+        # read it: `null` for "hidden" makes `x in config.hidden` raise
+        # TypeError, a string for "network" makes `.setdefault(...)` on
+        # it raise AttributeError.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            path.write_text(json.dumps({"hidden": None, "network": "oops", "favorites": []}))
+            config = Config(path=path)
+            self.assertEqual(config.hidden, [])
+            self.assertFalse(config.is_hidden("anything"))
+            self.assertIsInstance(config.network, dict)
+            self.assertEqual(config.network["port"], 42424)
+            # A validly-typed field in the same file still loads normally.
+            self.assertEqual(config.favorites, [])
+
+    def test_non_dict_json_root_is_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            path.write_text("[1, 2, 3]")
             config = Config(path=path)
             self.assertEqual(config.rom_dirs, [])
 

@@ -157,3 +157,10 @@ Chapters button in the reader header to jump straight to any chapter.
 ```bash
 python3 -m unittest discover -s tests
 ```
+
+`native/kabin-media-helper.c`'s JSON string-escape parsing has its own
+small C test, run separately:
+
+```bash
+./scripts/test-media-helper.sh
+```

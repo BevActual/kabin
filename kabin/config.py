@@ -4,10 +4,19 @@ import secrets
 import socket
 import hashlib
 import hmac
+import threading
 import time
 from pathlib import Path
 
 from .emulation import DEFAULT_EMULATION_SETTINGS
+
+# Config is written from the GTK main thread (favorites, recent, progress,
+# every Settings toggle) *and* from ThreadingHTTPServer handler threads
+# when host mode is on (a paired device saving progress, pairing, or
+# launching). Without serializing, two writers racing on one temp file
+# leave a half-written config.json - which then fails to parse and silently
+# falls back to defaults, losing paired devices, hosts, and favorites.
+_SAVE_LOCK = threading.Lock()
 
 DEFAULT_STREAMING = {
     "backend": "auto",
@@ -70,29 +79,52 @@ class Config:
         if path is None and not self.path.exists() and _legacy_config_path().exists():
             self._load_path = _legacy_config_path()
         self.data = json.loads(json.dumps(DEFAULT_CONFIG))  # deep copy
+        self._favorites_cache = None
         loaded = self.load()
         if loaded and self._load_path != self.path:
             self.save()
             self._load_path = self.path
 
     def load(self):
-        if self._load_path.exists():
-            try:
-                loaded = json.loads(self._load_path.read_text())
-                self.data.update(loaded)
-            except (json.JSONDecodeError, OSError):
-                return False
-            return True
-        return False
+        if not self._load_path.exists():
+            return False
+        try:
+            loaded = json.loads(self._load_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return False
+        if not isinstance(loaded, dict):
+            return False
+        for key, value in loaded.items():
+            default = DEFAULT_CONFIG.get(key)
+            # A field present with the wrong type (a hand-edited config,
+            # or a stale shape from an old version) would otherwise crash
+            # the first thing that reads it - e.g. {"hidden": null} makes
+            # `game_id in self.hidden` raise TypeError, {"network": "x"}
+            # makes `self.network.setdefault(...)` raise AttributeError.
+            # Keep the default instead for any key whose type doesn't
+            # match; every other loaded field is still honored.
+            if key in DEFAULT_CONFIG and default is not None and not isinstance(value, type(default)):
+                continue
+            self.data[key] = value
+        return True
 
     def save(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps(self.data, indent=2)
-        temporary = self.path.with_name(f".{self.path.name}.tmp")
-        temporary.write_text(payload)
-        temporary.chmod(0o600)
-        temporary.replace(self.path)
-        self.path.chmod(0o600)
+        with _SAVE_LOCK:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            payload = json.dumps(self.data, indent=2)
+            # Unique temp name as well as the lock: the lock only covers
+            # writers inside this process, and a second Kabin (or a
+            # future one) sharing a fixed ".config.json.tmp" would hit the
+            # same corruption across processes.
+            temporary = self.path.with_name(f".{self.path.name}.{os.getpid()}.{id(self)}.tmp")
+            try:
+                temporary.write_text(payload)
+                temporary.chmod(0o600)
+                temporary.replace(self.path)
+            except OSError:
+                temporary.unlink(missing_ok=True)
+                raise
+            self.path.chmod(0o600)
 
     @property
     def rom_dirs(self) -> list:
@@ -299,12 +331,29 @@ class Config:
         hosts[:] = [host for host in hosts if host.get("name") != name]
         self.save()
 
+    def _favorite_ids(self) -> set:
+        """Set view of `favorites`, so per-item checks stay O(1).
+
+        is_favorite() is called once per library item by the sidebar's
+        favorite count, the Favorites shelf, and the favorites filter, so
+        scanning the list made those passes O(items x favorites) - ~33 ms
+        per pass at 5000 items with 2000 favorited, on the main thread and
+        repeated on every favorite toggle. The cache is rebuilt whenever
+        the underlying list is replaced (load) or changes length (toggle).
+        """
+        favorites = self.favorites
+        cached = self._favorites_cache
+        if cached is None or cached[0] is not favorites or cached[1] != len(favorites):
+            cached = (favorites, len(favorites), set(favorites))
+            self._favorites_cache = cached
+        return cached[2]
+
     def is_favorite(self, game_id: str) -> bool:
-        return game_id in self.favorites
+        return game_id in self._favorite_ids()
 
     def toggle_favorite(self, game_id: str) -> bool:
         """Flips favorite state for game_id and returns the new state."""
-        if game_id in self.favorites:
+        if self.is_favorite(game_id):
             self.favorites.remove(game_id)
             is_favorite = False
         else:

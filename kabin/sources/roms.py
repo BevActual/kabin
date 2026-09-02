@@ -7,6 +7,7 @@ from ..artwork import clean_game_title, local_cover, resolve_local_cover
 from ..emulators import build_command, launch_environment
 from ..models import Game
 from ..systems import get_system
+from ._util import safe_mtime
 
 _SKIP_DIRS = {"covers", "media", "images", "manuals", "videos", ".git"}
 
@@ -88,7 +89,7 @@ def get_games(
                     extra={
                         "path": str(rom_path),
                         "system": system_id,
-                        "added_at": rom_path.stat().st_mtime,
+                        "added_at": safe_mtime(rom_path),
                         "needs_artwork": cover is None,
                     },
                     launch=_make_launcher(emulator, rom_path, emulation_settings, bios_path),

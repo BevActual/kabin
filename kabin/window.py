@@ -110,6 +110,10 @@ _BRAND_MARK = Path(__file__).resolve().parent.parent / "data" / "kabin-mark.svg"
 
 _HTML_READER_BACKENDS = frozenset({"epub", "fb2"})
 
+# Long enough to collapse a burst of typing into one re-filter, short
+# enough that results still feel live.
+SEARCH_DEBOUNCE_MS = 150
+
 _KEY_ACTIONS = {
     Gdk.KEY_Left: "left",
     Gdk.KEY_Right: "right",
@@ -433,6 +437,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.host_service = HostService(self.config, lambda: list(self._games))
         self._category = CATEGORY_HOME
         self._search_text = ""
+        self._search_timeout = 0
         self._sidebar_rows = {}
         self._games = []
         self._host_statuses = {}
@@ -450,6 +455,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._playback_queue = []
         self._playback_index = 0
         self._playback_auth = None
+        self._playback_poll_source = None
         self._seeking = False
         self._last_progress_save = 0.0
         self._player_art_path = None
@@ -1316,10 +1322,29 @@ class MainWindow(Adw.ApplicationWindow):
             self.loading_status.set_description("Finding titles on this device…")
 
         def worker():
-            games, host_statuses = discover_all_with_status(self.config)
+            try:
+                games, host_statuses = discover_all_with_status(self.config)
+            except Exception as exc:
+                GLib.idle_add(self._on_games_load_failed, generation, exc)
+                return
             GLib.idle_add(self._on_games_loaded, generation, games, host_statuses)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _on_games_load_failed(self, generation, error):
+        # Without this, one bad item anywhere in the scan (a file deleted
+        # out from under a Syncthing-synced media folder between being
+        # listed and stat()'d, a malformed reply from a paired host, ...)
+        # raises inside the daemon worker thread, which just dies -
+        # _on_games_loaded never runs, and the library is stuck on
+        # "Updating your library…" forever with no error shown. Fall back
+        # to whatever was already loaded instead of hanging.
+        if generation != self._refresh_generation:
+            return False
+        self._toast(f"Could not refresh your library · {error}")
+        if hasattr(self, "content_stack"):
+            self._update_stack_visibility()
+        return False
 
     def _on_games_loaded(self, generation, games, host_statuses=None):
         if generation != self._refresh_generation:
@@ -1650,6 +1675,12 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _clear_search(self):
         self.search_entry.set_text("")
+        # An explicit "Clear search" click should land immediately rather
+        # than after the typing debounce.
+        if self._search_timeout:
+            GLib.source_remove(self._search_timeout)
+            self._search_timeout = 0
+        self._apply_search()
 
     def _clear_filters(self):
         self._location_filter = "all"
@@ -1781,7 +1812,19 @@ class MainWindow(Adw.ApplicationWindow):
         self.no_matches_status.set_description(no_matches_description)
 
     def _on_search_changed(self, entry):
+        # The text itself has to update now - _matches(), _is_on_home()
+        # and the filter chips all read it synchronously - but re-filtering
+        # is several full passes over the library (~44 ms at 5000 items),
+        # far past a frame budget to spend on every keystroke. Coalesce a
+        # burst of typing into one pass, the way the cover picker's search
+        # already does.
         self._search_text = entry.get_text().strip().casefold()
+        if self._search_timeout:
+            GLib.source_remove(self._search_timeout)
+        self._search_timeout = GLib.timeout_add(SEARCH_DEBOUNCE_MS, self._apply_search)
+
+    def _apply_search(self):
+        self._search_timeout = 0
         self._apply_grid_metrics()
         self.game_filter.changed(Gtk.FilterChange.DIFFERENT)
         self._update_stack_visibility()
@@ -1789,6 +1832,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._update_library_header()
         self._update_filter_bar()
         self._sync_selection_to_filter()
+        return False
 
     def _on_sidebar_selected(self, listbox, row):
         category = self._sidebar_rows.get(row, CATEGORY_HOME) if row else CATEGORY_HOME
@@ -1978,6 +2022,20 @@ class MainWindow(Adw.ApplicationWindow):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _cancel_playback_poll(self):
+        if self._playback_poll_source is not None:
+            GLib.source_remove(self._playback_poll_source)
+            self._playback_poll_source = None
+
+    def _schedule_playback_poll(self):
+        # _on_playback_ready runs once per successful session start, and
+        # without cancelling any previous timer first, rapid track/session
+        # switching (Next/Prev, or Play on a different item while one is
+        # already going) can leave more than one 250ms poller alive at
+        # once, all polling whatever self._playback currently is.
+        self._cancel_playback_poll()
+        self._playback_poll_source = GLib.timeout_add(250, self._poll_playback)
+
     def _stop_playback(self):
         session = self._playback
         item = self._playback_item
@@ -1986,6 +2044,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._playback_queue = []
         self._playback_index = 0
         self._playback_auth = None
+        self._cancel_playback_poll()
         self._seeking = False
         if session and item:
             self._persist_progress(item, session)
@@ -2068,8 +2127,16 @@ class MainWindow(Adw.ApplicationWindow):
     def _poll_playback(self):
         session = self._playback
         if session is None:
+            self._playback_poll_source = None
             return False
         if session.ended or session.process.poll() is not None:
+            # Clear this before _start_queue_index/_stop_playback rather
+            # than after: both eventually reach _schedule_playback_poll or
+            # _cancel_playback_poll, and this source is already being
+            # torn down by returning False below, so it must not be
+            # GLib.source_remove()'d a second time as if it were still
+            # live.
+            self._playback_poll_source = None
             next_index = next_queue_index(self._playback_index, len(self._playback_queue))
             if next_index is not None:
                 self._start_queue_index(next_index, 0)
@@ -2178,7 +2245,7 @@ class MainWindow(Adw.ApplicationWindow):
         kind = kind_for(game)
         watching = kind.verb == "Watch"
         self._toast(f"Watching {game.title}" if watching else f"{kind.verb}ing {game.title}")
-        GLib.timeout_add(250, self._poll_playback)
+        self._schedule_playback_poll()
         return False
 
     def _on_tile_activated(self, _grid, position):
@@ -2731,6 +2798,9 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_close_request(self, *_args):
         self._closing = True
+        if self._search_timeout:
+            GLib.source_remove(self._search_timeout)
+            self._search_timeout = 0
         self.config.save_window_state(self.get_width(), self.get_height(), self.is_maximized())
         self._stop_playback()
         self._close_reader_resources()

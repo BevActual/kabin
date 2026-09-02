@@ -8,6 +8,7 @@ from gi.repository import Gio  # noqa: E402
 
 from ..artwork import resolve_local_cover  # noqa: E402
 from ..models import Game  # noqa: E402
+from ._util import safe_mtime  # noqa: E402
 
 # Steam owns its own launch path via sources/steam.py; skip its launcher
 # entry, Kabin's own launcher, emulator frontends, and stream clients
@@ -75,10 +76,7 @@ def get_games(hidden_ids=None, steam_appids=None, artwork_config=None) -> list:
         title = app_info.get_display_name() or app_info.get_name() or desktop_id
         cover = resolve_local_cover(gid)
         desktop_file = app_info.get_filename()
-        try:
-            added_at = Path(desktop_file).stat().st_mtime if desktop_file else 0
-        except OSError:
-            added_at = 0
+        added_at = safe_mtime(Path(desktop_file)) if desktop_file else 0
 
         games.append(
             Game(

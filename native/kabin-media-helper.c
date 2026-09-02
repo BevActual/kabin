@@ -1,6 +1,7 @@
 #include <gst/gst.h>
 #include <gst/sdp/sdp.h>
 #include <gst/webrtc/webrtc.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,6 +39,46 @@ static void emit_json(const char *type, const char *sdp) {
   fflush(stdout);
 }
 
+static void append_utf8_codepoint(GString *value, guint32 codepoint) {
+  if (codepoint <= 0x7F) {
+    g_string_append_c(value, (char)codepoint);
+  } else if (codepoint <= 0x7FF) {
+    g_string_append_c(value, (char)(0xC0 | (codepoint >> 6)));
+    g_string_append_c(value, (char)(0x80 | (codepoint & 0x3F)));
+  } else if (codepoint <= 0xFFFF) {
+    g_string_append_c(value, (char)(0xE0 | (codepoint >> 12)));
+    g_string_append_c(value, (char)(0x80 | ((codepoint >> 6) & 0x3F)));
+    g_string_append_c(value, (char)(0x80 | (codepoint & 0x3F)));
+  } else {
+    g_string_append_c(value, (char)(0xF0 | (codepoint >> 18)));
+    g_string_append_c(value, (char)(0x80 | ((codepoint >> 12) & 0x3F)));
+    g_string_append_c(value, (char)(0x80 | ((codepoint >> 6) & 0x3F)));
+    g_string_append_c(value, (char)(0x80 | (codepoint & 0x3F)));
+  }
+}
+
+// Reads exactly 4 hex digits starting at `cursor` into `*out`. Returns
+// FALSE (leaving `*out` untouched) if any of them isn't a hex digit,
+// including hitting the string's NUL terminator early.
+static gboolean parse_hex4(const char *cursor, guint32 *out) {
+  guint32 value = 0;
+  for (int i = 0; i < 4; i++) {
+    char c = cursor[i];
+    guint32 digit;
+    if (c >= '0' && c <= '9')
+      digit = (guint32)(c - '0');
+    else if (c >= 'a' && c <= 'f')
+      digit = (guint32)(10 + (c - 'a'));
+    else if (c >= 'A' && c <= 'F')
+      digit = (guint32)(10 + (c - 'A'));
+    else
+      return FALSE;
+    value = (value << 4) | digit;
+  }
+  *out = value;
+  return TRUE;
+}
+
 static gchar *json_string_field(const char *json, const char *field) {
   gchar *needle = g_strdup_printf("\"%s\"", field);
   const char *key = strstr(json, needle);
@@ -55,12 +96,49 @@ static gchar *json_string_field(const char *json, const char *field) {
   for (const char *cursor = quote; *cursor && *cursor != '"'; cursor++) {
     if (*cursor == '\\' && cursor[1]) {
       cursor++;
-      if (*cursor == 'n')
-        g_string_append_c(value, '\n');
-      else if (*cursor == 'r')
-        g_string_append_c(value, '\r');
-      else
-        g_string_append_c(value, *cursor);
+      switch (*cursor) {
+        case 'n':
+          g_string_append_c(value, '\n');
+          break;
+        case 'r':
+          g_string_append_c(value, '\r');
+          break;
+        case 't':
+          g_string_append_c(value, '\t');
+          break;
+        case 'b':
+          g_string_append_c(value, '\b');
+          break;
+        case 'f':
+          g_string_append_c(value, '\f');
+          break;
+        case 'u': {
+          // Python's json.dumps() (ensure_ascii=True, the default) emits
+          // \uXXXX for any non-ASCII character, and a surrogate pair for
+          // anything past the BMP - a device name or an odd SDP session
+          // string could plausibly carry one.
+          guint32 codepoint;
+          if (parse_hex4(cursor + 1, &codepoint)) {
+            cursor += 4;
+            if (codepoint >= 0xD800 && codepoint <= 0xDBFF && cursor[1] == '\\' &&
+                cursor[2] == 'u') {
+              guint32 low;
+              if (parse_hex4(cursor + 3, &low) && low >= 0xDC00 && low <= 0xDFFF) {
+                codepoint = 0x10000 + ((codepoint - 0xD800) << 10) + (low - 0xDC00);
+                cursor += 6;
+              }
+            }
+            append_utf8_codepoint(value, codepoint);
+          } else {
+            g_string_append_c(value, 'u');
+          }
+          break;
+        }
+        default:
+          // Covers \", \\, and \/ too: appending the character after the
+          // backslash verbatim is exactly right for those three.
+          g_string_append_c(value, *cursor);
+      }
     } else {
       g_string_append_c(value, *cursor);
     }
@@ -478,8 +556,10 @@ static int run_play(const char *uri, double start_seconds, const char *authoriza
       gst_message_unref(message);
       break;
     }
-    emit_play_position(playbin);
     if (feof(stdin))
+      break;
+    emit_play_position(playbin);
+    if (ferror(stdout))
       break;
     fd_set readfds;
     FD_ZERO(&readfds);
@@ -522,6 +602,12 @@ static int run_play(const char *uri, double start_seconds, const char *authoriza
 }
 
 int main(int argc, char **argv) {
+  // run_play's loop writes to stdout on a timer regardless of whether the
+  // parent is still reading it; without this, the parent dying makes our
+  // next write raise SIGPIPE and kill us before we reach GStreamer
+  // teardown. Ignoring it turns that into a normal write failure (see the
+  // ferror(stdout) check in run_play) instead of an abrupt kill.
+  signal(SIGPIPE, SIG_IGN);
   gst_init(&argc, &argv);
   if (argc == 2 && strcmp(argv[1], "--self-test") == 0)
     return self_test();

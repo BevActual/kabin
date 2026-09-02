@@ -29,8 +29,14 @@ class MediaHelperSession:
             bufsize=1,
         )
         self._events: Queue[dict] = Queue()
+        self._stderr_lines: list[str] = []
+        self._start_reader_threads()
+
+    def _start_reader_threads(self) -> None:
         self._reader = threading.Thread(target=self._read, daemon=True)
         self._reader.start()
+        self._stderr_reader = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._stderr_reader.start()
 
     def _read(self):
         assert self.process.stdout is not None
@@ -42,6 +48,25 @@ class MediaHelperSession:
                 self._events.put(json.loads(line))
             except json.JSONDecodeError:
                 self._events.put({"type": "error", "sdp": line})
+
+    def _drain_stderr(self) -> None:
+        # Just reading stdout isn't enough: an OS pipe fills at ~64KB, and
+        # once it does the helper blocks the next time it writes to
+        # stderr - silently wedging the whole session. Keep a short tail
+        # so a failure at least explains itself instead of a bare
+        # "exited"/"timed out".
+        if not self.process.stderr:
+            return
+        for line in self.process.stderr:
+            line = line.rstrip()
+            if line:
+                self._stderr_lines.append(line)
+                del self._stderr_lines[:-20]
+
+    def _stderr_tail(self) -> str:
+        if not self._stderr_lines:
+            return ""
+        return " · " + " | ".join(self._stderr_lines[-3:])
 
     def send(self, payload: dict) -> None:
         if not self.process.stdin:
@@ -56,13 +81,13 @@ class MediaHelperSession:
                 event = self._events.get(timeout=0.2)
             except Empty:
                 if self.process.poll() is not None:
-                    raise MediaHelperError("media helper exited")
+                    raise MediaHelperError(f"media helper exited{self._stderr_tail()}")
                 continue
             if event.get("type") == "error":
                 raise MediaHelperError(event.get("sdp") or "media helper error")
             if event.get("type") == message_type:
                 return event
-        raise MediaHelperError(f"timed out waiting for {message_type}")
+        raise MediaHelperError(f"timed out waiting for {message_type}{self._stderr_tail()}")
 
     def close(self) -> None:
         try:
@@ -79,6 +104,10 @@ class MediaHelperSession:
             self.process.wait(timeout=2)
         except subprocess.TimeoutExpired:
             self.process.kill()
+            try:
+                self.process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                pass
 
 
 def create_client_offer(session: MediaHelperSession) -> str:
@@ -121,8 +150,8 @@ class PlaybackSession(MediaHelperSession):
             env=env,
         )
         self._events: Queue[dict] = Queue()
-        self._reader = threading.Thread(target=self._read, daemon=True)
-        self._reader.start()
+        self._stderr_lines: list[str] = []
+        self._start_reader_threads()
 
     def _read(self):
         assert self.process.stdout is not None

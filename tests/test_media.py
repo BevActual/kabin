@@ -1,3 +1,4 @@
+import subprocess
 import unittest
 from queue import Queue
 from unittest.mock import patch
@@ -149,6 +150,66 @@ class TestMediaHelperSession(unittest.TestCase):
             session.close()
         self.assertTrue(any('"pause"' in text for text in process.stdin.writes))
         self.assertTrue(any('"seek"' in text and "30.000" in text for text in process.stdin.writes))
+
+
+class _WaitFailsOnceProcess(_ScriptedProcess):
+    """Simulates terminate() not being enough, so close() falls back to
+    kill() - and tracks whether it then reaps the killed process."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.wait_calls = 0
+        self.killed = False
+
+    def wait(self, timeout=None):
+        self.wait_calls += 1
+        if self.wait_calls == 1:
+            raise subprocess.TimeoutExpired(cmd="helper", timeout=timeout)
+        self.returncode = -9
+        return -9
+
+    def kill(self):
+        self.killed = True
+
+
+class TestMediaHelperSessionRobustness(unittest.TestCase):
+    def test_stderr_tail_is_included_in_the_timeout_error(self):
+        # An OS pipe fills at ~64KB; if nothing drains stderr, the
+        # helper's next write to it blocks and the session just hangs
+        # with no explanation. Draining it also means a real failure
+        # gets to explain itself instead of a bare "timed out".
+        process = _ScriptedProcess(['{"type":"hello","sdp":"client"}\n'], {})
+        process.stderr = ["gst warning: no encoder", "fatal: negotiation failed"]
+        with patch("kabin.media.native_helper_path", return_value="/tmp/helper"), patch(
+            "kabin.media.subprocess.Popen", return_value=process
+        ):
+            session = MediaHelperSession("client")
+            session._stderr_reader.join(timeout=1)
+            with self.assertRaisesRegex(MediaHelperError, "negotiation failed"):
+                session.wait("offer", timeout=0.05)
+            session.close()
+
+    def test_exited_error_includes_stderr_tail(self):
+        process = _ScriptedProcess([], {})
+        process.stderr = ["core dumped"]
+        process.returncode = 1
+        with patch("kabin.media.native_helper_path", return_value="/tmp/helper"), patch(
+            "kabin.media.subprocess.Popen", return_value=process
+        ):
+            session = MediaHelperSession("client")
+            session._stderr_reader.join(timeout=1)
+            with self.assertRaisesRegex(MediaHelperError, "core dumped"):
+                session.wait("hello", timeout=0.05)
+
+    def test_close_reaps_the_process_after_a_kill_fallback(self):
+        process = _WaitFailsOnceProcess(['{"type":"hello","sdp":"client"}\n'], {})
+        with patch("kabin.media.native_helper_path", return_value="/tmp/helper"), patch(
+            "kabin.media.subprocess.Popen", return_value=process
+        ):
+            session = MediaHelperSession("client")
+            session.close()
+        self.assertTrue(process.killed)
+        self.assertEqual(process.wait_calls, 2)
 
 
 if __name__ == "__main__":

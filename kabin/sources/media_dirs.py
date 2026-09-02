@@ -8,6 +8,7 @@ from ..artwork import book_artwork_root, cached_cover, extract_epub_cover, folde
 from ..kinds import FOLDER_KINDS, get_kind
 from ..models import LibraryItem
 from ..titles import parse_media_name
+from ._util import safe_mtime
 
 _SKIP_DIRS = {"covers", "media", "images", "manuals", "videos", ".git"}
 
@@ -63,7 +64,7 @@ def _file_item(kind, base: Path, path: Path, hidden_ids) -> LibraryItem | None:
         launch=lambda target=path: _open(target),
         extra={
             "path": str(path),
-            "added_at": path.stat().st_mtime,
+            "added_at": safe_mtime(path),
             "needs_artwork": cover is None and kind.id == "book",
         },
         media_type=kind.id,
@@ -90,7 +91,7 @@ def _album_item(kind, base: Path, folder: Path, tracks: list[Path], hidden_ids) 
         launch=lambda target=folder: _open(target),
         extra={
             "path": str(folder),
-            "added_at": folder.stat().st_mtime,
+            "added_at": safe_mtime(folder),
             "track_count": len(tracks),
         },
         media_type=kind.id,

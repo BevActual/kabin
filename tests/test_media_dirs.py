@@ -1,7 +1,9 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import kabin.sources.media_dirs as media_dirs_module
 from kabin.sources.media_dirs import get_items
 
 
@@ -66,6 +68,40 @@ class TestMediaDirs(unittest.TestCase):
         self.assertEqual(by_type["comic"].series_index, 1)
         self.assertEqual(by_type["music"].title, "Sketches Of Brunswick East")
         self.assertEqual(by_type["music"].creators, ["King Gizzard"])
+
+    def test_a_file_vanishing_mid_scan_does_not_take_down_the_whole_scan(self):
+        # Realistic trigger: a media folder kept in sync (Syncthing, a
+        # removable drive, someone deleting a file in a file manager) can
+        # lose a file between it being listed by the directory walk and
+        # being stat()'d a moment later for its "added" timestamp.
+        # Regression: this used to raise FileNotFoundError, which - since
+        # get_items() runs on window.py's refresh() worker thread with no
+        # exception handling above it either - killed the whole library
+        # refresh silently, leaving the UI stuck on "Updating your
+        # library…" forever.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Stable Book.epub").write_bytes(b"epub")
+            vanished = root / "Vanishing Book.epub"
+            vanished.write_bytes(b"epub")
+
+            original_parse = media_dirs_module.parse_media_name
+
+            def parse_then_vanish(name, media_type=""):
+                result = original_parse(name, media_type)
+                if name == vanished.name:
+                    vanished.unlink()
+                return result
+
+            with patch(
+                "kabin.sources.media_dirs.parse_media_name", side_effect=parse_then_vanish
+            ):
+                items = get_items([{"path": tmp, "media_type": "book"}])
+
+        titles = {item.title for item in items}
+        self.assertEqual(titles, {"Stable Book", "Vanishing Book"})
+        vanished_item = next(item for item in items if item.title == "Vanishing Book")
+        self.assertEqual(vanished_item.extra["added_at"], 0)
 
     def test_respects_enabled_kinds_and_hidden_ids(self):
         with tempfile.TemporaryDirectory() as tmp:
