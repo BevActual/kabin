@@ -30,7 +30,7 @@ from .playback import (
     save_progress,
     track_count,
 )
-from .reader import READABLE_KINDS
+from .reader import READABLE_KINDS, opens_in_kabin_reader
 from .streaming import media_capabilities, stream_offer
 
 
@@ -156,7 +156,7 @@ def serialize_item(item, media_dirs=None, progress=None) -> dict:
         "appid": appid,
         "has_artwork": bool(getattr(item, "icon_path", None)) or bool(appid),
         "playable": (
-            (plays_in_kabin(item) or kind_for(item).id in READABLE_KINDS)
+            (plays_in_kabin(item) or opens_in_kabin_reader(item))
             and media_file_for_item(item, media_dirs) is not None
         ),
         "track_count": track_count(item) if plays_in_kabin(item) else 0,

@@ -24,6 +24,8 @@ from kabin.reader import (
     open_reader_pages,
     parse_xml,
     prune_cache,
+    prune_remote_read_cache,
+    remote_read_cache_root,
     opens_in_kabin_reader,
     reader_backend_for,
     reader_uri_allowed,
@@ -470,11 +472,11 @@ class TestEpubToc(unittest.TestCase):
                     [
                         {"title": "Chapter One", "index": 0},
                         {"title": "Chapter Two", "index": 1},
-                        {"title": "Chapter Three, Section One", "index": 2},
+                        {"title": "Chapter Three, Section One", "index": 2, "fragment": "sec1"},
                     ],
                 )
 
-    def test_ncx_toc_resolves_nested_entries_and_strips_fragments(self):
+    def test_ncx_toc_resolves_nested_entries_and_keeps_fragments(self):
         with tempfile.TemporaryDirectory() as tmp:
             epub = Path(tmp) / "book.epub"
             _write_epub_with_ncx(epub)
@@ -485,7 +487,7 @@ class TestEpubToc(unittest.TestCase):
                     pages.toc,
                     [
                         {"title": "Chapter One", "index": 0},
-                        {"title": "Chapter One, cont.", "index": 0},
+                        {"title": "Chapter One, cont.", "index": 0, "fragment": "more"},
                         {"title": "Chapter Two", "index": 1},
                     ],
                 )
@@ -943,6 +945,22 @@ class TestReaderWebViewPolicy(unittest.TestCase):
         self.assertTrue(step_adjustment(adj, -1))
         self.assertLess(adj.value, 150)
         self.assertFalse(step_adjustment(None, 1))
+
+
+class TestRemoteReadCachePrune(unittest.TestCase):
+    def test_prune_remote_read_cache_keeps_newest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "remote-read"
+            with patch("kabin.reader.remote_read_cache_root", return_value=root):
+                for i in range(5):
+                    entry = root / f"book{i}"
+                    entry.mkdir(parents=True)
+                    (entry / "item.epub").write_bytes(b"x")
+                    os.utime(entry, (i, i))
+                prune_remote_read_cache(keep=2)
+                left = sorted(p.name for p in root.iterdir())
+                self.assertEqual(left, ["book3", "book4"])
+
 
 
 if __name__ == "__main__":

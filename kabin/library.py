@@ -18,7 +18,7 @@ from .playback import (
     should_resume,
     track_count,
 )
-from .reader import READABLE_KINDS, opens_in_kabin_reader, resume_page
+from .reader import READABLE_KINDS, opens_in_kabin_reader, reader_backend_for, resume_page
 
 
 def matches_context(game, search_text: str, category, config) -> bool:
@@ -95,12 +95,19 @@ def can_play_media(game) -> bool:
 
 
 def can_read_remote(game) -> bool:
-    """A paired host marked this book/comic playable; we can fetch it."""
+    """A paired host marked this book/comic playable and Kabin can read it.
+
+    Older hosts advertised every book file as playable, including MOBI/AZW3
+    that only open via xdg-open. Refusing those here stops a fetch that
+    would only fail after downloading the whole file.
+    """
     if getattr(game, "source", "") != "remote":
         return False
     if kind_for(game).id not in READABLE_KINDS:
         return False
-    return bool((getattr(game, "extra", None) or {}).get("playable"))
+    if not (getattr(game, "extra", None) or {}).get("playable"):
+        return False
+    return reader_backend_for(game) is not None
 
 
 def opens_reader(game) -> bool:

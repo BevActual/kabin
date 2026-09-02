@@ -585,6 +585,30 @@ class TestNetwork(unittest.TestCase):
             self.assertNotIn(str(book_path), json.dumps(catalog))
             self.assertFalse(by_id["book:novel.epub"]["playable"])
 
+    def test_library_marks_mobi_not_playable_even_inside_media_dirs(self):
+        # Kabin cannot read MOBI in-app; advertising playable would make a
+        # paired client fetch the whole file and then fail to open it.
+        with tempfile.TemporaryDirectory() as tmp:
+            library = Path(tmp) / "books"
+            library.mkdir()
+            book_path = library / "novel.mobi"
+            book_path.write_bytes(b"MOBI")
+            config = Config(path=Path(tmp) / "config.json")
+            config.network["port"] = 0
+            config.media_dirs.append({"path": str(library), "media_type": "book"})
+            book = SimpleNamespace(
+                id="book:novel.mobi",
+                title="Novel",
+                source="book",
+                subtitle="Book",
+                icon_path=None,
+                extra={"path": str(book_path)},
+                media_type="book",
+                media_format="mobi",
+            )
+            public = serialize_game(book, media_dirs=config.media_dirs)
+            self.assertFalse(public["playable"])
+
     def test_library_marks_books_playable_when_inside_media_dirs(self):
         with tempfile.TemporaryDirectory() as tmp:
             library = Path(tmp) / "books"

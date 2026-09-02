@@ -41,6 +41,7 @@ def _game(
     extra=None,
     series="",
     series_index=None,
+    media_format="",
 ):
     return SimpleNamespace(
         id=item_id,
@@ -51,6 +52,7 @@ def _game(
         extra=extra or {},
         series=series,
         series_index=series_index,
+        media_format=media_format,
         search_text=f"{title or item_id} {subtitle} {source}".casefold(),
         sort_key=(title or item_id).casefold(),
     )
@@ -193,6 +195,20 @@ class TestCanPlayMediaAndQueue(unittest.TestCase):
         self.assertFalse(can_play_media(not_playable))
         playable = _game("g2", source="remote", media_type="video", extra={"playable": True})
         self.assertTrue(can_play_media(playable))
+
+    def test_remote_mobi_is_not_readable_even_when_host_marks_playable(self):
+        # Older hosts advertised every book file as playable. A MOBI still
+        # must not offer in-app Read — there is no Kabin backend for it.
+        ready = _game(
+            "remote:den:book:novel.mobi",
+            source="remote",
+            media_type="book",
+            media_format="mobi",
+            extra={"playable": True, "remote_id": "book:novel.mobi"},
+        )
+        # media_format may live on the object; also stash on extra for safety
+        ready.media_format = "mobi"
+        self.assertFalse(can_read_remote(ready))
 
     def test_remote_book_is_readable_when_host_marks_it_playable(self):
         ghost = _game("remote:den:book:novel.epub", source="remote", media_type="book")

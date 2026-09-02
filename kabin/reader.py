@@ -117,10 +117,16 @@ def remote_read_suffix(item) -> str:
     fmt = str(getattr(item, "media_format", "") or "").strip().lstrip(".")
     if fmt and fmt.casefold() != "album":
         return f".{fmt.casefold()}"
-    remote_id = str((getattr(item, "extra", None) or {}).get("remote_id") or "")
+    extra = getattr(item, "extra", None) or {}
+    remote_id = str(extra.get("remote_id") or getattr(item, "id", "") or "")
     suffix = Path(remote_id.split(":")[-1]).suffix
     return suffix.casefold()
 
+
+
+def prune_remote_read_cache(keep: int | None = None) -> None:
+    """Cap ~/.cache/kabin/remote-read the same way EPUB/FB2 extractions are capped."""
+    prune_cache(remote_read_cache_root(), keep=keep)
 
 def scroll_adjustment(widget):
     """Find a vertical Gtk.Adjustment under `widget`, if any."""
@@ -194,6 +200,37 @@ def _bsdtar_available() -> bool:
     return shutil.which("bsdtar") is not None
 
 
+def backend_for_suffix(suffix: str) -> str | None:
+    """In-app backend for a file suffix (".epub", "epub", …), or None.
+
+    Shared by local opens and remote playable checks so a host never
+    advertises Read for MOBI/AZW3 (and a client never fetches them for
+    the reader) when Kabin would only hand the file to xdg-open.
+    """
+    raw = (suffix or "").strip().casefold()
+    if not raw:
+        return None
+    if not raw.startswith("."):
+        raw = f".{raw}"
+    if raw == ".pdf":
+        return "pdf" if _poppler_available() else None
+    if raw == ".cbz":
+        return "comic-zip"
+    if raw == ".cbt":
+        return "comic-tar"
+    if raw == ".cb7":
+        return "comic-7z" if _bsdtar_available() else None
+    if raw == ".cbr":
+        return "comic-rar" if _bsdtar_available() else None
+    if raw == ".epub":
+        return "epub" if _webkit_available() else None
+    if raw == ".fb2":
+        return "fb2" if _webkit_available() else None
+    if raw == ".txt":
+        return "text"
+    return None
+
+
 def reader_backend_for(item) -> str | None:
     """Which in-app backend (if any) can open this item, or None to fall
     back to the item's own `launch` (xdg-open)."""
@@ -201,25 +238,13 @@ def reader_backend_for(item) -> str | None:
         return None
     path = playback.playable_file(item)
     if path is None:
-        return None
-    suffix = path.suffix.lower()
-    if suffix == ".pdf":
-        return "pdf" if _poppler_available() else None
-    if suffix == ".cbz":
-        return "comic-zip"
-    if suffix == ".cbt":
-        return "comic-tar"
-    if suffix == ".cb7":
-        return "comic-7z" if _bsdtar_available() else None
-    if suffix == ".cbr":
-        return "comic-rar" if _bsdtar_available() else None
-    if suffix == ".epub":
-        return "epub" if _webkit_available() else None
-    if suffix == ".fb2":
-        return "fb2" if _webkit_available() else None
-    if suffix == ".txt":
-        return "text"
-    return None
+        # Remote catalog entries have no local path yet; decide from the
+        # published media_format / remote id suffix instead.
+        fmt = str(getattr(item, "media_format", "") or "").strip()
+        if not fmt:
+            fmt = remote_read_suffix(item)
+        return backend_for_suffix(fmt)
+    return backend_for_suffix(path.suffix)
 
 
 def opens_in_kabin_reader(item) -> bool:
@@ -549,19 +574,31 @@ def prune_cache(root: Path, keep: int | None = None) -> None:
 _EPUB_NAV_TYPE_ATTR = "{http://www.idpf.org/2007/ops}type"
 
 
-def _resolve_toc_href(raw_href: str, doc_dir: str, hrefs: list[str]) -> int | None:
-    """Map a TOC entry's href (nav/NCX-relative, may carry a #fragment) to
-    a spine index, or None if it doesn't match any spine document."""
+def _toc_fragment(raw_href: str) -> str:
+    """Return the decoded #fragment from a TOC href, or ""."""
+    if not raw_href or "#" not in raw_href:
+        return ""
+    return urllib.parse.unquote(raw_href.split("#", 1)[1]).strip()
+
+
+def _resolve_toc_href(raw_href: str, doc_dir: str, hrefs: list[str]) -> tuple[int, str] | None:
+    """Map a TOC entry's href to (spine index, fragment), or None.
+
+    The fragment (without '#') is preserved so the reader can scroll to a
+    mid-chapter heading after the spine document loads.
+    """
     if not raw_href:
         return None
-    target = raw_href.split("#", 1)[0]
+    path_part, _, fragment = raw_href.partition("#")
+    target = path_part
     if not target:
         return None
     normalized = posixpath.normpath(posixpath.join(doc_dir, urllib.parse.unquote(target)))
     try:
-        return hrefs.index(normalized)
+        index = hrefs.index(normalized)
     except ValueError:
         return None
+    return index, urllib.parse.unquote(fragment).strip()
 
 
 def _epub3_nav_toc(nav_root, nav_dir: str, hrefs: list[str]) -> list[dict]:
@@ -574,12 +611,16 @@ def _epub3_nav_toc(nav_root, nav_dir: str, hrefs: list[str]) -> list[dict]:
     for a in toc_nav.iter():
         if _local_name(a.tag) != "a" or not a.get("href"):
             continue
-        index = _resolve_toc_href(a.get("href"), nav_dir, hrefs)
-        if index is None:
+        resolved = _resolve_toc_href(a.get("href"), nav_dir, hrefs)
+        if resolved is None:
             continue
+        index, fragment = resolved
         title = "".join(a.itertext()).strip()
         if title:
-            entries.append({"title": title, "index": index})
+            entry = {"title": title, "index": index}
+            if fragment:
+                entry["fragment"] = fragment
+            entries.append(entry)
     return entries
 
 
@@ -598,9 +639,13 @@ def _ncx_toc(ncx_root, ncx_dir: str, hrefs: list[str]) -> list[dict]:
             title = "".join(label.itertext()).strip() if label is not None else ""
             href = content.get("src") if content is not None else None
             if title and href:
-                index = _resolve_toc_href(href, ncx_dir, hrefs)
-                if index is not None:
-                    entries.append({"title": title, "index": index})
+                resolved = _resolve_toc_href(href, ncx_dir, hrefs)
+                if resolved is not None:
+                    index, fragment = resolved
+                    entry = {"title": title, "index": index}
+                    if fragment:
+                        entry["fragment"] = fragment
+                    entries.append(entry)
             walk(point)
 
     walk(nav_map)

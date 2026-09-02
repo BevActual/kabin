@@ -76,6 +76,7 @@ from .reader import (  # noqa: E402
     reader_backend_for,
     reader_cache_root,
     reader_uri_allowed,
+    prune_remote_read_cache,
     remote_read_cache_path,
     remote_read_suffix,
     resume_page,
@@ -481,6 +482,8 @@ class MainWindow(Adw.ApplicationWindow):
         self._reader_pages = None
         self._reader_page_count = 0
         self._reader_page_index = 0
+        self._reader_pending_fragment = ""
+        self._reader_pdf_width = 0
         self._reader_request = 0
         self._reader_return_stack = "library"
         self._reader_render_queue = queue.Queue()
@@ -1155,6 +1158,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.reader_picture.set_hexpand(True)
         self.reader_picture.set_vexpand(True)
         self.reader_picture.add_css_class("kabin-reader-picture")
+        self.reader_picture.connect("notify::width", self._on_reader_pdf_size)
+        self.reader_picture.connect("notify::height", self._on_reader_pdf_size)
 
         self.reader_status = Adw.StatusPage(title="Opening…", icon_name="view-paged-symbolic")
         self.reader_status.set_vexpand(True)
@@ -2459,6 +2464,14 @@ class MainWindow(Adw.ApplicationWindow):
             self._toast(f"Could not open {item.title} · {error}")
             return False
         item.extra["path"] = str(dest)
+        try:
+            # Touch first so prune's mtime ranking keeps the book we just
+            # fetched instead of deleting it as the oldest entry.
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.touch()
+            prune_remote_read_cache()
+        except OSError:
+            pass
         self._open_reader(item)
         return False
 
@@ -2515,8 +2528,8 @@ class MainWindow(Adw.ApplicationWindow):
             row.set_child(label)
             row.connect(
                 "clicked",
-                lambda _btn, index=entry["index"]: (
-                    self._reader_show_page(index),
+                lambda _btn, index=entry["index"], fragment=entry.get("fragment", ""): (
+                    self._reader_jump_to(index, fragment),
                     self.reader_toc_button.popdown(),
                 ),
             )
@@ -2542,6 +2555,64 @@ class MainWindow(Adw.ApplicationWindow):
         self.reader_content_stack.add_named(webview, "html")
         self.reader_webview = webview
         return webview
+
+
+    def _reader_scroll_to_fragment(self, webview, fragment: str):
+        """Scroll to a TOC #fragment after load. Briefly enables JS for one
+        host-initiated evaluate — page scripts stay off via settings."""
+        import json
+
+        frag = (fragment or "").lstrip("#")
+        if not frag or webview is None:
+            return
+        script = (
+            "(() => { const id = %s;"
+            " const el = document.getElementById(id)"
+            " || document.getElementsByName(id)[0];"
+            " if (el) el.scrollIntoView(); })();" % json.dumps(frag)
+        )
+        settings = webview.get_settings()
+        was_js = False
+        try:
+            was_js = bool(settings.get_enable_javascript())
+            settings.set_enable_javascript(True)
+        except Exception:
+            pass
+
+        def _restore(*_args):
+            try:
+                settings.set_enable_javascript(was_js)
+            except Exception:
+                pass
+            return False
+
+        def _run(_webview, result, _data=None):
+            try:
+                _webview.evaluate_javascript_finish(result)
+            except Exception:
+                pass
+            GLib.idle_add(_restore)
+
+        def _on_load(webview, event):
+            try:
+                from gi.repository import WebKit
+                if event != WebKit.LoadEvent.FINISHED:
+                    return
+            except Exception:
+                return
+            try:
+                webview.disconnect_by_func(_on_load)
+            except Exception:
+                pass
+            try:
+                webview.evaluate_javascript(script, -1, None, None, None, _run, None)
+            except Exception:
+                _restore()
+
+        try:
+            webview.connect("load-changed", _on_load)
+        except Exception:
+            _restore()
 
     def _reader_allowed_roots(self) -> list:
         root = reader_cache_root(self._reader_pages)
@@ -2571,6 +2642,18 @@ class MainWindow(Adw.ApplicationWindow):
         return False
 
 
+
+    def _on_reader_pdf_size(self, *_args):
+        if self._closing or self._reader_backend != "pdf" or not self._reader_pages:
+            return
+        if self.main_stack.get_visible_child_name() != "reader":
+            return
+        width = self._reader_target_width()
+        if abs(width - (self._reader_pdf_width or 0)) < 64:
+            return
+        self._reader_pdf_width = width
+        self._reader_show_page(self._reader_page_index)
+
     def _reader_target_width(self) -> int:
         """Pixel width to rasterize PDF pages at, matching the reader pane."""
         widget = getattr(self, "reader_picture", None)
@@ -2579,6 +2662,10 @@ class MainWindow(Adw.ApplicationWindow):
             width = PDF_RENDER_WIDTH
         scale = self.get_scale_factor() if hasattr(self, "get_scale_factor") else 1.0
         return max(320, int(width * max(1.0, float(scale))))
+
+    def _reader_jump_to(self, index: int, fragment: str = ""):
+        self._reader_pending_fragment = fragment or ""
+        self._reader_show_page(index)
 
     def _reader_show_page(self, index: int):
         pages = self._reader_pages
@@ -2599,6 +2686,8 @@ class MainWindow(Adw.ApplicationWindow):
         # opening a file or turning a page, PDF or not — is serialized
         # through one worker to rule that out.
         target_width = self._reader_target_width() if backend == "pdf" else None
+        if backend == "pdf":
+            self._reader_pdf_width = target_width or 0
         self._reader_render_queue.put(("page", request_id, pages, backend, item, index, total, target_width))
 
     def _reader_render_loop(self):
@@ -2653,6 +2742,10 @@ class MainWindow(Adw.ApplicationWindow):
                 # text. FB2 pages are plain HTML Kabin generated itself,
                 # so this is just consistent, not load-bearing for them.
                 webview.load_bytes(GLib.Bytes.new(data), "text/html", "utf-8", base_uri)
+                fragment = self._reader_pending_fragment
+                self._reader_pending_fragment = ""
+                if fragment:
+                    self._reader_scroll_to_fragment(webview, fragment)
             except Exception as exc:
                 self._toast(f"Could not render this page · {exc}")
                 return False
@@ -2700,6 +2793,18 @@ class MainWindow(Adw.ApplicationWindow):
         elif self._reader_backend in HTML_READER_BACKENDS:
             widget = self.reader_webview
         return step_adjustment(scroll_adjustment(widget), direction)
+
+    def _reader_step(self, direction: int):
+        """Scroll within the current page when possible; otherwise turn.
+
+        Used by Space / Page Up / Page Down on EPUB, FB2, and TXT so they
+        match pad up/down instead of skipping unread text.
+        """
+        if uses_tap_zones(self._reader_backend):
+            self._reader_turn(direction)
+            return
+        if not self._reader_scroll(direction):
+            self._reader_turn(direction)
 
     def _reader_turn(self, delta: int):
         if not self._reader_pages:
@@ -3140,14 +3245,12 @@ class MainWindow(Adw.ApplicationWindow):
         if on_reader:
             if action == "back":
                 self._close_reader()
-            elif action in ("left", "prev"):
-                self._reader_turn(-1)
-            elif action in ("right", "next"):
-                self._reader_turn(1)
+            elif action in ("left", "right"):
+                self._reader_turn(-1 if action == "left" else 1)
+            elif action in ("prev", "next"):
+                self._reader_step(-1 if action == "prev" else 1)
             elif action in ("up", "down"):
-                direction = -1 if action == "up" else 1
-                if not self._reader_scroll(direction):
-                    self._reader_turn(direction)
+                self._reader_step(-1 if action == "up" else 1)
             return False
 
         on_details = self.main_stack.get_visible_child_name() == "details"
@@ -3275,7 +3378,7 @@ class MainWindow(Adw.ApplicationWindow):
             and not self._cabinet_chrome_focused()
             and keyval == Gdk.KEY_space
         ):
-            self._reader_turn(1)
+            self._reader_step(1)
             return True
         if self._playback and not self._cabinet_chrome_focused():
             if keyval in (Gdk.KEY_space, Gdk.KEY_AudioPlay, Gdk.KEY_AudioPause):
