@@ -49,14 +49,21 @@ def save_progress(config, item_id: str, position: float, duration: float = 0, tr
     config.save()
 
 
-def adopt_progress(config, item_id: str, payload) -> bool:
+def adopt_progress(config, item_id: str, payload, save: bool = True) -> bool:
+    """Take `payload` as this item's progress if it's newer than ours.
+
+    Pass save=False when adopting several items in a row (a library
+    refresh syncing every book from a paired host) and save once after,
+    instead of writing the whole config per item.
+    """
     if not payload:
         return False
     incoming = public_progress(payload)
     if incoming["updated_at"] <= progress_for(config, item_id)["updated_at"]:
         return False
     progress_map(config)[item_id] = incoming
-    config.save()
+    if save:
+        config.save()
     return True
 
 

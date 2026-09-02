@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 import tarfile
@@ -20,6 +21,8 @@ from kabin.reader import (
     TextPages,
     open_comic_pages,
     open_reader_pages,
+    parse_xml,
+    prune_cache,
     opens_in_kabin_reader,
     reader_backend_for,
     resume_page,
@@ -290,6 +293,34 @@ class TestComicPages(unittest.TestCase):
 
 @unittest.skipUnless(_BSDTAR_AVAILABLE, "bsdtar not installed")
 class TestComicArchivePages(unittest.TestCase):
+    def test_glob_characters_in_page_names_extract_literally(self):
+        # Regression: bsdtar treats the trailing argument as a shell-style
+        # pattern, so a page named "page*.jpg" matched every page and the
+        # reader was handed all of them concatenated - one corrupt image.
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "src"
+            src.mkdir()
+            (src / "page1.jpg").write_bytes(b"AAAA")
+            (src / "page2.jpg").write_bytes(b"BBBB")
+            (src / "page*.jpg").write_bytes(b"GLOB")
+            (src / "page?.jpg").write_bytes(b"QUES")
+            (src / "page[1].jpg").write_bytes(b"BRAK")
+            cb7 = Path(tmp) / "issue.cb7"
+            subprocess.run(
+                ["bsdtar", "-cf", str(cb7), "--format=7zip", "-C", str(src)]
+                + sorted(p.name for p in src.iterdir()),
+                check=True,
+            )
+            pages = open_reader_pages(cb7, "comic-7z")
+            by_name = {name: pages.page_bytes(i) for i, name in enumerate(pages.names)}
+            pages.close()
+
+        self.assertEqual(by_name["page1.jpg"], b"AAAA")
+        self.assertEqual(by_name["page2.jpg"], b"BBBB")
+        self.assertEqual(by_name["page*.jpg"], b"GLOB")
+        self.assertEqual(by_name["page?.jpg"], b"QUES")
+        self.assertEqual(by_name["page[1].jpg"], b"BRAK")
+
     def test_cb7_pages_are_naturally_sorted_and_readable(self):
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "src"
@@ -447,6 +478,31 @@ class TestEpubPages(unittest.TestCase):
                 second = EpubPages(epub)
                 self.assertEqual(second.hrefs, first.hrefs)
 
+    def test_replacing_the_file_in_place_is_not_served_from_the_old_cache(self):
+        # Regression: the cache key was the path alone, so replacing a book
+        # in place (a better scan re-downloaded over it, Calibre rewriting
+        # metadata, Syncthing pulling an update) kept serving the previous
+        # extraction forever.
+        with tempfile.TemporaryDirectory() as tmp:
+            epub = Path(tmp) / "book.epub"
+            _write_epub(epub)
+            cache_root = Path(tmp) / "epub-cache"
+            with patch("kabin.reader.epub_cache_root", return_value=cache_root):
+                first = open_reader_pages(epub, "epub")
+                self.assertIn("Chapter one", first.page_bytes(0).decode())
+
+                # Same path, different contents (and a distinct mtime).
+                epub.unlink()
+                _write_epub_with_nav(epub)
+                os.utime(epub, (1_000_000, 1_000_000))
+
+                second = open_reader_pages(epub, "epub")
+                self.assertEqual(len(second), 3)
+                self.assertEqual(
+                    [entry["title"] for entry in second.toc],
+                    ["Chapter One", "Chapter Two", "Chapter Three, Section One"],
+                )
+
     def test_zip_slip_entries_are_not_extracted_outside_the_cache_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             epub = Path(tmp) / "evil.epub"
@@ -495,6 +551,78 @@ _FB2_EMPTY_BOOK = b"""<?xml version="1.0" encoding="UTF-8"?>
   <body></body>
 </FictionBook>
 """
+
+
+class TestCachePruning(unittest.TestCase):
+    def test_old_extractions_are_pruned_and_recent_ones_kept(self):
+        # Regression: every EPUB/FB2 ever opened was extracted to its own
+        # folder and never cleaned up - a second copy of the whole library
+        # on disk, including books long since deleted and superseded copies
+        # of books edited in place.
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_root = Path(tmp) / "epub-cache"
+            books = Path(tmp) / "books"
+            books.mkdir()
+
+            opened = []
+            with patch("kabin.reader.epub_cache_root", return_value=cache_root), patch(
+                "kabin.reader.CACHED_BOOKS_KEPT", 3
+            ):
+                for index in range(6):
+                    epub = books / f"book{index}.epub"
+                    _write_epub(epub)
+                    opened.append(open_reader_pages(epub, "epub")._root)
+
+            surviving = {entry.name for entry in cache_root.iterdir() if entry.is_dir()}
+            self.assertEqual(len(surviving), 3)
+            # The three most recently opened books are the ones kept.
+            self.assertEqual(surviving, {root.name for root in opened[-3:]})
+
+    def test_pruning_a_missing_cache_root_is_harmless(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prune_cache(Path(tmp) / "not-created-yet")
+
+
+class TestXmlSafety(unittest.TestCase):
+    def test_entity_bomb_is_refused_rather_than_expanded(self):
+        # "Billion laughs": ElementTree expands internal entities, so a few
+        # hundred bytes of nested declarations become gigabytes in memory.
+        # Ebooks routinely come from the internet, so refuse the file.
+        bomb = b"""<?xml version="1.0"?>
+<!DOCTYPE FictionBook [
+  <!ENTITY a "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">
+  <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">
+  <!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">
+  <!ENTITY d "&c;&c;&c;&c;&c;&c;&c;&c;&c;&c;">
+]>
+<FictionBook><body><section><p>&d;</p></section></body></FictionBook>"""
+        with self.assertRaisesRegex(ValueError, "entity declarations"):
+            parse_xml(bomb)
+
+    def test_ordinary_documents_still_parse(self):
+        for doc in (
+            b'<?xml version="1.0"?><FictionBook><p>caf&#233; &amp; cream</p></FictionBook>',
+            b'<?xml version="1.0"?><!DOCTYPE html><html><body><p>hi</p></body></html>',
+            b'<?xml version="1.0"?><!-- note --><FictionBook><p>x</p></FictionBook>',
+            # Only the prolog is scanned, so content may mention the string.
+            b'<?xml version="1.0"?><FictionBook><p>the &lt;!ENTITY bit</p></FictionBook>',
+            b'<?xml version="1.0"?><FictionBook><p><![CDATA[<!ENTITY e "x">]]></p></FictionBook>',
+        ):
+            self.assertIsNotNone(parse_xml(doc))
+
+    def test_an_fb2_bomb_is_refused_at_open(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fb2 = Path(tmp) / "bomb.fb2"
+            fb2.write_bytes(
+                b'<?xml version="1.0"?>\n<!DOCTYPE FictionBook [\n'
+                b'  <!ENTITY a "aaaaaaaaaa">\n'
+                b'  <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">\n]>\n'
+                b"<FictionBook><body><section><p>&b;</p></section></body></FictionBook>"
+            )
+            cache_root = Path(tmp) / "fb2-cache"
+            with patch("kabin.reader.fb2_cache_root", return_value=cache_root):
+                with self.assertRaises(ValueError):
+                    open_reader_pages(fb2, "fb2")
 
 
 class TestFB2Pages(unittest.TestCase):
@@ -558,16 +686,27 @@ class TestReaderProgress(unittest.TestCase):
             self.assertEqual(resume_page(config, "comic:1"), 0)
 
 
-def _local(item_id, media_type="comic"):
-    return SimpleNamespace(id=item_id, source="comic", media_type=media_type, extra={})
+def _local(item_id, media_type="comic", directory=None, contents=b"local book bytes"):
+    """A local item backed by a real file, since sync compares file sizes."""
+    extra = {}
+    if directory is not None:
+        path = Path(directory) / item_id.split(":", 1)[-1]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(contents)
+        extra["path"] = str(path)
+    return SimpleNamespace(id=item_id, source="comic", media_type=media_type, extra=extra)
 
 
-def _remote(remote_id, media_type="comic", progress=None, host="Office"):
+def _remote(remote_id, media_type="comic", progress=None, host="Office", size=None):
     return SimpleNamespace(
         id=f"remote:{host}:{remote_id}",
         source="remote",
         media_type=media_type,
-        extra={"remote_id": remote_id, "progress": progress or {}},
+        extra={
+            "remote_id": remote_id,
+            "progress": progress or {},
+            "size": len(b"local book bytes") if size is None else size,
+        },
     )
 
 
@@ -579,7 +718,7 @@ class TestSyncProgressFromRemote(unittest.TestCase):
 
     def test_adopts_remote_progress_onto_the_matching_local_item(self):
         games = [
-            _local("comic:issue1.cbz"),
+            _local("comic:issue1.cbz", directory=self._tmp.name),
             _remote(
                 "comic:issue1.cbz",
                 progress={"position": 5, "duration": 20, "track": 0, "updated_at": 1000},
@@ -592,7 +731,7 @@ class TestSyncProgressFromRemote(unittest.TestCase):
         save_progress(self.config, "book:novel.epub", 40, 100)
         local_updated_at = progress_for(self.config, "book:novel.epub")["updated_at"]
         games = [
-            _local("book:novel.epub", media_type="book"),
+            _local("book:novel.epub", media_type="book", directory=self._tmp.name),
             _remote(
                 "book:novel.epub",
                 media_type="book",
@@ -617,9 +756,38 @@ class TestSyncProgressFromRemote(unittest.TestCase):
         sync_progress_from_remote(games, self.config)
         self.assertEqual(self.config.data.get("progress", {}), {})
 
+    def test_a_different_book_with_the_same_name_does_not_contaminate(self):
+        # Item ids are relative paths, so two differently-organised
+        # libraries can share a filename ("01.cbz", "book.pdf") without
+        # being the same book at all. Adopting on the id alone dropped the
+        # reader onto a page of a book you never opened - and showed the
+        # remote's page count in the progress ring.
+        games = [
+            _local("comic:01.cbz", directory=self._tmp.name, contents=b"a short local comic"),
+            _remote(
+                "comic:01.cbz",
+                size=90210,  # a much bigger, unrelated book of the same name
+                progress={"position": 300, "duration": 500, "track": 0, "updated_at": 9999},
+            ),
+        ]
+        sync_progress_from_remote(games, self.config)
+        self.assertEqual(self.config.data.get("progress", {}), {})
+
+    def test_a_host_that_reports_no_size_is_skipped(self):
+        games = [
+            _local("comic:issue1.cbz", directory=self._tmp.name),
+            _remote(
+                "comic:issue1.cbz",
+                size=0,
+                progress={"position": 5, "duration": 20, "track": 0, "updated_at": 1000},
+            ),
+        ]
+        sync_progress_from_remote(games, self.config)
+        self.assertEqual(self.config.data.get("progress", {}), {})
+
     def test_remote_games_are_not_synced_as_reader_progress(self):
         games = [
-            _local("roms:zelda.gba", media_type="game"),
+            _local("roms:zelda.gba", media_type="game", directory=self._tmp.name),
             _remote(
                 "roms:zelda.gba",
                 media_type="game",

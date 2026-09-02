@@ -67,6 +67,7 @@ def discover(
                         "playable": bool(remote.get("playable")),
                         "track_count": int(remote.get("track_count") or 0),
                         "progress": remote.get("progress") or {},
+                        "size": remote.get("size") or 0,
                     },
                     media_type=kind.id,
                     media_format=str(remote.get("media_format") or ""),

@@ -34,6 +34,62 @@ from .reader import READABLE_KINDS
 from .streaming import media_capabilities, stream_offer
 
 
+def parse_byte_range(range_header: str, size: int) -> tuple[str, int, int]:
+    """Resolve one RFC 7233 byte range against a known file size.
+
+    Returns ("full", 0, size - 1) to serve the whole file (no range, a
+    range we don't handle, or a malformed one - which RFC 7233 says to
+    ignore rather than reject), ("partial", start, end) inclusive, or
+    ("unsatisfiable", 0, 0) for a range that starts past the end.
+
+    The previous inline parsing got suffix ranges backwards - "bytes=-5"
+    means the *last* five bytes, but it served the first six - and
+    answered 206 with a nonsensical Content-Range for ranges past EOF
+    instead of 416.
+    """
+    full = ("full", 0, max(0, size - 1))
+    if not size or not range_header.startswith("bytes="):
+        return full
+    spec = range_header.removeprefix("bytes=").strip()
+    if "," in spec:
+        # Multiple ranges would need multipart/byteranges; serving the
+        # whole entity instead is allowed.
+        return full
+    start_text, separator, end_text = spec.partition("-")
+    if not separator:
+        return full
+    try:
+        if not start_text:
+            suffix = int(end_text)
+            if suffix <= 0:
+                return full
+            return ("partial", max(0, size - suffix), size - 1)
+        start = int(start_text)
+        end = int(end_text) if end_text else size - 1
+    except ValueError:
+        return full
+    if start < 0 or end < 0:
+        return full
+    if start >= size:
+        return ("unsatisfiable", 0, 0)
+    end = min(end, size - 1)
+    if end < start:
+        return ("unsatisfiable", 0, 0)
+    return ("partial", start, end)
+
+
+def _pairing_bytes(value) -> bytes:
+    """Bytes for a constant-time compare.
+
+    hmac.compare_digest refuses non-ASCII str outright, and the code comes
+    straight from a JSON body, so a single accented character used to
+    raise TypeError mid-request: the client saw a dropped connection
+    instead of "invalid code", and - because it raised before the failure
+    was recorded - the attempt escaped rate-limit accounting entirely.
+    """
+    return str(value).encode("utf-8", "surrogatepass")
+
+
 def _tracks_progress(item) -> bool:
     """Whether the host should publish `item`'s saved position in the
     public catalog — video/music (play position) and book/comic (page
@@ -47,6 +103,10 @@ def _tracks_progress(item) -> bool:
 
 SERVICE_TYPE = "_kabin._tcp"
 SESSION_TTL = 600
+# Streaming sessions are one-at-a-time in practice; the cap only exists so
+# a client that keeps retrying (or a hostile paired device) can't pile them
+# up without bound.
+MAX_SESSIONS = 32
 PAIR_WINDOW = 30
 PAIR_MAX_FAILURES = 8
 MAX_PAYLOAD_BYTES = 65536  # WebRTC offers with several ICE candidates can exceed a few KB
@@ -104,7 +164,24 @@ def serialize_item(item, media_dirs=None, progress=None) -> dict:
     }
     if progress is not None:
         public["progress"] = public_progress(progress)
+        if kind_for(item).id in READABLE_KINDS:
+            # Reading progress is matched across devices by item id, which
+            # is a *relative path* - so two differently-organised libraries
+            # can collide on a common name ("01.cbz", "book.pdf") and adopt
+            # each other's position. Publishing the size lets the other
+            # side confirm it's actually the same file. Not path-revealing.
+            public["size"] = _item_size(item)
     return public
+
+
+def _item_size(item) -> int:
+    raw = (getattr(item, "extra", None) or {}).get("path")
+    if not raw:
+        return 0
+    try:
+        return Path(raw).stat().st_size
+    except OSError:
+        return 0
 
 
 def serialize_game(game, media_dirs=None, progress=None) -> dict:
@@ -215,20 +292,18 @@ class HostService:
                 except OSError:
                     self._json(HTTPStatus.NOT_FOUND, {"error": "media not found"})
                     return
-                start, end = 0, size - 1
-                range_header = self.headers.get("Range", "")
-                if range_header.startswith("bytes=") and size:
-                    spec = range_header.removeprefix("bytes=")
-                    start_text, _, end_text = spec.partition("-")
-                    try:
-                        if start_text:
-                            start = max(0, int(start_text))
-                        if end_text:
-                            end = min(size - 1, int(end_text))
-                    except ValueError:
-                        start, end = 0, size - 1
+                kind, start, end = parse_byte_range(self.headers.get("Range", ""), size)
+                if kind == "unsatisfiable":
+                    handle.close()
+                    self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                    self.send_header("Content-Range", f"bytes */{size}")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
                 length = max(0, end - start + 1)
-                status = HTTPStatus.PARTIAL_CONTENT if start > 0 or end < size - 1 else HTTPStatus.OK
+                status = (
+                    HTTPStatus.PARTIAL_CONTENT if kind == "partial" else HTTPStatus.OK
+                )
                 self.send_response(status)
                 self.send_header("Content-Type", "application/octet-stream")
                 self.send_header("Content-Length", str(length))
@@ -500,7 +575,7 @@ class HostService:
         valid = (
             self.pairing_code is not None
             and time.monotonic() <= self.pairing_expires
-            and hmac.compare_digest(code, self.pairing_code)
+            and hmac.compare_digest(_pairing_bytes(code), _pairing_bytes(self.pairing_code))
         )
         if valid:
             self.pairing_code = None
@@ -509,6 +584,38 @@ class HostService:
             return "ok"
         self._pair_failures.append(now)
         return "invalid"
+
+    def _drop_sessions_locked(self, session_ids) -> list:
+        """Forget these sessions; returns their helpers for the caller to
+        close *outside* the lock (closing waits on a subprocess)."""
+        helpers = []
+        for session_id in session_ids:
+            self.sessions.pop(session_id, None)
+            self.session_games.pop(session_id, None)
+            helper = self.session_helpers.pop(session_id, None)
+            if helper:
+                helpers.append(helper)
+        return helpers
+
+    def _expire_sessions_locked(self, now: float) -> list:
+        """Sweep timed-out sessions, then oldest-first past MAX_SESSIONS.
+
+        Nothing used to walk this dict - get_session only pruned the single
+        id being fetched, and only if it had already expired - so a paired
+        device could pile up sessions without limit just by retrying, each
+        pinning a catalog item and a capabilities snapshot, and each
+        negotiated one holding an open kabin-media-helper process.
+        """
+        expired = [
+            session_id
+            for session_id, session in self.sessions.items()
+            if now - session["created_at"] > SESSION_TTL
+        ]
+        live = [session_id for session_id in self.sessions if session_id not in set(expired)]
+        if len(live) > MAX_SESSIONS:
+            live.sort(key=lambda session_id: self.sessions[session_id]["created_at"])
+            expired.extend(live[: len(live) - MAX_SESSIONS])
+        return self._drop_sessions_locked(expired)
 
     def prepare_session(self, game_id: str) -> dict | None:
         game = next(
@@ -531,18 +638,26 @@ class HostService:
         with self.sessions_lock:
             self.sessions[session_id] = session
             self.session_games[session_id] = game
+            # Swept after inserting so the cap counts this session too;
+            # it's the newest, so oldest-first eviction never drops it.
+            stale_helpers = self._expire_sessions_locked(time.time())
+        for helper in stale_helpers:
+            helper.close()
         return dict(session)
 
     def get_session(self, session_id: str) -> dict | None:
+        stale_helpers = []
+        result = None
         with self.sessions_lock:
             session = self.sessions.get(session_id)
-            if not session:
-                return None
-            if time.time() - session["created_at"] > SESSION_TTL:
-                self.sessions.pop(session_id, None)
-                self.session_games.pop(session_id, None)
-                return None
-            return dict(session)
+            if session is not None:
+                if time.time() - session["created_at"] > SESSION_TTL:
+                    stale_helpers = self._drop_sessions_locked([session_id])
+                else:
+                    result = dict(session)
+        for helper in stale_helpers:
+            helper.close()
+        return result
 
     def mark_media_connected(self, session_id: str) -> bool:
         with self.sessions_lock:

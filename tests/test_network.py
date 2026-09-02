@@ -10,12 +10,14 @@ from unittest.mock import patch
 
 from kabin.config import Config
 from kabin.network import (
+    MAX_SESSIONS,
     HostService,
     SESSION_TTL,
     ensure_host_certificate,
     fetch_remote_library,
     pair_with_host,
     parse_avahi_hosts,
+    parse_byte_range,
     prepare_remote_session,
     serialize_game,
     signal_remote_session,
@@ -330,6 +332,99 @@ class TestNetwork(unittest.TestCase):
             self.assertIsNone(service.get_session(session["id"]))
             self.assertNotIn(session["id"], service.session_games)
 
+    def test_byte_range_parsing_follows_rfc7233(self):
+        # Regression: "bytes=-5" means the *last* five bytes, but the old
+        # inline parsing served the first six - silently wrong data - and
+        # answered 206 with a nonsensical Content-Range for ranges past
+        # EOF instead of 416.
+        self.assertEqual(parse_byte_range("bytes=-5", 10), ("partial", 5, 9))
+        self.assertEqual(parse_byte_range("bytes=2-5", 10), ("partial", 2, 5))
+        self.assertEqual(parse_byte_range("bytes=5-", 10), ("partial", 5, 9))
+        self.assertEqual(parse_byte_range("bytes=0-100", 10), ("partial", 0, 9))
+        self.assertEqual(parse_byte_range("bytes=100-200", 10), ("unsatisfiable", 0, 0))
+        self.assertEqual(parse_byte_range("bytes=8-2", 10), ("unsatisfiable", 0, 0))
+        # Malformed, multi-range and absent headers all serve the whole file.
+        for header in ("", "bytes=abc", "bytes=0-1,5-6", "items=0-1"):
+            self.assertEqual(parse_byte_range(header, 10), ("full", 0, 9))
+
+    def test_media_stream_serves_suffix_and_rejects_impossible_ranges(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            library = Path(tmp) / "films"
+            library.mkdir()
+            media = library / "film.mkv"
+            media.write_bytes(b"0123456789")
+            config = Config(path=Path(tmp) / "config.json")
+            config.network["port"] = 0
+            config.media_dirs.append({"path": str(library), "media_type": "video"})
+            item = SimpleNamespace(
+                id="video:film.mkv",
+                title="Film",
+                source="video",
+                subtitle="Movie",
+                icon_path=None,
+                extra={"path": str(media)},
+                media_type="video",
+            )
+            service = HostService(config, lambda: [item], tls=False)
+            with patch.object(service, "_publish"):
+                service.start()
+            self.addCleanup(service.stop)
+            token = config.ensure_network_token()
+            url = f"http://127.0.0.1:{service.server.server_port}/v1/media/stream?id=video:film.mkv"
+
+            request = urllib.request.Request(
+                url, headers={"Authorization": f"Bearer {token}", "Range": "bytes=-4"}
+            )
+            with urllib.request.urlopen(request) as response:
+                self.assertEqual(response.status, 206)
+                self.assertEqual(response.read(), b"6789")
+                self.assertEqual(response.headers.get("Content-Range"), "bytes 6-9/10")
+
+            request = urllib.request.Request(
+                url, headers={"Authorization": f"Bearer {token}", "Range": "bytes=50-60"}
+            )
+            with self.assertRaises(urllib.error.HTTPError) as refused:
+                urllib.request.urlopen(request)
+            self.assertEqual(refused.exception.code, 416)
+            self.assertEqual(refused.exception.headers.get("Content-Range"), "bytes */10")
+            refused.exception.close()
+
+    def test_sessions_are_capped_and_expired_ones_swept(self):
+        # Regression: nothing ever walked the sessions dict, so a paired
+        # device that kept calling prepare_session (a retry loop on a flaky
+        # link, or a hostile one) piled up entries without bound - each
+        # pinning a catalog item, and each negotiated one an open helper
+        # process.
+        game = SimpleNamespace(
+            id="steam:1",
+            title="Game",
+            source="steam",
+            launch=lambda: None,
+        )
+        closed = []
+
+        class FakeHelper:
+            def close(self):
+                closed.append(self)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            service = HostService(
+                Config(path=Path(tmp) / "config.json"), lambda: [game], tls=False
+            )
+            for _ in range(MAX_SESSIONS * 3):
+                service.prepare_session(game.id)
+
+            self.assertLessEqual(len(service.sessions), MAX_SESSIONS)
+            self.assertEqual(len(service.session_games), len(service.sessions))
+
+            # An expired session's helper subprocess is closed, not leaked.
+            stale = service.prepare_session(game.id)
+            service.session_helpers[stale["id"]] = FakeHelper()
+            service.sessions[stale["id"]]["created_at"] -= SESSION_TTL + 1
+            self.assertIsNone(service.get_session(stale["id"]))
+            self.assertNotIn(stale["id"], service.session_helpers)
+            self.assertEqual(len(closed), 1)
+
     def test_artwork_endpoint_requires_authentication_and_hides_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -483,6 +578,11 @@ class TestNetwork(unittest.TestCase):
             by_id = {item["id"]: item for item in catalog["items"]}
             self.assertEqual(by_id["book:novel.epub"]["progress"]["position"], 12)
             self.assertNotIn("progress", by_id["steam:1"])
+            # Published so the other device can confirm it's the same book
+            # before adopting its reading position - ids are relative
+            # paths, which two libraries can collide on.
+            self.assertEqual(by_id["book:novel.epub"]["size"], book_path.stat().st_size)
+            self.assertNotIn(str(book_path), json.dumps(catalog))
 
     def test_media_stream_serves_album_tracks_and_stores_progress(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -604,6 +704,23 @@ class TestNetwork(unittest.TestCase):
                 self.assertEqual(service.attempt_pairing("000000"), "invalid")
             self.assertEqual(service.attempt_pairing("000000"), "locked")
             self.assertEqual(service.attempt_pairing(service.pairing_code or ""), "locked")
+
+    def test_non_ascii_pairing_code_is_rejected_and_still_counted(self):
+        # Regression: hmac.compare_digest refuses non-ASCII str, so a code
+        # with an accented character raised TypeError mid-request. The
+        # caller saw a dropped connection rather than "invalid code", and
+        # the attempt never reached the failure counter - so it escaped
+        # rate limiting entirely.
+        with tempfile.TemporaryDirectory() as tmp:
+            service = HostService(
+                Config(path=Path(tmp) / "config.json"), lambda: [], tls=False
+            )
+            service.create_pairing_code()
+            for code in ("é23456", "🔑", "北京市", "\ud800"):
+                self.assertEqual(service.attempt_pairing(code), "invalid")
+            self.assertEqual(len(service._pair_failures), 4)
+            # The real code still works afterwards.
+            self.assertEqual(service.attempt_pairing(service.pairing_code), "ok")
 
 
 if __name__ == "__main__":

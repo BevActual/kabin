@@ -159,9 +159,23 @@ def _bsdtar_list(path: Path) -> list[str]:
     return [line for line in result.stdout.splitlines() if line and not line.endswith("/")]
 
 
+_BSDTAR_GLOB_CHARS = "*?[\\"
+
+
+def _bsdtar_pattern(member: str) -> str:
+    """Escape a member name so bsdtar matches it literally.
+
+    bsdtar treats trailing arguments as shell-style *patterns*, not names,
+    so a page called "page*.jpg" would otherwise match (and concatenate)
+    every page in the archive - handing the reader one corrupt image built
+    from several. Backslash-escaping the metacharacters makes it literal.
+    """
+    return "".join("\\" + ch if ch in _BSDTAR_GLOB_CHARS else ch for ch in member)
+
+
 def _bsdtar_extract(path: Path, member: str) -> bytes:
     result = subprocess.run(
-        ["bsdtar", "-xOf", str(path), member],
+        ["bsdtar", "-xOf", str(path), _bsdtar_pattern(member)],
         capture_output=True,
         check=True,
         timeout=30,
@@ -272,9 +286,82 @@ def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
+_XML_ELEMENT_START = re.compile(rb"<[A-Za-z_]")
+
+
+def parse_xml(data: bytes):
+    """ElementTree parse that refuses DTD-declared entities.
+
+    ElementTree expands internal entities, so a book can nest them to blow
+    up exponentially - a "billion laughs" bomb, where a few hundred bytes
+    become gigabytes in memory. Ebooks routinely arrive from the internet,
+    so refuse entity declarations rather than trusting the file. Only the
+    prolog is scanned (declarations can't appear anywhere else), so content
+    that merely mentions "<!ENTITY" still parses; the predefined XML
+    entities and numeric character references are unaffected.
+    """
+    match = _XML_ELEMENT_START.search(data)
+    prolog = data[: match.start()] if match else data
+    if b"<!ENTITY" in prolog:
+        raise ValueError("XML entity declarations are not allowed")
+    return ET.fromstring(data)
+
+
 def epub_cache_root() -> Path:
     base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
     return base / "kabin" / "epub"
+
+
+def cache_key_for(path: Path) -> str:
+    """Cache directory name for `path`'s *current contents*.
+
+    Keying on the path alone means replacing a book in place - a better
+    scan re-downloaded over the old one, Calibre rewriting metadata,
+    Syncthing pulling an update - keeps serving the previous extraction
+    forever. Mixing in size and mtime makes a replaced file a cache miss
+    without having to hash the whole book on every open.
+    """
+    try:
+        info = path.stat()
+        identity = f"{path.resolve()}\0{info.st_size}\0{info.st_mtime_ns}"
+    except OSError:
+        identity = str(path)
+    return hashlib.sha256(identity.encode()).hexdigest()
+
+
+# Each opened EPUB/FB2 is extracted to its own folder under the cache
+# root. Nothing else prunes them, so without a cap the cache accumulates a
+# second copy of every book ever opened - including books since deleted,
+# and superseded copies of books edited in place.
+CACHED_BOOKS_KEPT = 20
+
+
+def touch_cache_dir(directory: Path) -> None:
+    """Mark a cache folder as just-used, so pruning keeps it."""
+    try:
+        os.utime(directory)
+    except OSError:
+        pass
+
+
+def prune_cache(root: Path, keep: int | None = None) -> None:
+    """Keep only the `keep` most recently used extractions under `root`."""
+    if keep is None:
+        keep = CACHED_BOOKS_KEPT
+    try:
+        entries = [entry for entry in root.iterdir() if entry.is_dir()]
+    except OSError:
+        return
+
+    def used_at(entry: Path) -> float:
+        try:
+            return entry.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    entries.sort(key=used_at, reverse=True)
+    for stale in entries[keep:]:
+        shutil.rmtree(stale, ignore_errors=True)
 
 
 _EPUB_NAV_TYPE_ATTR = "{http://www.idpf.org/2007/ops}type"
@@ -351,7 +438,7 @@ def _extract_toc(archive, opf, items, manifest, opf_base_dir: str, hrefs: list[s
             posixpath.join(opf_base_dir, urllib.parse.unquote(nav_item.get("href")))
         )
         try:
-            nav_root = ET.fromstring(archive.read(nav_path))
+            nav_root = parse_xml(archive.read(nav_path))
             toc = _epub3_nav_toc(nav_root, posixpath.dirname(nav_path), hrefs)
             if toc:
                 return toc
@@ -372,7 +459,7 @@ def _extract_toc(archive, opf, items, manifest, opf_base_dir: str, hrefs: list[s
             posixpath.join(opf_base_dir, urllib.parse.unquote(ncx_href))
         )
         try:
-            ncx_root = ET.fromstring(archive.read(ncx_path))
+            ncx_root = parse_xml(archive.read(ncx_path))
             return _ncx_toc(ncx_root, posixpath.dirname(ncx_path), hrefs)
         except (KeyError, ET.ParseError):
             pass
@@ -392,22 +479,26 @@ class EpubPages:
     a spine index — empty if the book has neither or neither parses."""
 
     def __init__(self, path: Path):
-        digest = hashlib.sha256(str(path.resolve()).encode()).hexdigest()
-        self._root = epub_cache_root() / digest
+        digest = cache_key_for(path)
+        cache_root = epub_cache_root()
+        self._root = cache_root / digest
         spine_cache = self._root / ".kabin-spine.json"
         if spine_cache.is_file():
             try:
                 cached = json.loads(spine_cache.read_text())
                 self.hrefs = cached["hrefs"]
                 self.toc = cached["toc"]
+                touch_cache_dir(self._root)
                 return
             except (OSError, json.JSONDecodeError, KeyError, TypeError):
                 pass
         self.hrefs, self.toc = self._extract(path, spine_cache)
+        touch_cache_dir(self._root)
+        prune_cache(cache_root)
 
     def _extract(self, path: Path, spine_cache: Path) -> tuple[list[str], list[dict]]:
         with zipfile.ZipFile(path) as archive:
-            container = ET.fromstring(archive.read("META-INF/container.xml"))
+            container = parse_xml(archive.read("META-INF/container.xml"))
             rootfile = next(
                 (
                     node
@@ -419,7 +510,7 @@ class EpubPages:
             if rootfile is None:
                 raise ValueError("EPUB is missing a rootfile")
             opf_path = rootfile.get("full-path")
-            opf = ET.fromstring(archive.read(opf_path))
+            opf = parse_xml(archive.read(opf_path))
             items = [item for item in opf.iter() if _local_name(item.tag) == "item"]
             manifest = {
                 item.get("id"): item.get("href")
@@ -560,21 +651,25 @@ class FB2Pages:
     from the section titles."""
 
     def __init__(self, path: Path):
-        digest = hashlib.sha256(str(path.resolve()).encode()).hexdigest()
-        self._root = fb2_cache_root() / digest
+        digest = cache_key_for(path)
+        cache_root = fb2_cache_root()
+        self._root = cache_root / digest
         cache_file = self._root / ".kabin-pages.json"
         if cache_file.is_file():
             try:
                 cached = json.loads(cache_file.read_text())
                 self._pages = cached["pages"]
                 self.toc = cached["toc"]
+                touch_cache_dir(self._root)
                 return
             except (OSError, json.JSONDecodeError, KeyError, TypeError):
                 pass
         self._pages, self.toc = self._extract(path, cache_file)
+        touch_cache_dir(self._root)
+        prune_cache(cache_root)
 
     def _extract(self, path: Path, cache_file: Path) -> tuple[list[str], list[dict]]:
-        root = ET.fromstring(path.read_bytes())
+        root = parse_xml(path.read_bytes())
         self._root.mkdir(parents=True, exist_ok=True)
         binaries = {}
         for binary in root:
@@ -681,13 +776,42 @@ def sync_progress_from_remote(games, config) -> None:
     typically keep a real local copy of on every device (synced via
     Syncthing or copied by hand). If a local item's id matches a remote
     catalog entry's own (unprefixed) id — same kind, same relative path
-    under a media folder — this adopts whichever side has read further,
-    onto the *local* item's progress record (`playback.adopt_progress`
-    already only overwrites when the incoming update is newer)."""
-    local_ids = {game.id for game in games if game.source != "remote"}
+    under a media folder — and the two files are the same size, this
+    adopts whichever side has read further, onto the *local* item's
+    progress record (`playback.adopt_progress` already only overwrites
+    when the incoming update is newer).
+
+    The id is a relative path, so matching on it alone would let two
+    differently-organised libraries that happen to share a filename
+    ("01.cbz", "Chapter 1.epub") adopt each other's position. Comparing
+    sizes as well keeps unrelated books apart; a host that doesn't publish
+    a size is skipped rather than guessed at, since landing on the wrong
+    page is worse than not syncing."""
+    local_sizes = {
+        game.id: _local_size(game) for game in games if game.source != "remote"
+    }
+    adopted = False
     for game in games:
         if game.source != "remote" or kind_for(game).id not in READABLE_KINDS:
             continue
         remote_id = game.extra.get("remote_id") or ""
-        if remote_id in local_ids:
-            playback.adopt_progress(config, remote_id, game.extra.get("progress"))
+        if remote_id not in local_sizes:
+            continue
+        remote_size = int(game.extra.get("size") or 0)
+        if not remote_size or remote_size != local_sizes[remote_id]:
+            continue
+        if playback.adopt_progress(config, remote_id, game.extra.get("progress"), save=False):
+            adopted = True
+    if adopted:
+        # One write for the whole refresh, rather than one per book.
+        config.save()
+
+
+def _local_size(item) -> int:
+    path = playback.playable_file(item)
+    if path is None:
+        return 0
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
