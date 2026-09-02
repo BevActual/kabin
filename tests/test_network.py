@@ -20,6 +20,7 @@ from kabin.network import (
     serialize_game,
     signal_remote_session,
 )
+from kabin.playback import save_progress
 
 
 class TestNetwork(unittest.TestCase):
@@ -440,6 +441,48 @@ class TestNetwork(unittest.TestCase):
                 self.assertEqual(response.status, 206)
                 self.assertEqual(response.read(), b"2345")
                 self.assertEqual(response.headers.get("Content-Range"), "bytes 2-5/10")
+
+    def test_library_exposes_progress_for_book_and_comic_items(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            library = Path(tmp) / "books"
+            library.mkdir()
+            book_path = library / "novel.epub"
+            book_path.write_bytes(b"pk")
+            config = Config(path=Path(tmp) / "config.json")
+            config.network["port"] = 0
+            book = SimpleNamespace(
+                id="book:novel.epub",
+                title="Novel",
+                source="book",
+                subtitle="Book",
+                icon_path=None,
+                extra={"path": str(book_path)},
+                media_type="book",
+            )
+            game = SimpleNamespace(
+                id="steam:1",
+                title="Game",
+                source="steam",
+                subtitle="Steam",
+                icon_path=None,
+                extra={},
+                media_type="game",
+            )
+            save_progress(config, "book:novel.epub", 12, 40)
+            service = HostService(config, lambda: [book, game], tls=False)
+            with patch.object(service, "_publish"):
+                service.start()
+            self.addCleanup(service.stop)
+            token = config.ensure_network_token()
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{service.server.server_port}/v1/library",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            with urllib.request.urlopen(request) as response:
+                catalog = json.loads(response.read())
+            by_id = {item["id"]: item for item in catalog["items"]}
+            self.assertEqual(by_id["book:novel.epub"]["progress"]["position"], 12)
+            self.assertNotIn("progress", by_id["steam:1"])
 
     def test_media_stream_serves_album_tracks_and_stores_progress(self):
         with tempfile.TemporaryDirectory() as tmp:

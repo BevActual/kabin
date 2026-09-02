@@ -8,6 +8,10 @@ bin_dir="$HOME/.local/bin"
 
 "$project_root/scripts/build-media-helper.sh" >/dev/null
 
+if ! python3 -c 'import gi; gi.require_version("WebKit", "6.0"); from gi.repository import WebKit' >/dev/null 2>&1; then
+  echo "Note: webkitgtk-6.0 isn't installed — Kabin will still read PDF, CBZ, and CBT, but EPUB books/comics will open in your system reader instead of Kabin's own reader. Install webkitgtk-6.0 for in-app EPUB reading." >&2
+fi
+
 mkdir -p "$bin_dir"
 cat > "$bin_dir/kabin" <<EOF
 #!/usr/bin/env bash

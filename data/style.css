@@ -695,3 +695,54 @@ button.kabin-tile:focus-visible .kabin-tile-art,
 .kabin-status {
   background-color: transparent;
 }
+
+.kabin-reader-page {
+  background-color: @bg_darker_color;
+}
+
+.kabin-reader-header {
+  padding: 12px 20px;
+  background-color: alpha(@bg_darker_color, 0.92);
+}
+
+.kabin-reader-back {
+  font-weight: 700;
+  min-height: 40px;
+}
+
+.kabin-reader-picture {
+  background-color: @bg_darker_color;
+  padding: 24px;
+}
+
+.kabin-reader-text {
+  background-color: @bg_darker_color;
+  color: @fg_color;
+  font-size: 1.05em;
+  line-height: 1.6;
+}
+
+.kabin-reader-zone {
+  background-color: transparent;
+  border-radius: 0;
+}
+
+.kabin-reader-zone:hover {
+  background-color: alpha(white, 0.04);
+}
+
+.kabin-reader-pager {
+  padding: 10px 20px 16px;
+  background-color: alpha(@bg_darker_color, 0.92);
+}
+
+.kabin-reader-toc-entry {
+  border-radius: 0;
+  padding: 8px 10px;
+  min-height: 36px;
+}
+
+.kabin-reader-toc-entry:hover,
+.kabin-reader-toc-entry:focus {
+  background-color: alpha(@fg_color, 0.06);
+}

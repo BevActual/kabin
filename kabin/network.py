@@ -19,6 +19,7 @@ from pathlib import Path
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from .kinds import kind_for
 from .media import MediaHelperError, MediaHelperSession, answer_host_offer
 from .playback import (
     is_safe_media_file,
@@ -29,7 +30,19 @@ from .playback import (
     save_progress,
     track_count,
 )
+from .reader import READABLE_KINDS
 from .streaming import media_capabilities, stream_offer
+
+
+def _tracks_progress(item) -> bool:
+    """Whether the host should publish `item`'s saved position in the
+    public catalog — video/music (play position) and book/comic (page
+    position) alike. Read-only: books/comics aren't streamed the way
+    video/music are, so there's no POST /v1/media/progress path for them —
+    a paired device with its own local copy of the same file pulls this
+    from the catalog and adopts it onto that local copy instead (see
+    reader.sync_progress_from_remote)."""
+    return plays_in_kabin(item) or kind_for(item).id in READABLE_KINDS
 
 
 SERVICE_TYPE = "_kabin._tcp"
@@ -263,7 +276,7 @@ class HostService:
                         serialize_item(
                             item,
                             service.config.media_dirs,
-                            progress_for(service.config, item.id) if plays_in_kabin(item) else None,
+                            progress_for(service.config, item.id) if _tracks_progress(item) else None,
                         )
                         for item in service.catalog_provider()
                     ]

@@ -4,8 +4,9 @@ Your games and media live here.
 
 Kabin is a personal media host and player — the same class of program as
 Jellyfin or Plex, starting from a game cabinet. One app scans your library,
-serves it to paired Kabin devices, and plays music and video itself. Books
-and comics still open in your reader until Kabin grows its own.
+serves it to paired Kabin devices, plays music and video itself, and reads
+PDF, EPUB, FB2, TXT, CBZ, CBR, CBT, and CB7 books and comics in its own
+reader. MOBI and AZW3 books still open in your system reader.
 
 This is not an Omarchy shell plugin. It's a regular GTK4/libadwaita app you
 launch like any other, and it isn't tied to the Quickshell bar.
@@ -23,9 +24,16 @@ launch like any other, and it isn't tied to the Quickshell bar.
   Kabin groups music by album folder, plays music and video in
   `kabin-media-helper`, and remembers resume position on this device and the
   host. Albums play through as a queue. Space pauses; the bottom bar seeks,
-  skips tracks, and stops. Books and comics open in your default reader.
-  The cabinet uses a poster wall for mixed views, square album cards in
-  Music, and widescreen cards in Movies.
+  skips tracks, and stops. Kabin reads PDF, EPUB, FB2, TXT, CBZ, CBR, CBT,
+  and CB7 books and comics itself, with the same resume-position tracking
+  — the arrow keys, Page Up/Down, and Space turn pages, and a page slider
+  jumps around (TXT has no natural pagination, so it's one scrollable
+  page; FB2 has no CSS of its own, so Kabin styles it to match the reader).
+  EPUB and FB2 need `webkitgtk-6.0` installed, and CBR/CB7 need `bsdtar`
+  (both ship with Omarchy); without those (or for MOBI/AZW3, which Kabin
+  doesn't parse at all) books and comics open in your default reader
+  instead. The cabinet uses a poster wall for mixed views, square album
+  cards in Music, and widescreen cards in Movies.
 - **Emulation Center** — choose a game system and ROM folder; Kabin supplies
   the correct file types and detects compatible native or Flatpak emulators.
   standalone emulators are discovered automatically, and advanced users can
@@ -83,6 +91,12 @@ are selected with `track=`. `GET`/`POST /v1/media/progress` keeps Continue
 in sync across paired Kabin devices. The catalog marks titles `playable`
 and includes resume metadata without exposing a path.
 
+Books and comics aren't streamed — a paired device with its own local copy
+of the same file (synced with Syncthing, say, or just copied by hand) picks
+up reading progress from the catalog automatically on refresh: whichever
+device has read further wins, applied to that device's own local copy. No
+separate setup beyond pairing normally.
+
 Remote game play is a Kabin layer, not a second app. The host captures the
 desktop with PipeWire or X11, encodes it, and sends WebRTC over the existing
 Kabin TLS API. The client decodes that stream in `kabin-media-helper` — the
@@ -103,7 +117,9 @@ this). It needs GStreamer WebRTC plus a capture plugin (`pipewiresrc` or
 Writes a small `kabin` wrapper into `~/.local/bin` that runs this repo
 in place (no pip/venv needed), and puts a `Kabin` entry in your app
 launcher. Requires system GTK4/libadwaita/PyGObject, which Omarchy already
-ships. Make sure `~/.local/bin` is on your `PATH`.
+ships. Make sure `~/.local/bin` is on your `PATH`. Reading PDF, CBZ, and
+CBT books/comics needs nothing beyond that; EPUB additionally needs
+`webkitgtk-6.0` — install.sh warns (without failing) if it isn't found.
 
 Run directly during development with:
 
@@ -128,9 +144,13 @@ Letter keys jump to that letter in the current list.
 - `F2` — surprise me (random title in the current view)
 - `Enter` — open the selected title, then play, read, listen, or watch
 - `Esc` — back, then clear search, then leave fullscreen
-- `Page Up` / `Page Down` — previous or next library
+- `Page Up` / `Page Down` — previous or next library; turns pages while reading
 - `F1` or `Ctrl+,` — open Settings
 - `F11` — toggle fullscreen
+
+While reading, the arrow keys and Space also turn pages, and a page slider
+at the bottom jumps to any page. EPUBs with a table of contents get a
+Chapters button in the reader header to jump straight to any chapter.
 
 ## Tests
 

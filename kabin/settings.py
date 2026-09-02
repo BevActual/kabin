@@ -249,7 +249,7 @@ class AddMediaDirDialog(Adw.Window):
         page = Adw.PreferencesPage()
         group = Adw.PreferencesGroup(
             title="Library",
-            description="Kabin lists the files, plays music and movies itself, and opens books and comics in your reader.",
+            description="Kabin plays music and movies and reads PDF, EPUB, FB2, TXT, CBZ, CBR, CBT, and CB7 itself; MOBI and AZW3 books open in your reader.",
         )
         self.kind_row = Adw.ComboRow(
             title="Media type",
@@ -571,7 +571,7 @@ class SettingsWindow(Adw.PreferencesWindow):
 
         self.media_group = Adw.PreferencesGroup(
             title="Media Folders",
-            description="Books, comics, music, and movies. Kabin hosts and plays music and video, queues albums, and syncs resume to the host. Books and comics still open in your reader.",
+            description="Books, comics, music, and movies. Kabin hosts and plays music and video, queues albums, and syncs resume to the host. Kabin also reads PDF, EPUB, FB2, TXT, CBZ, CBR, CBT, and CB7 itself; MOBI and AZW3 books still open in your reader.",
         )
         add_media = Adw.ButtonRow(title="Add Media Folder")
         add_media.add_css_class("suggested-action")

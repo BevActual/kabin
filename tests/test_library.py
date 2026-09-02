@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,6 +20,13 @@ from kabin.library import (
     resume_hint,
 )
 from kabin.playback import save_progress
+
+
+def _cbz(tmp_dir) -> Path:
+    path = Path(tmp_dir) / "issue.cbz"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("1.jpg", b"a")
+    return path
 
 
 def _game(item_id, source="steam", subtitle="", media_type="game", title="", extra=None):
@@ -295,6 +303,15 @@ class TestItemProgress(unittest.TestCase):
         )
         self.assertAlmostEqual(ratio, 0.5)
 
+    def test_reader_item_falls_back_to_saved_page_progress(self):
+        cbz = _cbz(self._tmp.name)
+        game = _game("c1", media_type="comic", extra={"path": str(cbz)})
+        save_progress(self.config, game.id, 40, 100)
+        ratio = item_progress(
+            game, self.config, is_current=False, playback=None, playback_index=0, queue_length=1
+        )
+        self.assertAlmostEqual(ratio, 0.4)
+
 
 class TestPlayButtonLabel(unittest.TestCase):
     def setUp(self):
@@ -339,6 +356,17 @@ class TestPlayButtonLabel(unittest.TestCase):
         game = _game("g1", source="steam", media_type="game")
         self.assertEqual(
             play_button_label(game, self.config, is_current=False, playback=None), "Play"
+        )
+
+    def test_reader_item_with_saved_page_offers_resume(self):
+        cbz = _cbz(self._tmp.name)
+        game = _game("c1", media_type="comic", extra={"path": str(cbz)})
+        self.assertEqual(
+            play_button_label(game, self.config, is_current=False, playback=None), "Read"
+        )
+        save_progress(self.config, game.id, 5, 20)
+        self.assertEqual(
+            play_button_label(game, self.config, is_current=False, playback=None), "Resume"
         )
 
 

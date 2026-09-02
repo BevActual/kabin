@@ -1,3 +1,4 @@
+import queue
 import threading
 import time
 from functools import lru_cache
@@ -50,11 +51,20 @@ from .playback import (  # noqa: E402
     adopt_progress,
     format_clock,
     helper_ready,
+    playable_file,
     plays_in_kabin,
     resume_seconds,
     resume_track,
     save_progress,
     track_count,
+)
+from .reader import (  # noqa: E402
+    opens_in_kabin_reader,
+    open_reader_pages,
+    reader_backend_for,
+    resume_page,
+    save_page_progress,
+    sync_progress_from_remote,
 )
 from .settings import SettingsWindow  # noqa: E402
 from .sources import discover_all_with_status  # noqa: E402
@@ -97,6 +107,8 @@ _SIDEBAR_ICON_CANDIDATES = {
 
 CATEGORY_FAVORITES = ("favorite", None)
 _BRAND_MARK = Path(__file__).resolve().parent.parent / "data" / "kabin-mark.svg"
+
+_HTML_READER_BACKENDS = frozenset({"epub", "fb2"})
 
 _KEY_ACTIONS = {
     Gdk.KEY_Left: "left",
@@ -441,6 +453,15 @@ class MainWindow(Adw.ApplicationWindow):
         self._seeking = False
         self._last_progress_save = 0.0
         self._player_art_path = None
+        self._reader_item = None
+        self._reader_backend = None
+        self._reader_pages = None
+        self._reader_page_count = 0
+        self._reader_page_index = 0
+        self._reader_request = 0
+        self._reader_return_stack = "library"
+        self._reader_render_queue = queue.Queue()
+        threading.Thread(target=self._reader_render_loop, daemon=True).start()
         self._closing = False
         self._nav_target = "home"
         self._home_focus_rows = []
@@ -668,6 +689,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.main_stack.set_transition_duration(220)
         self.main_stack.add_named(self.content_stack, "library")
         self.main_stack.add_named(self._build_details_panel(), "details")
+        self.main_stack.add_named(self._build_reader_panel(), "reader")
 
         self.bottom_stack = Gtk.Stack()
         self.bottom_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
@@ -1063,6 +1085,116 @@ class MainWindow(Adw.ApplicationWindow):
 
         return panel
 
+    def _build_reader_panel(self):
+        panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        panel.add_css_class("kabin-reader-page")
+
+        header = Gtk.Box(spacing=8)
+        header.add_css_class("kabin-reader-header")
+        back_button = Gtk.Button(child=Adw.ButtonContent(icon_name="go-previous-symbolic", label="Back"))
+        back_button.add_css_class("flat")
+        back_button.add_css_class("kabin-reader-back")
+        back_button.connect("clicked", lambda *_: self._close_reader())
+        header.append(back_button)
+
+        self.reader_title = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+        self.reader_title.add_css_class("heading")
+        self.reader_title.set_hexpand(True)
+        header.append(self.reader_title)
+
+        toc_icon = _resolve_icon_name(
+            ("view-list-symbolic", "format-justify-fill-symbolic", "text-x-generic-symbolic")
+        )
+        self.reader_toc_button = Gtk.MenuButton(icon_name=toc_icon, tooltip_text="Chapters")
+        self.reader_toc_button.add_css_class("kabin-icon-button")
+        self.reader_toc_button.add_css_class("flat")
+        self.reader_toc_button.set_visible(False)
+        header.append(self.reader_toc_button)
+
+        self.reader_page_label = Gtk.Label()
+        self.reader_page_label.add_css_class("caption")
+        self.reader_page_label.add_css_class("dim-label")
+        header.append(self.reader_page_label)
+        panel.append(header)
+
+        self.reader_picture = Gtk.Picture()
+        self.reader_picture.set_can_shrink(True)
+        self.reader_picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+        self.reader_picture.set_hexpand(True)
+        self.reader_picture.set_vexpand(True)
+        self.reader_picture.add_css_class("kabin-reader-picture")
+
+        self.reader_status = Adw.StatusPage(title="Opening…", icon_name="view-paged-symbolic")
+        self.reader_status.set_vexpand(True)
+
+        self.reader_text_view = Gtk.TextView()
+        self.reader_text_view.set_editable(False)
+        self.reader_text_view.set_cursor_visible(False)
+        self.reader_text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.reader_text_view.add_css_class("kabin-reader-text")
+        self.reader_text_view.set_left_margin(48)
+        self.reader_text_view.set_right_margin(48)
+        self.reader_text_view.set_top_margin(32)
+        self.reader_text_view.set_bottom_margin(32)
+        reader_text_scroller = Gtk.ScrolledWindow()
+        reader_text_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        reader_text_scroller.set_child(self.reader_text_view)
+
+        self.reader_content_stack = Gtk.Stack()
+        self.reader_content_stack.add_named(self.reader_status, "status")
+        self.reader_content_stack.add_named(self.reader_picture, "page")
+        self.reader_content_stack.add_named(reader_text_scroller, "text")
+        self.reader_webview = None
+
+        prev_zone = Gtk.Button()
+        prev_zone.add_css_class("flat")
+        prev_zone.add_css_class("kabin-reader-zone")
+        prev_zone.set_hexpand(True)
+        prev_zone.set_vexpand(True)
+        prev_zone.set_tooltip_text("Previous page")
+        prev_zone.connect("clicked", lambda *_: self._reader_turn(-1))
+
+        next_zone = Gtk.Button()
+        next_zone.add_css_class("flat")
+        next_zone.add_css_class("kabin-reader-zone")
+        next_zone.set_hexpand(True)
+        next_zone.set_vexpand(True)
+        next_zone.set_tooltip_text("Next page")
+        next_zone.connect("clicked", lambda *_: self._reader_turn(1))
+
+        zones = Gtk.Box(spacing=0)
+        zones.set_hexpand(True)
+        zones.set_vexpand(True)
+        zones.append(prev_zone)
+        zones.append(next_zone)
+
+        overlay = Gtk.Overlay()
+        overlay.set_child(self.reader_content_stack)
+        overlay.add_overlay(zones)
+        overlay.set_vexpand(True)
+        panel.append(overlay)
+
+        bottom = Gtk.Box(spacing=12, halign=Gtk.Align.CENTER)
+        bottom.add_css_class("kabin-reader-pager")
+        self.reader_prev_button = Gtk.Button(icon_name="go-previous-symbolic", tooltip_text="Previous page")
+        self.reader_prev_button.add_css_class("kabin-icon-button")
+        self.reader_prev_button.add_css_class("flat")
+        self.reader_prev_button.connect("clicked", lambda *_: self._reader_turn(-1))
+        self.reader_seek = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 1, 1)
+        self.reader_seek.set_draw_value(False)
+        self.reader_seek.set_size_request(320, -1)
+        self.reader_seek.connect("change-value", self._on_reader_seek_change)
+        self.reader_next_button = Gtk.Button(icon_name="go-next-symbolic", tooltip_text="Next page")
+        self.reader_next_button.add_css_class("kabin-icon-button")
+        self.reader_next_button.add_css_class("flat")
+        self.reader_next_button.connect("clicked", lambda *_: self._reader_turn(1))
+        bottom.append(self.reader_prev_button)
+        bottom.append(self.reader_seek)
+        bottom.append(self.reader_next_button)
+        panel.append(bottom)
+
+        return panel
+
     def _add_sidebar_header(self, text):
         row = Gtk.ListBoxRow()
         row.set_selectable(False)
@@ -1197,6 +1329,7 @@ class MainWindow(Adw.ApplicationWindow):
         for game in games:
             if game.source == "remote":
                 adopt_progress(self.config, game.id, game.extra.get("progress"))
+        sync_progress_from_remote(games, self.config)
         self._rebuild_sidebar(games, preserve_category=self._category)
         self.game_store.remove_all()
         for game in games:
@@ -1323,7 +1456,7 @@ class MainWindow(Adw.ApplicationWindow):
         if hasattr(self, "hero_play"):
             if self._is_playing(featured):
                 self.hero_play.set_label("Pause" if self._playback and not self._playback.paused else "Resume")
-            elif plays_in_kabin(featured) and self._can_play_media(featured):
+            elif (plays_in_kabin(featured) and self._can_play_media(featured)) or self._opens_in_reader(featured):
                 self.hero_play.set_label(self._play_button_label(featured))
             else:
                 self.hero_play.set_label(kind.verb)
@@ -1376,6 +1509,10 @@ class MainWindow(Adw.ApplicationWindow):
             start = resume_seconds(self.config, game.id)
             if start:
                 clock = format_clock(start)
+        elif opens_in_kabin_reader(game):
+            page = resume_page(self.config, game.id)
+            if page:
+                clock = f"p. {page + 1}"
         return continue_caption(
             playing=self._is_playing(game),
             track=track,
@@ -1695,6 +1832,9 @@ class MainWindow(Adw.ApplicationWindow):
     def _launch_game(self, game):
         if plays_in_kabin(game):
             self._play_media(game)
+            return
+        if opens_in_kabin_reader(game):
+            self._open_reader(game)
             return
         if not game.launch:
             return
@@ -2136,6 +2276,229 @@ class MainWindow(Adw.ApplicationWindow):
         if hasattr(self, "main_stack"):
             self.main_stack.set_visible_child_name("library")
 
+    def _opens_in_reader(self, game) -> bool:
+        return opens_in_kabin_reader(game)
+
+    def _open_reader(self, item):
+        current = self.main_stack.get_visible_child_name()
+        if current != "reader":
+            self._reader_return_stack = current
+        if self._reader_item is item:
+            self.main_stack.set_visible_child_name("reader")
+            return
+        backend = reader_backend_for(item)
+        path = playable_file(item)
+        if backend is None or path is None:
+            self._toast(f"Could not open {item.title}")
+            return
+        self._close_reader_resources()
+        self._reader_item = item
+        self._reader_backend = backend
+        self.reader_title.set_label(item.title)
+        self.reader_page_label.set_label("")
+        self.reader_toc_button.set_visible(False)
+        self.reader_status.set_title("Opening…")
+        self.reader_status.set_description("")
+        self.reader_content_stack.set_visible_child_name("status")
+        self.main_stack.set_visible_child_name("reader")
+        # Goes through the same single render-thread queue as page turns —
+        # see _reader_render_loop for why (concurrent Poppler/cairo calls
+        # from different threads are not safe).
+        self._reader_render_queue.put(("open", path, backend, item))
+
+    def _on_reader_opened(self, item, pages, count, error):
+        if self._closing or self._reader_item is not item:
+            if pages:
+                pages.close()
+            return False
+        if error or not pages:
+            self.reader_status.set_title("Could not open this file")
+            self.reader_status.set_description(str(error) if error else "")
+            self.reader_content_stack.set_visible_child_name("status")
+            self._toast(f"Could not open {item.title} · {error or 'unknown error'}")
+            return False
+        self._reader_pages = pages
+        self._reader_page_count = count
+        self.reader_seek.set_range(0, max(0, count - 1))
+        self._update_reader_toc(pages)
+        self.config.record_played(item.id)
+        self._rebuild_recent_shelf(self._games)
+        start = max(0, min(count - 1, resume_page(self.config, item.id)))
+        self._reader_show_page(start)
+        return False
+
+    def _update_reader_toc(self, pages):
+        toc = getattr(pages, "toc", None)
+        if not toc:
+            self.reader_toc_button.set_visible(False)
+            self.reader_toc_button.set_popover(None)
+            return
+        popover = Gtk.Popover()
+        popover.add_css_class("kabin-reader-toc")
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_max_content_height(360)
+        scroller.set_propagate_natural_height(True)
+        scroller.set_propagate_natural_width(True)
+        scroller.set_min_content_width(260)
+        listbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        for entry in toc:
+            row = Gtk.Button()
+            row.add_css_class("flat")
+            row.add_css_class("kabin-reader-toc-entry")
+            label = Gtk.Label(label=entry["title"], xalign=0, ellipsize=Pango.EllipsizeMode.END)
+            label.set_max_width_chars(36)
+            label.set_hexpand(True)
+            row.set_child(label)
+            row.connect(
+                "clicked",
+                lambda _btn, index=entry["index"]: (
+                    self._reader_show_page(index),
+                    self.reader_toc_button.popdown(),
+                ),
+            )
+            listbox.append(row)
+        scroller.set_child(listbox)
+        popover.set_child(scroller)
+        self.reader_toc_button.set_popover(popover)
+        self.reader_toc_button.set_visible(True)
+
+    def _ensure_reader_webview(self):
+        if self.reader_webview is not None:
+            return self.reader_webview
+        import gi
+
+        gi.require_version("WebKit", "6.0")
+        from gi.repository import WebKit
+
+        webview = WebKit.WebView()
+        webview.set_hexpand(True)
+        webview.set_vexpand(True)
+        self.reader_content_stack.add_named(webview, "html")
+        self.reader_webview = webview
+        return webview
+
+    def _reader_show_page(self, index: int):
+        pages = self._reader_pages
+        total = self._reader_page_count
+        item = self._reader_item
+        if not pages or not total or not item:
+            return
+        index = max(0, min(total - 1, index))
+        backend = self._reader_backend
+        self._reader_request += 1
+        request_id = self._reader_request
+        # Rendering (rasterizing a PDF page, reading a comic-archive/EPUB
+        # member) is I/O/CPU work best kept off the main thread so page
+        # turns and slider drags don't stall the UI. It's queued onto a
+        # single persistent render thread rather than a thread per
+        # request: Poppler/cairo segfault if two renders run concurrently
+        # (confirmed by crashing them that way), so every reader render —
+        # opening a file or turning a page, PDF or not — is serialized
+        # through one worker to rule that out.
+        self._reader_render_queue.put(("page", request_id, pages, backend, item, index, total))
+
+    def _reader_render_loop(self):
+        while True:
+            job = self._reader_render_queue.get()
+            # Coalesce a burst of requests (rapid page-turns, a slider
+            # drag) down to only the most recent one.
+            while True:
+                try:
+                    job = self._reader_render_queue.get_nowait()
+                except queue.Empty:
+                    break
+            if job[0] == "open":
+                _, path, backend, item = job
+                try:
+                    pages = open_reader_pages(path, backend)
+                    count = len(pages)
+                    if count <= 0:
+                        raise ValueError("This file has no readable pages")
+                    open_result = (pages, count, None)
+                except Exception as exc:
+                    open_result = (None, 0, exc)
+                GLib.idle_add(self._on_reader_opened, item, *open_result)
+                continue
+            _, request_id, pages, backend, item, index, total = job
+            try:
+                data = pages.page_bytes(index)
+                base_uri = pages.page_base_uri(index) if backend in _HTML_READER_BACKENDS else None
+                result = (data, base_uri, None)
+            except Exception as exc:
+                result = (None, None, exc)
+            GLib.idle_add(self._on_reader_page_ready, request_id, item, index, total, result)
+
+    def _on_reader_page_ready(self, request_id, item, index, total, result):
+        if self._closing or request_id != self._reader_request or self._reader_item is not item:
+            return False
+        data, base_uri, error = result
+        if error is not None:
+            self._toast(f"Could not render this page · {error}")
+            return False
+        backend = self._reader_backend
+        if backend in _HTML_READER_BACKENDS:
+            try:
+                webview = self._ensure_reader_webview()
+                # Force the HTML5 parser (not strict application/xhtml+xml
+                # XML parsing) so EPUB spine documents that aren't
+                # perfectly namespaced XHTML — common from less careful
+                # sources — still render styled instead of dumping as raw
+                # text. FB2 pages are plain HTML Kabin generated itself,
+                # so this is just consistent, not load-bearing for them.
+                webview.load_bytes(GLib.Bytes.new(data), "text/html", "utf-8", base_uri)
+            except Exception as exc:
+                self._toast(f"Could not render this page · {exc}")
+                return False
+            self.reader_content_stack.set_visible_child_name("html")
+        elif backend == "text":
+            self.reader_text_view.get_buffer().set_text(data.decode("utf-8", errors="replace"))
+            self.reader_content_stack.set_visible_child_name("text")
+        else:
+            try:
+                texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(data))
+            except GLib.Error:
+                self._toast("Could not render this page")
+                return False
+            self.reader_picture.set_paintable(texture)
+            self.reader_content_stack.set_visible_child_name("page")
+        self._reader_page_index = index
+        self.reader_page_label.set_label(f"{index + 1} / {total}")
+        self.reader_seek.set_value(index)
+        save_page_progress(self.config, item.id, index, total)
+        return False
+
+    def _reader_turn(self, delta: int):
+        if not self._reader_pages:
+            return
+        self._reader_show_page(self._reader_page_index + delta)
+
+    def _on_reader_seek_change(self, _scale, _scroll, value):
+        if not self._reader_pages:
+            return False
+        self._reader_show_page(round(value))
+        return False
+
+    def _close_reader_resources(self):
+        if self._reader_pages:
+            self._reader_pages.close()
+        if self._reader_backend in _HTML_READER_BACKENDS and self.reader_webview is not None:
+            self.reader_webview.load_uri("about:blank")
+        self._reader_pages = None
+        self._reader_backend = None
+        self._reader_page_count = 0
+        self._reader_page_index = 0
+
+    def _close_reader(self):
+        item = self._reader_item
+        if item and self._reader_pages and self._reader_page_count:
+            self._sync_play_button(item)
+            self._rebuild_recent_shelf(self._games)
+        self._close_reader_resources()
+        self._reader_item = None
+        if hasattr(self, "main_stack"):
+            self.main_stack.set_visible_child_name(getattr(self, "_reader_return_stack", "library"))
+
     def _update_backdrop(self, cover_path):
         if cover_path is None:
             self.backdrop_picture.set_paintable(None)
@@ -2370,6 +2733,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._closing = True
         self.config.save_window_state(self.get_width(), self.get_height(), self.is_maximized())
         self._stop_playback()
+        self._close_reader_resources()
         self._replace_stream_helper(None)
         if self._gamepad:
             self._gamepad.close()
@@ -2498,6 +2862,16 @@ class MainWindow(Adw.ApplicationWindow):
             self.search_entry.grab_focus()
             return False
 
+        on_reader = self.main_stack.get_visible_child_name() == "reader"
+        if on_reader:
+            if action == "back":
+                self._close_reader()
+            elif action in ("left", "prev"):
+                self._reader_turn(-1)
+            elif action in ("right", "next"):
+                self._reader_turn(1)
+            return False
+
         on_details = self.main_stack.get_visible_child_name() == "details"
         if on_details:
             if action == "confirm":
@@ -2614,8 +2988,16 @@ class MainWindow(Adw.ApplicationWindow):
         if control and keyval == Gdk.KEY_comma:
             self._open_settings()
             return True
-        if keyval == Gdk.KEY_BackSpace and self.main_stack.get_visible_child_name() == "details":
+        if keyval == Gdk.KEY_BackSpace and self.main_stack.get_visible_child_name() in ("details", "reader"):
             self._on_cabinet_action("back")
+            return True
+        if (
+            self._reader_pages
+            and self.main_stack.get_visible_child_name() == "reader"
+            and not self._cabinet_chrome_focused()
+            and keyval == Gdk.KEY_space
+        ):
+            self._reader_turn(1)
             return True
         if self._playback and not self._cabinet_chrome_focused():
             if keyval in (Gdk.KEY_space, Gdk.KEY_AudioPlay, Gdk.KEY_AudioPause):
@@ -2642,7 +3024,7 @@ class MainWindow(Adw.ApplicationWindow):
             return True
         if (
             not self._cabinet_chrome_focused()
-            and self.main_stack.get_visible_child_name() != "details"
+            and self.main_stack.get_visible_child_name() not in ("details", "reader")
         ):
             letter = Gdk.keyval_to_unicode(keyval)
             if letter:

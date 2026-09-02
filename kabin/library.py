@@ -17,6 +17,7 @@ from .playback import (
     should_resume,
     track_count,
 )
+from .reader import opens_in_kabin_reader, resume_page
 
 
 def matches_context(game, search_text: str, category, config) -> bool:
@@ -130,20 +131,26 @@ def is_playing(game, playback_item) -> bool:
 
 def item_progress(game, config, *, is_current: bool, playback, playback_index: int, queue_length: int) -> float:
     """Fraction (0..1) through `game`, either live from an in-progress session or from saved resume state."""
-    if not game or not plays_in_kabin(game):
+    if not game:
         return 0
-    if is_current and playback:
-        duration = playback.duration
-        frac = (playback.position / duration) if duration else 0
-        total = max(1, queue_length)
-        return min(1.0, (playback_index + max(0.0, frac)) / total)
-    return progress_ratio(config, game.id, track_count(game))
+    if plays_in_kabin(game):
+        if is_current and playback:
+            duration = playback.duration
+            frac = (playback.position / duration) if duration else 0
+            total = max(1, queue_length)
+            return min(1.0, (playback_index + max(0.0, frac)) / total)
+        return progress_ratio(config, game.id, track_count(game))
+    if opens_in_kabin_reader(game):
+        return progress_ratio(config, game.id)
+    return 0
 
 
 def play_button_label(game, config, *, is_current: bool, playback) -> str:
     if is_current:
         return "Resume" if playback and playback.paused else "Pause"
     if plays_in_kabin(game) and should_resume(config, game.id, track_count(game)):
+        return "Resume"
+    if opens_in_kabin_reader(game) and resume_page(config, game.id) > 0:
         return "Resume"
     if game.source == "remote" and kind_for(game).id == "game":
         return "Stream"
