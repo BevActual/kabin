@@ -2741,6 +2741,7 @@ class MainWindow(Adw.ApplicationWindow):
         _remote_artwork.close()
         _sgdb_artwork.close()
         _book_artwork.close()
+        icons.close()
         return False
 
     def _queue_cabinet_action(self, action: str):

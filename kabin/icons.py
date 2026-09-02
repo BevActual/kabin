@@ -83,3 +83,11 @@ def fetch_async(appid: str, on_done: Callable[[Optional[Path]], None], kind: str
     Duplicate in-flight requests share one download and every listener is notified.
     """
     _steam_artwork.request_job((kind, appid), (appid, kind), on_done)
+
+
+def close() -> None:
+    """Cancel any queued Steam artwork fetches. Call on app shutdown —
+    otherwise ThreadPoolExecutor's atexit hook joins whatever's still
+    running, which can stall quitting for as long as an in-flight
+    download's timeout."""
+    _steam_artwork.close()

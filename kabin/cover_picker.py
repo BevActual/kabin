@@ -197,7 +197,13 @@ class CoverPicker(Adw.Window):
             return
         if not chosen:
             return
-        path = install_cover_from_file(self._game.id, Path(chosen.get_path()))
+        raw_path = chosen.get_path()
+        if not raw_path:
+            # A GVFS-only location (network share, MTP device, "Other
+            # Locations") has no local path for us to read directly.
+            self._finish_choice(None, "Choose a file stored on this device.")
+            return
+        path = install_cover_from_file(self._game.id, Path(raw_path))
         self._finish_choice(path, "That file is not a usable image.")
 
     def _finish_choice(self, path, error: str):

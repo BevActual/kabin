@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import CancelledError, ThreadPoolExecutor
 from typing import Callable
 
 
@@ -37,7 +37,16 @@ class ArtworkQueue:
             self._inflight[key] = [callback]
 
         future = self._executor.submit(self._fetch, args)
-        future.add_done_callback(lambda completed: self._complete(key, completed.result()))
+        future.add_done_callback(lambda completed: self._on_future_done(key, completed))
+
+    def _on_future_done(self, key: tuple, future) -> None:
+        try:
+            result = future.result()
+        except CancelledError:
+            # close() cancels anything still queued (not yet started) on
+            # shutdown — nothing to dispatch to, the app is quitting.
+            return
+        self._complete(key, result)
 
     def _fetch(self, args: tuple):
         try:

@@ -1,3 +1,4 @@
+import shlex
 import threading
 import subprocess
 
@@ -14,6 +15,22 @@ from .network import discover_hosts, fetch_remote_library, pair_with_host
 from .systems import SYSTEMS, firmware_files, get_system
 from .kinds import FOLDER_KINDS, get_kind
 from .streaming import media_capabilities
+
+
+def custom_emulator_command_error(text: str) -> str | None:
+    """None if `text` is a usable custom emulator command, else a short
+    reason it isn't. Checked here (before saving) rather than only at
+    launch time (`sources.roms.custom_command`'s `shlex.split`, run
+    lazily inside the launch closure) so a quoting mistake gets caught
+    where it was made instead of surfacing as a confusing toast far
+    later, the next time that ROM is played."""
+    if "{rom}" not in text:
+        return "Must include {rom}"
+    try:
+        shlex.split(text)
+    except ValueError as exc:
+        return str(exc)
+    return None
 
 
 class AddRomDirDialog(Adw.Window):
@@ -210,7 +227,11 @@ class AddRomDirDialog(Adw.Window):
     def _update_add_button(self):
         system = self._systems[self.system_row.get_selected()]
         custom = self.emulator_row.get_selected() >= len(self._emulator_choices)
-        custom_valid = "{rom}" in self.custom_emulator_entry.get_text() if custom else True
+        custom_valid = (
+            custom_emulator_command_error(self.custom_emulator_entry.get_text()) is None
+            if custom
+            else True
+        )
         firmware_valid = not system.firmware_required or bool(self._bios_path)
         self.add_button.set_sensitive(bool(self._selected_path and custom_valid and firmware_valid))
 
@@ -223,7 +244,7 @@ class AddRomDirDialog(Adw.Window):
             emulator = self._emulator_choices[selected].to_config()
         else:
             emulator = self.custom_emulator_entry.get_text().strip()
-            if "{rom}" not in emulator:
+            if custom_emulator_command_error(emulator) is not None:
                 self.custom_emulator_entry.add_css_class("error")
                 return
         self._on_added(

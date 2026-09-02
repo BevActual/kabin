@@ -106,6 +106,26 @@ class TestEmulators(unittest.TestCase):
             self.assertTrue(linked.exists())
             self.assertEqual(linked.resolve(), bios.resolve())
 
+    def test_prepare_bios_repairs_a_dangling_symlink(self):
+        # Simulates the BIOS folder being moved/renamed after the symlink
+        # was created (e.g. repointing it in Settings): exists() is False
+        # for a dangling symlink even though is_symlink() is True, so the
+        # old "exists() or is_symlink()" skip check never repaired it.
+        with tempfile.TemporaryDirectory() as tmp:
+            data_home = Path(tmp) / "data"
+            linked = data_home / "duckstation" / "bios" / "scph5501.bin"
+            linked.parent.mkdir(parents=True)
+            linked.symlink_to(Path(tmp) / "moved-away" / "scph5501.bin")
+            self.assertFalse(linked.exists())
+
+            bios = Path(tmp) / "new-dump" / "scph5501.bin"
+            bios.parent.mkdir()
+            bios.write_bytes(b"bios")
+            prepare_bios({"id": "duckstation"}, str(bios.parent), {"XDG_DATA_HOME": str(data_home)})
+
+            self.assertTrue(linked.exists())
+            self.assertEqual(linked.resolve(), bios.resolve())
+
     def test_does_not_offer_uninstalled_emulator(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("kabin.emulators.shutil.which", return_value=None), patch(

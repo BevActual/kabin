@@ -106,5 +106,15 @@ class TestDownload(_IconsCacheRootTestCase):
         self.assertIsNone(path)
 
 
+class TestClose(unittest.TestCase):
+    def test_close_closes_the_shared_steam_artwork_queue(self):
+        # Patched rather than exercised for real: _steam_artwork is a
+        # module-level singleton shared by the whole process, and
+        # ArtworkQueue.close() permanently shuts down its executor.
+        with patch.object(icons, "_steam_artwork") as mock_queue:
+            icons.close()
+        mock_queue.close.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -170,8 +170,14 @@ def prepare_bios(profile: dict, bios_path, environment: dict | None = None) -> N
     destination.mkdir(parents=True, exist_ok=True)
     for source in files:
         target = destination / source.name
-        if target.exists() or target.is_symlink():
+        if target.exists():
             continue
+        if target.is_symlink():
+            # A dangling symlink (its target moved or was renamed, e.g.
+            # after repointing the BIOS folder in Settings) - exists() is
+            # False for these even though is_symlink() is True, so without
+            # this it would never get repaired.
+            target.unlink()
         resolved = source.resolve()
         try:
             target.symlink_to(resolved)
