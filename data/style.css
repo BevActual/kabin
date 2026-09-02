@@ -327,6 +327,9 @@ button.kabin-tile:focus-visible .kabin-tile-art,
 .kabin-tile-title {
   color: @fg_color;
   font-weight: 700;
+  /* Reserve two lines so subtitles line up across a row whether the
+     title above them wrapped or not. */
+  min-height: 2.7em;
 }
 
 .kabin-tile-subtitle {
@@ -757,4 +760,220 @@ button.kabin-tile:focus-visible .kabin-tile-art,
 .kabin-reader-toc-entry:hover,
 .kabin-reader-toc-entry:focus {
   background-color: alpha(@fg_color, 0.06);
+}
+
+/* Couch tiers. The window gets .kabin-wide past 1800px and .kabin-huge past
+   2600px (see home.COUCH_TIERS). Everything without an absolute size
+   inherits the base bump; Adwaita's pt-sized typography classes and the
+   fixed-height chrome are re-stated so they grow with it. Tile, hero,
+   and details artwork are scaled in Python by couch_scale(). */
+
+.kabin-window.kabin-wide {
+  font-size: 1.15em;
+}
+
+.kabin-window.kabin-huge {
+  font-size: 1.35em;
+}
+
+.kabin-wide .heading,
+.kabin-wide .kabin-tile-title {
+  font-size: 12.5pt;
+}
+
+.kabin-huge .heading,
+.kabin-huge .kabin-tile-title {
+  font-size: 15pt;
+}
+
+.kabin-wide .caption,
+.kabin-wide .kabin-tile-subtitle {
+  font-size: 10.5pt;
+}
+
+.kabin-huge .caption,
+.kabin-huge .kabin-tile-subtitle {
+  font-size: 12.5pt;
+}
+
+.kabin-wide .body {
+  font-size: 12.5pt;
+}
+
+.kabin-huge .body {
+  font-size: 15pt;
+}
+
+.kabin-wide .title-1 {
+  font-size: 30pt;
+}
+
+.kabin-huge .title-1 {
+  font-size: 36pt;
+}
+
+.kabin-wide .kabin-kicker,
+.kabin-wide .kabin-sidebar-header,
+.kabin-wide .kabin-shelf-header,
+.kabin-wide .kabin-hero-kicker,
+.kabin-wide .kabin-details-kicker {
+  font-size: 0.82em;
+  letter-spacing: 2px;
+}
+
+.kabin-huge .kabin-kicker,
+.kabin-huge .kabin-sidebar-header,
+.kabin-huge .kabin-shelf-header,
+.kabin-huge .kabin-hero-kicker,
+.kabin-huge .kabin-details-kicker {
+  font-size: 0.86em;
+  letter-spacing: 2.4px;
+}
+
+.kabin-wide .kabin-topbar {
+  min-height: 56px;
+}
+
+.kabin-huge .kabin-topbar {
+  min-height: 64px;
+}
+
+.kabin-wide .kabin-brand-mark {
+  -gtk-icon-size: 26px;
+}
+
+.kabin-huge .kabin-brand-mark {
+  -gtk-icon-size: 30px;
+}
+
+.kabin-wide .kabin-search {
+  min-width: 340px;
+  min-height: 42px;
+}
+
+.kabin-huge .kabin-search {
+  min-width: 400px;
+  min-height: 48px;
+}
+
+.kabin-wide .kabin-icon-button {
+  min-width: 50px;
+  min-height: 50px;
+}
+
+.kabin-huge .kabin-icon-button {
+  min-width: 56px;
+  min-height: 56px;
+}
+
+.kabin-wide .kabin-sidebar {
+  padding: 16px 12px;
+}
+
+.kabin-huge .kabin-sidebar {
+  padding: 20px 14px;
+}
+
+.kabin-wide .kabin-sidebar-row {
+  padding: 13px 14px;
+}
+
+.kabin-huge .kabin-sidebar-row {
+  padding: 16px 16px;
+}
+
+.kabin-wide .kabin-sidebar-icon {
+  -gtk-icon-size: 18px;
+}
+
+.kabin-huge .kabin-sidebar-icon {
+  -gtk-icon-size: 22px;
+}
+
+.kabin-wide .kabin-game-grid > child {
+  padding: 18px 12px;
+}
+
+.kabin-huge .kabin-game-grid > child {
+  padding: 22px 16px;
+}
+
+.kabin-wide .kabin-filter-chip {
+  min-height: 38px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.kabin-huge .kabin-filter-chip {
+  min-height: 44px;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.kabin-wide .kabin-hero-row {
+  padding: 36px 40px 28px;
+}
+
+.kabin-huge .kabin-hero-row {
+  padding: 44px 48px 32px;
+}
+
+.kabin-wide .kabin-hero-play,
+.kabin-wide .kabin-hero-open,
+.kabin-wide .kabin-details-page .suggested-action {
+  min-height: 48px;
+  min-width: 140px;
+}
+
+.kabin-huge .kabin-hero-play,
+.kabin-huge .kabin-hero-open,
+.kabin-huge .kabin-details-page .suggested-action {
+  min-height: 56px;
+  min-width: 168px;
+}
+
+.kabin-wide .kabin-details-title {
+  font-size: 2.3em;
+}
+
+.kabin-huge .kabin-details-title {
+  font-size: 2.6em;
+}
+
+.kabin-wide .kabin-details-back,
+.kabin-wide .kabin-reader-back {
+  min-height: 46px;
+}
+
+.kabin-huge .kabin-details-back,
+.kabin-huge .kabin-reader-back {
+  min-height: 52px;
+}
+
+.kabin-wide .kabin-player {
+  min-height: 72px;
+  padding: 10px 20px;
+}
+
+.kabin-huge .kabin-player {
+  min-height: 84px;
+  padding: 12px 24px;
+}
+
+.kabin-wide .kabin-player-button {
+  min-width: 46px;
+  min-height: 46px;
+}
+
+.kabin-huge .kabin-player-button {
+  min-width: 52px;
+  min-height: 52px;
+}
+
+.kabin-wide .kabin-reader-text {
+  font-size: 1.15em;
+}
+
+.kabin-huge .kabin-reader-text {
+  font-size: 1.3em;
 }

@@ -20,10 +20,12 @@ from .config import Config  # noqa: E402
 from .cover_picker import CoverPicker  # noqa: E402
 from .gamepad import GamepadMonitor, cycle_index, move_grid_index  # noqa: E402
 from .home import (  # noqa: E402
+    COUCH_TIERS,
     added_heading,
     continue_caption,
     continue_heading,
     continue_tile_scale,
+    couch_scale,
     hero_meta_line,
     hero_uses_bleed,
     library_tile_scale,
@@ -52,7 +54,7 @@ from .library import (  # noqa: E402
     play_button_label,
     queue_for,
     reader_progress_targets,
-    related_items,
+    related_shelf,
     resume_hint,
     sidebar_entries,
     sidebar_highlight_category,
@@ -148,6 +150,7 @@ _BRAND_MARK = Path(__file__).resolve().parent.parent / "data" / "kabin-mark.svg"
 # Long enough to collapse a burst of typing into one re-filter, short
 # enough that results still feel live.
 SEARCH_DEBOUNCE_MS = 150
+HERO_HEIGHT = 360
 
 _KEY_ACTIONS = {
     Gdk.KEY_Left: "left",
@@ -791,6 +794,16 @@ class MainWindow(Adw.ApplicationWindow):
         compact.add_setter(self.details_art_frame, "height-request", 322)
         compact.add_setter(self.details_info, "width-request", -1)
         self.add_breakpoint(compact)
+
+        # Couch tiers. Past a desk-sized window Kabin is on a TV, so type,
+        # tiles, and art all grow together instead of leaving a large panel
+        # full of small objects. Later breakpoints win when several match.
+        for tier, condition, sidebar_max in COUCH_TIERS:
+            breakpoint = Adw.Breakpoint.new(Adw.BreakpointCondition.parse(condition))
+            breakpoint.add_setter(split_view, "max-sidebar-width", sidebar_max)
+            breakpoint.connect("apply", lambda _bp, name=tier: self._set_couch_tier(name))
+            breakpoint.connect("unapply", lambda _bp: self._set_couch_tier(""))
+            self.add_breakpoint(breakpoint)
         self._apply_grid_metrics()
 
     def _build_player_bar(self):
@@ -915,7 +928,7 @@ class MainWindow(Adw.ApplicationWindow):
         hero.add_css_class("kabin-hero")
         hero.set_overflow(Gtk.Overflow.HIDDEN)
         overlay = Gtk.Overlay()
-        overlay.set_size_request(-1, 360)
+        overlay.set_size_request(-1, HERO_HEIGHT)
         overlay.set_hexpand(True)
         self.hero_picture = Gtk.Picture()
         self.hero_picture.set_content_fit(Gtk.ContentFit.COVER)
@@ -970,6 +983,7 @@ class MainWindow(Adw.ApplicationWindow):
         copy.append(actions)
         row.append(copy)
         overlay.add_overlay(row)
+        self.hero_overlay = overlay
         hero.append(overlay)
         hero.set_visible(False)
         self._featured_item = None
@@ -1456,7 +1470,7 @@ class MainWindow(Adw.ApplicationWindow):
             box.remove(child)
 
     def _fill_kind_shelf(self, parent, title, items, kind, *, resume=False):
-        scale = continue_tile_scale(len(items)) if resume else 1.0
+        scale = (continue_tile_scale(len(items)) if resume else 1.0) * self._couch_scale()
         section, shelf = self._build_shelf(
             title, int(kind.tile_height * scale) + 72
         )
@@ -1559,7 +1573,11 @@ class MainWindow(Adw.ApplicationWindow):
                 self.hero_play.set_label(self._play_button_label(featured))
             else:
                 self.hero_play.set_label(kind.verb)
-        self.hero_poster.set_size_request(kind.tile_width, kind.tile_height)
+        couch = self._couch_scale()
+        self.hero_poster.set_size_request(int(kind.tile_width * couch), int(kind.tile_height * couch))
+        # The bleed art is the overlay's base child, so the row would be
+        # clipped at the top if the poster outgrew the hero's height request.
+        self.hero_overlay.set_size_request(-1, int(HERO_HEIGHT * couch))
         self.hero_poster.set_content_fit(_art_fit(kind))
         for css_class in list(self.hero_section.get_css_classes()):
             if css_class.startswith("kabin-kind-") or css_class == "kabin-hero-quiet":
@@ -1838,8 +1856,41 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _library_tile_scale(self) -> float:
         if self._is_on_home():
-            return 1.0
-        return library_tile_scale(self._visible_count())
+            return self._couch_scale()
+        return library_tile_scale(self._visible_count()) * self._couch_scale()
+
+    def _couch_scale(self) -> float:
+        return couch_scale(getattr(self, "_couch_tier", ""))
+
+    def _set_couch_tier(self, tier: str):
+        if getattr(self, "_couch_tier", "") == tier:
+            return
+        self._couch_tier = tier
+        for name, _condition, _width in COUCH_TIERS:
+            if name == tier:
+                self.add_css_class(name)
+            else:
+                self.remove_css_class(name)
+        self._apply_couch_scale()
+
+    def _apply_couch_scale(self):
+        """Re-lay everything that bakes a pixel size in at build time."""
+        if not hasattr(self, "game_grid") or not hasattr(self, "_games"):
+            return
+        self._apply_grid_metrics()
+        self.game_filter.changed(Gtk.FilterChange.DIFFERENT)
+        self._rebuild_recent_shelf(self._games)
+        game = self._selected_game
+        if game is not None:
+            self._size_details_art(kind_for(game))
+            self._rebuild_related_shelf(game)
+
+    def _size_details_art(self, kind):
+        factor = self._couch_scale()
+        width = int(kind.details_width * factor)
+        height = int(kind.details_height * factor)
+        self.details_art_frame.set_size_request(width, height)
+        self.details_art_plate.set_size_request(width, height)
 
     def _apply_grid_metrics(self):
         kind = self._tile_kind()
@@ -3166,8 +3217,7 @@ class MainWindow(Adw.ApplicationWindow):
                 self.details_kind_chip.add_css_class(f"kabin-kind-{name}")
             else:
                 self.details_kind_chip.remove_css_class(f"kabin-kind-{name}")
-        self.details_art_frame.set_size_request(kind.details_width, kind.details_height)
-        self.details_art_plate.set_size_request(kind.details_width, kind.details_height)
+        self._size_details_art(kind)
         self.details_picture.set_content_fit(_art_fit(kind))
         for name in ("portrait", "square", "landscape"):
             if name == kind.shape:
@@ -3289,15 +3339,12 @@ class MainWindow(Adw.ApplicationWindow):
         if not hasattr(self, "details_related_shelf"):
             return
         self._clear_box(self.details_related_shelf)
-        related = related_items(game, getattr(self, "_games", []))
+        heading, related = related_shelf(game, getattr(self, "_games", []))
         if not related:
             self.details_related_section.set_visible(False)
             return
-        series = (getattr(game, "series", None) or "").strip()
         if self.details_related_header is not None:
-            self.details_related_header.set_label(
-                f"More in {series}" if series else "More in this series"
-            )
+            self.details_related_header.set_label(heading)
         for item in related:
             button = _build_shelf_button(
                 item,
@@ -3305,6 +3352,7 @@ class MainWindow(Adw.ApplicationWindow):
                 self._item_progress(item),
                 self._is_playing(item),
                 show_badge=False,
+                scale=self._couch_scale(),
             )
             self.details_related_shelf.append(button)
         self.details_related_section.set_visible(True)

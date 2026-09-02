@@ -96,6 +96,23 @@ def continue_tile_scale(count: int) -> float:
     return LONELY_TILE_SCALE if count == 1 else 1.0
 
 
+# (css class, libadwaita breakpoint condition, sidebar max width). Ordered
+# smallest to largest because the last matching breakpoint wins. The window
+# widths are logical pixels, so a 4K TV at 1x lands in "huge" while a
+# 4K monitor at 2x scale stays on the desk tier.
+COUCH_TIERS = (
+    ("kabin-wide", "min-width: 1800px", 320),
+    ("kabin-huge", "min-width: 2600px", 400),
+)
+
+_COUCH_SCALES = {"kabin-wide": 1.22, "kabin-huge": 1.5}
+
+
+def couch_scale(tier: str) -> float:
+    """Multiplier applied to tiles, hero art, and details art per tier."""
+    return _COUCH_SCALES.get(tier, 1.0)
+
+
 def library_tile_scale(count: int) -> float:
     """Grow lockups when a typed library would otherwise sit in a hole."""
     if count <= 1:

@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .kinds import FOLDER_KINDS, kind_for
+from .kinds import FOLDER_KINDS, count_noun, kind_for
 from .network import media_stream_url
 from .systems import SYSTEMS
 from .playback import (
@@ -428,6 +428,64 @@ def related_items(item, games, *, limit: int = 12) -> list:
 
     matches.sort(key=sort_key)
     return matches[:limit]
+
+
+def related_shelf(item, games, *, limit: int = 12) -> tuple[str, list]:
+    """(heading, items) for the details page's bottom shelf.
+
+    Series siblings win when they exist. Otherwise fall back to what a
+    person browsing would reach for next: the same author or artist, the
+    same console, the same host, and finally the same kind of thing. An
+    empty list means the shelf should hide."""
+    siblings = related_items(item, games, limit=limit)
+    if siblings:
+        series = (getattr(item, "series", None) or "").strip()
+        return (f"More in {series}" if series else "More in this series"), siblings
+
+    item_id = getattr(item, "id", None)
+    others = [
+        game for game in games or []
+        if game is not item and getattr(game, "id", None) != item_id
+    ]
+    kind = kind_for(item)
+
+    def pick(predicate):
+        found = [game for game in others if predicate(game)]
+        found.sort(key=lambda g: getattr(g, "sort_key", None) or (g.title or "").casefold())
+        return found[:limit]
+
+    creators = [c for c in (getattr(item, "creators", None) or []) if c and c.strip()]
+    if creators:
+        lead = creators[0].strip().casefold()
+        same = pick(
+            lambda g: any(c.strip().casefold() == lead for c in (getattr(g, "creators", None) or []))
+        )
+        if same:
+            return f"More by {creators[0].strip()}", same
+
+    source = getattr(item, "source", "")
+    subtitle = (getattr(item, "subtitle", None) or "").strip()
+    if source == "roms" and subtitle:
+        same = pick(lambda g: getattr(g, "source", "") == "roms" and (g.subtitle or "").strip() == subtitle)
+        if same:
+            return f"More from {subtitle}", same
+    if source == "remote" and subtitle:
+        same = pick(
+            lambda g: getattr(g, "source", "") == "remote"
+            and (g.subtitle or "").strip() == subtitle
+            and kind_for(g).id == kind.id
+        )
+        if same:
+            return f"More on {subtitle}", same
+    if source == "steam" and kind.id == "game":
+        same = pick(lambda g: getattr(g, "source", "") == "steam" and kind_for(g).id == "game")
+        if same:
+            return "More on Steam", same
+
+    same_kind = pick(lambda g: kind_for(g).id == kind.id)
+    if same_kind:
+        return f"More {count_noun(len(same_kind), kind)}", same_kind
+    return "", []
 
 
 def local_path(item) -> Path | None:

@@ -2,10 +2,12 @@ import unittest
 from types import SimpleNamespace
 
 from kabin.home import (
+    COUCH_TIERS,
     added_heading,
     continue_caption,
     continue_heading,
     continue_tile_scale,
+    couch_scale,
     hero_meta_line,
     library_tile_scale,
     hero_uses_bleed,
@@ -75,6 +77,19 @@ class TestHomeShelves(unittest.TestCase):
         self.assertEqual(library_tile_scale(12), 1.0)
         self.assertFalse(show_library_sort(2))
         self.assertTrue(show_library_sort(6))
+
+    def test_couch_tiers_grow_in_order(self):
+        names = [tier for tier, _condition, _sidebar in COUCH_TIERS]
+        self.assertEqual(names, ["kabin-wide", "kabin-huge"])
+        self.assertEqual(couch_scale(""), 1.0)
+        self.assertEqual(couch_scale("kabin-desk-unknown"), 1.0)
+        scales = [couch_scale(tier) for tier in names]
+        self.assertEqual(scales, sorted(scales))
+        self.assertGreater(scales[0], 1.0)
+        widths = [width for _tier, _condition, width in COUCH_TIERS]
+        self.assertEqual(widths, sorted(widths))
+        for _tier, condition, _width in COUCH_TIERS:
+            self.assertTrue(condition.startswith("min-width:"))
 
     def test_hero_bleed_is_only_for_widescreen(self):
         self.assertTrue(hero_uses_bleed(get_kind("video")))

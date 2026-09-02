@@ -32,6 +32,7 @@ from kabin.library import (
     queue_for,
     reader_progress_targets,
     related_items,
+    related_shelf,
     resume_hint,
     sidebar_entries,
     sidebar_highlight_category,
@@ -761,6 +762,59 @@ class TestRelatedItems(unittest.TestCase):
         extra = _game("c0", media_type="comic", title="Artbook", series="Naruto")
         related = related_items(numbered, [extra, numbered])
         self.assertEqual([item.id for item in related], ["c0"])
+
+
+class TestRelatedShelf(unittest.TestCase):
+    def test_series_siblings_win(self):
+        one = _game("b1", media_type="book", title="Stone", series="Harry Potter", series_index=1)
+        two = _game("b2", media_type="book", title="Chamber", series="Harry Potter", series_index=2)
+        one.creators = two.creators = ["J.K. Rowling"]
+        heading, items = related_shelf(two, [one, two])
+        self.assertEqual(heading, "More in Harry Potter")
+        self.assertEqual([item.id for item in items], ["b1"])
+
+    def test_same_author_when_no_series(self):
+        first = _game("b1", media_type="book", title="Zeta")
+        second = _game("b2", media_type="book", title="Alpha")
+        stranger = _game("b3", media_type="book", title="Other")
+        first.creators = ["J.K. Rowling"]
+        second.creators = ["j.k. rowling"]
+        stranger.creators = ["Terry Pratchett"]
+        heading, items = related_shelf(first, [first, second, stranger])
+        self.assertEqual(heading, "More by J.K. Rowling")
+        self.assertEqual([item.id for item in items], ["b2"])
+
+    def test_roms_fall_back_to_the_same_console(self):
+        chrono = _game("r1", source="roms", subtitle="Super Nintendo", title="Chrono Trigger")
+        zelda = _game("r2", source="roms", subtitle="Super Nintendo", title="Zelda")
+        mario = _game("r3", source="roms", subtitle="Super Nintendo", title="Mario World")
+        gb = _game("r4", source="roms", subtitle="Game Boy", title="Tetris")
+        heading, items = related_shelf(chrono, [chrono, zelda, mario, gb])
+        self.assertEqual(heading, "More from Super Nintendo")
+        self.assertEqual([item.id for item in items], ["r3", "r2"])
+
+    def test_remote_items_stay_on_their_host_and_kind(self):
+        movie = _game("m1", source="remote", subtitle="Den", media_type="video", title="Alien")
+        other_movie = _game("m2", source="remote", subtitle="Den", media_type="video", title="Blade Runner")
+        remote_book = _game("m3", source="remote", subtitle="Den", media_type="book", title="Dune")
+        elsewhere = _game("m4", source="remote", subtitle="Attic", media_type="video", title="Heat")
+        heading, items = related_shelf(movie, [movie, other_movie, remote_book, elsewhere])
+        self.assertEqual(heading, "More on Den")
+        self.assertEqual([item.id for item in items], ["m2"])
+
+    def test_same_kind_is_the_last_resort_and_respects_limit(self):
+        albums = [
+            _game(f"a{i}", source="music", media_type="music", title=f"Album {i:02d}")
+            for i in range(15)
+        ]
+        heading, items = related_shelf(albums[0], albums)
+        self.assertEqual(heading, "More albums")
+        self.assertEqual(len(items), 12)
+        self.assertNotIn("a0", [item.id for item in items])
+
+    def test_lonely_item_hides_the_shelf(self):
+        only = _game("g1", source="steam", title="Solo")
+        self.assertEqual(related_shelf(only, [only]), ("", []))
 
 
 

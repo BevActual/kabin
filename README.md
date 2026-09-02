@@ -56,6 +56,12 @@ sign of a rejected flag or missing BIOS), and the cabinet minimizes while
 you play then comes back to the front when the game quits. On a controller,
 Start opens Settings and the Guide/Mode button refreshes the library.
 
+Every details page ends with a shelf of what you would reach for next: the
+rest of the series when there is one, otherwise more by the same author or
+artist, more from the same console or host, or more of the same kind. Past
+1800 and 2600 logical pixels of width Kabin assumes it is on a TV and grows
+type, tiles, and artwork together so the cabinet reads from the couch.
+
 Optional console cover art comes from SteamGridDB. Add a personal API key in
 Settings → Artwork; Kabin then sends normalized game titles to the
 SteamGridDB search API and caches portrait covers locally. The key is stored
