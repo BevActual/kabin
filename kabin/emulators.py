@@ -27,7 +27,11 @@ _FLATPAK_IDS = {
 }
 
 _NATIVE_EMULATORS = {
-    "nes": (("punes", "puNES", "punes"), ("mesen", "Mesen", "mesen")),
+    "nes": (
+        ("fceux", "FCEUX", "fceux"),
+        ("punes", "puNES", "punes"),
+        ("mesen", "Mesen", "mesen"),
+    ),
     "snes": (("snes9x", "Snes9x", "snes9x"), ("mesen", "Mesen", "mesen")),
     "n64": (("rmg", "RMG", "RMG"), ("mupen64plus", "Mupen64Plus", "mupen64plus")),
     "gb": (("mgba", "mGBA", "mgba-qt"), ("mgba", "mGBA", "mgba")),
@@ -89,51 +93,143 @@ _BIOS_DATA_DIRS = {
 }
 
 
+def _flag01(value: bool) -> str:
+    return "1" if value else "0"
+
+
+def _with_rom(command: list[str], rom_path: Path) -> list[str]:
+    command.append(str(rom_path))
+    return command
+
+
+def _adapt_fceux(command, rom_path, fullscreen, vsync, integer_scaling, rewind):
+    # 2.6 Qt/SDL takes 0|1 values. VSync and rewind are config-file only.
+    del vsync, rewind
+    command.extend(["--fullscreen", _flag01(fullscreen)])
+    if integer_scaling:
+        command.extend(["--autoscale", "0", "--xstretch", "0", "--ystretch", "0"])
+    else:
+        command.extend(["--autoscale", "1", "--keepratio", "1"])
+    return _with_rom(command, rom_path)
+
+
+def _adapt_mgba(command, rom_path, fullscreen, vsync, integer_scaling, rewind):
+    if fullscreen:
+        command.append("-f")
+    command.extend(["-C", f"videoSync={_flag01(vsync)}"])
+    command.extend(["-C", f"rewindEnable={_flag01(rewind)}"])
+    command.extend(["-C", "lockAspectRatio=1"])
+    command.extend(["-C", f"lockIntegerScaling={_flag01(integer_scaling)}"])
+    return _with_rom(command, rom_path)
+
+
+def _adapt_snes9x(command, rom_path, fullscreen, vsync, integer_scaling, rewind):
+    del vsync
+    if fullscreen:
+        command.append("-fullscreen")
+    if not integer_scaling:
+        command.append("-maxaspect")
+    command.extend(["-rwbuffersize", "16" if rewind else "0"])
+    return _with_rom(command, rom_path)
+
+
+def _adapt_mupen64plus(command, rom_path, fullscreen, vsync, integer_scaling, rewind):
+    # Integer scaling is plugin-specific; do not invent a Video-General key.
+    del integer_scaling, rewind
+    command.append("--fullscreen" if fullscreen else "--windowed")
+    command.extend(["--set", f"Video-General[VerticalSync]={vsync}"])
+    command.append("--nosaveoptions")
+    return _with_rom(command, rom_path)
+
+
+def _adapt_mame(command, rom_path, fullscreen, vsync, integer_scaling, rewind):
+    command.append("-nowindow" if fullscreen else "-window")
+    command.append("-waitvsync" if vsync else "-nowaitvsync")
+    if integer_scaling:
+        command.extend(["-intscalex", "1", "-intscaley", "1"])
+    command.append("-rewind" if rewind else "-norewind")
+    command.extend(["-rompath", str(rom_path.parent), rom_path.stem])
+    return command
+
+
+def _adapt_dolphin(command, rom_path, fullscreen, vsync, integer_scaling, rewind):
+    del integer_scaling, rewind
+    command.extend(["--batch", "--exec"])
+    command.append(f"--config=Dolphin.Display.Fullscreen={'True' if fullscreen else 'False'}")
+    command.append(f"--config=GFX.Hardware.VSync={'True' if vsync else 'False'}")
+    return _with_rom(command, rom_path)
+
+
+def _adapt_duckstation(command, rom_path, fullscreen, vsync, integer_scaling, rewind):
+    del vsync, integer_scaling, rewind
+    command.append("-batch")
+    if fullscreen:
+        command.append("-fullscreen")
+    return _with_rom(command, rom_path)
+
+
+def _adapt_pcsx2(command, rom_path, fullscreen, vsync, integer_scaling, rewind):
+    del vsync, integer_scaling, rewind
+    command.append("-batch")
+    if fullscreen:
+        command.append("-fullscreen")
+    return _with_rom(command, rom_path)
+
+
+def _adapt_ppsspp(command, rom_path, fullscreen, vsync, integer_scaling, rewind):
+    del vsync, integer_scaling, rewind
+    command.append("--fullscreen" if fullscreen else "--windowed")
+    return _with_rom(command, rom_path)
+
+
+_FULLSCREEN_FLAGS = {
+    "blastem": "-f",
+    "punes": "--fullscreen",
+    "mesen": "--fullscreen",
+}
+
+_ADAPTERS = {
+    "fceux": _adapt_fceux,
+    "mgba": _adapt_mgba,
+    "snes9x": _adapt_snes9x,
+    "mupen64plus": _adapt_mupen64plus,
+    "mame": _adapt_mame,
+    "dolphin": _adapt_dolphin,
+    "duckstation": _adapt_duckstation,
+    "pcsx2": _adapt_pcsx2,
+    "ppsspp": _adapt_ppsspp,
+}
+
+
 def build_command(profile: dict, rom_path: Path, settings: dict | None = None) -> list[str]:
+    """Translate Kabin's play profile into one emulator's argv.
+
+    Unknown or unsupported switches are omitted rather than guessed — a
+    flag the binary does not have would abort the launch. When `settings`
+    is omitted, only the flags required to start the game are added.
+    """
     command = emulator_command(profile)
     emulator_id = profile.get("id")
     options = settings or {}
     fullscreen = bool(options.get("fullscreen", False))
     vsync = bool(options.get("vsync", False))
     integer_scaling = bool(options.get("integer_scaling", False))
+    rewind = bool(options.get("rewind", False))
+    adapter = _ADAPTERS.get(emulator_id)
+    if adapter and settings is not None:
+        return adapter(command, rom_path, fullscreen, vsync, integer_scaling, rewind)
     if emulator_id == "dolphin":
         command.extend(["--batch", "--exec"])
-        if fullscreen:
-            command.append("--fullscreen")
-    elif emulator_id == "duckstation":
+    elif emulator_id in {"duckstation", "pcsx2"}:
         command.append("-batch")
-        if fullscreen:
-            command.append("-fullscreen")
-    elif emulator_id == "pcsx2":
-        command.append("-batch")
-        if fullscreen:
-            command.append("-fullscreen")
     elif emulator_id == "mame":
-        if fullscreen:
-            command.append("-nowindow")
-        if vsync:
-            command.append("-waitvsync")
         command.extend(["-rompath", str(rom_path.parent), rom_path.stem])
         return command
-    elif fullscreen:
-        fullscreen_flags = {
-            "mgba": "-f",
-            "snes9x": "-fullscreen",
-            "mupen64plus": "--fullscreen",
-            "blastem": "-f",
-            "ppsspp": "--fullscreen",
-            "punes": "--fullscreen",
-        }
-        flag = fullscreen_flags.get(emulator_id)
+    if fullscreen:
+        flag = _FULLSCREEN_FLAGS.get(emulator_id)
         if flag:
             command.append(flag)
-    if emulator_id == "mupen64plus":
-        if vsync:
-            command.extend(["--set", "Video-General[VerticalSync]=True"])
-        if integer_scaling:
-            command.extend(["--set", "Video-General[IntegerScaling]=True"])
-    command.append(str(rom_path))
-    return command
+    return _with_rom(command, rom_path)
 
 
 def launch_environment(profile: dict, bios_path=None) -> dict | None:

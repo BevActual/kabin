@@ -16,6 +16,8 @@ class TestDesktopSource(unittest.TestCase):
         self.assertIn("dolphin-emu.desktop", desktop._EXCLUDED_IDS)
         self.assertIn("mame.desktop", desktop._EXCLUDED_IDS)
         self.assertIn("com.libretro.RetroArch.desktop", desktop._EXCLUDED_IDS)
+        self.assertIn("org.fceux.fceux.desktop", desktop._EXCLUDED_IDS)
+        self.assertIn("fceux.desktop", desktop._EXCLUDED_IDS)
 
     def test_excludes_streaming_clients_from_game_library(self):
         self.assertIn("com.moonlight_stream.Moonlight.desktop", desktop._EXCLUDED_IDS)

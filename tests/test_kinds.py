@@ -14,6 +14,7 @@ class TestMediaKinds(unittest.TestCase):
         self.assertEqual(verbs["book"], "Read")
         self.assertEqual(verbs["music"], "Listen")
         self.assertEqual(verbs["video"], "Watch")
+        self.assertEqual(verbs["tv"], "Watch")
         self.assertIn(".epub", get_kind("book").extensions)
         self.assertIn(".cbz", get_kind("comic").extensions)
         self.assertIn(".epub", get_kind("comic").extensions)
@@ -23,13 +24,18 @@ class TestMediaKinds(unittest.TestCase):
         self.assertEqual(get_kind("game").art_fit, "cover")
         self.assertEqual(get_kind("music").shape, "square")
         self.assertEqual(get_kind("video").shape, "landscape")
+        self.assertEqual(get_kind("tv").shape, "landscape")
+        self.assertEqual(get_kind("video").extensions, get_kind("tv").extensions)
         self.assertNotEqual(get_kind("music").accent, get_kind("video").accent)
+        self.assertNotEqual(get_kind("video").accent, get_kind("tv").accent)
 
     def test_count_noun_matches_kind(self):
         self.assertEqual(count_noun(1, get_kind("book")), "book")
         self.assertEqual(count_noun(2, get_kind("book")), "books")
         self.assertEqual(count_noun(1, get_kind("music")), "album")
         self.assertEqual(count_noun(2, get_kind("music")), "albums")
+        self.assertEqual(count_noun(1, get_kind("tv")), "episode")
+        self.assertEqual(count_noun(2, get_kind("tv")), "episodes")
 
 
 if __name__ == "__main__":

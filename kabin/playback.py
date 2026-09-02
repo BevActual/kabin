@@ -7,7 +7,7 @@ from .kinds import kind_for
 from .streaming import native_helper_path
 from .titles import clean_track_title, track_sort_key
 
-PLAY_IN_KABIN = frozenset({"video", "music"})
+PLAY_IN_KABIN = frozenset({"video", "tv", "music"})
 RESUME_AFTER = 5
 FINISHED_RATIO = 0.9
 

@@ -275,7 +275,7 @@ class AddMediaDirDialog(Adw.Window):
         page = Adw.PreferencesPage()
         group = Adw.PreferencesGroup(
             title="Library",
-            description="Kabin plays music and movies and reads PDF, EPUB, FB2, TXT, CBZ, CBR, CBT, and CB7 itself; MOBI and AZW3 books open in your reader.",
+            description="Kabin plays music, movies, and TV and reads PDF, EPUB, FB2, TXT, CBZ, CBR, CBT, and CB7 itself; MOBI and AZW3 books open in your reader.",
         )
         self.kind_row = Adw.ComboRow(
             title="Media type",
@@ -446,7 +446,7 @@ class SettingsWindow(Adw.PreferencesWindow):
 
         play_group = Adw.PreferencesGroup(
             title="Play Defaults",
-            description="Fullscreen is applied at launch. VSync and integer scaling are passed to MAME and Mupen64Plus. BIOS folders are linked into DuckStation and PCSX2 data directories.",
+            description="Each launch translates these defaults for the emulators that accept them. BIOS folders are linked into DuckStation and PCSX2 data directories.",
         )
         self._preset_ids = list(PRESETS)
         current_preset = self.config.emulation.get("preset", "balanced")
@@ -462,13 +462,11 @@ class SettingsWindow(Adw.PreferencesWindow):
         play_group.add(self.preset_row)
 
         self._play_switches = {}
-        # Rewind stays in the preset/config dict for forward compatibility,
-        # but no adapter reads it yet — keep it out of the UI so Settings
-        # only shows switches that actually change a launch.
         for key, title, subtitle in (
             ("fullscreen", "Start fullscreen", "Launch games directly into fullscreen mode."),
-            ("vsync", "Vertical sync", "Reduce tearing by synchronizing frames with the display."),
-            ("integer_scaling", "Integer scaling", "Keep classic pixels evenly sized."),
+            ("vsync", "Vertical sync", "Passed to mGBA, Mupen64Plus, MAME, and Dolphin."),
+            ("integer_scaling", "Integer scaling", "Passed to FCEUX, mGBA, Snes9x, and MAME."),
+            ("rewind", "Rewind", "Passed to mGBA, Snes9x, and MAME."),
         ):
             row = Adw.SwitchRow(title=title, subtitle=subtitle)
             row.set_active(bool(self.config.emulation.get(key, False)))
@@ -556,6 +554,7 @@ class SettingsWindow(Adw.PreferencesWindow):
             ("comic", "Comics"),
             ("music", "Music"),
             ("video", "Movies"),
+            ("tv", "TV"),
         ):
             row = Adw.SwitchRow(title=label)
             row.set_active(self.config.sources.get(source_id, True))
@@ -589,7 +588,7 @@ class SettingsWindow(Adw.PreferencesWindow):
 
         self.media_group = Adw.PreferencesGroup(
             title="Media Folders",
-            description="Books, comics, music, and movies. Kabin hosts and plays music and video, queues albums, and syncs resume to the host. Kabin also reads PDF, EPUB, FB2, TXT, CBZ, CBR, CBT, and CB7 itself; MOBI and AZW3 books still open in your reader.",
+            description="Books, comics, music, movies, and TV. Kabin hosts and plays music and video, queues albums, and syncs resume to the host. Kabin also reads PDF, EPUB, FB2, TXT, CBZ, CBR, CBT, and CB7 itself; MOBI and AZW3 books still open in your reader.",
         )
         add_media = Adw.ButtonRow(title="Add Media Folder")
         add_media.add_css_class("suggested-action")

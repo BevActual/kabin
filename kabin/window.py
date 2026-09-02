@@ -31,12 +31,15 @@ from .home import (  # noqa: E402
     show_library_sort,
     split_home_shelves,
 )
-from .kinds import CABINET_KIND, FOLDER_KINDS, KINDS, count_noun, get_kind, kind_for  # noqa: E402
+from .kinds import CABINET_KIND, KINDS, count_noun, get_kind, kind_for  # noqa: E402
 from .library import (  # noqa: E402
+    CATEGORY_HOME,
     can_play_media,
     can_read_remote,
     compare_items,
     empty_state_message,
+    library_group_for,
+    library_scope_filters,
     is_playing,
     item_progress,
     matches,
@@ -47,6 +50,8 @@ from .library import (  # noqa: E402
     reader_progress_targets,
     related_items,
     resume_hint,
+    sidebar_entries,
+    sidebar_highlight_category,
 )
 from .media import MediaHelperError, MediaHelperSession, PlaybackSession, create_client_offer  # noqa: E402
 from .network import (  # noqa: E402
@@ -89,15 +94,11 @@ from .reader import (  # noqa: E402
 from .settings import SettingsWindow  # noqa: E402
 from .sources import discover_all_with_status  # noqa: E402
 from .sources import steam as steam_source  # noqa: E402
-from .systems import get_system  # noqa: E402
 
 
 def _art_fit(kind) -> Gtk.ContentFit:
     return Gtk.ContentFit.CONTAIN if getattr(kind, "art_fit", "cover") == "contain" else Gtk.ContentFit.COVER
 
-
-CATEGORY_HOME = ("home", None)
-CATEGORY_ALL = ("all", None)
 
 _SOURCE_BADGE_CANDIDATES = {
     "steam": ["steam-symbolic", "steam", "applications-games-symbolic"],
@@ -109,6 +110,7 @@ _SOURCE_BADGE_CANDIDATES = {
     "comic": ["view-paged-symbolic", "x-office-document-symbolic", "text-x-generic-symbolic"],
     "music": ["audio-x-generic-symbolic", "folder-music-symbolic", "audio-headphones-symbolic"],
     "video": ["video-x-generic-symbolic", "video-display-symbolic", "camera-video-symbolic"],
+    "tv": ["video-display-symbolic", "video-x-generic-symbolic", "camera-video-symbolic"],
 }
 
 _SIDEBAR_ICON_CANDIDATES = {
@@ -123,9 +125,9 @@ _SIDEBAR_ICON_CANDIDATES = {
     "comic": ["view-paged-symbolic", "x-office-document-symbolic", "text-x-generic-symbolic"],
     "music": ["audio-x-generic-symbolic", "folder-music-symbolic", "audio-headphones-symbolic"],
     "video": ["video-x-generic-symbolic", "video-display-symbolic", "camera-video-symbolic"],
+    "tv": ["video-display-symbolic", "video-x-generic-symbolic", "camera-video-symbolic"],
 }
 
-CATEGORY_FAVORITES = ("favorite", None)
 _BRAND_MARK = Path(__file__).resolve().parent.parent / "data" / "kabin-mark.svg"
 
 # Long enough to collapse a burst of typing into one re-filter, short
@@ -457,6 +459,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._search_text = ""
         self._search_timeout = 0
         self._sidebar_rows = {}
+        self._syncing_sidebar = False
         self._games = []
         self._host_statuses = {}
         self._has_recent = False
@@ -639,6 +642,12 @@ class MainWindow(Adw.ApplicationWindow):
         self.library_header.append(self.library_title)
         self.library_header.append(self.library_subtitle)
         self.library_column.append(self.library_header)
+        self.game_scope = Gtk.Box(spacing=8)
+        self.game_scope.add_css_class("kabin-scope-bar")
+        self.game_scope_scroller = Gtk.ScrolledWindow(child=self.game_scope)
+        self.game_scope_scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
+        self.game_scope_scroller.set_visible(False)
+        self.library_column.append(self.game_scope_scroller)
         self.filter_bar = Gtk.Box(spacing=8)
         self.filter_bar.add_css_class("kabin-filter-bar")
         self.filter_bar.set_visible(False)
@@ -1273,62 +1282,15 @@ class MainWindow(Adw.ApplicationWindow):
     def _rebuild_sidebar(self, games, preserve_category=None):
         self.sidebar_list.remove_all()
         self._sidebar_rows = {}
+        for entry in sidebar_entries(games, self.config, self._host_statuses):
+            if entry.kind == "header":
+                self._add_sidebar_header(entry.label)
+            else:
+                self._add_sidebar_row(entry.label, entry.icon_key, entry.count, entry.category)
 
-        favorite_count = sum(1 for g in games if self.config.is_favorite(g.id))
-        steam_count = sum(1 for g in games if g.source == "steam")
-        desktop_count = sum(1 for g in games if g.source == "desktop")
-        remote_hosts = {g.subtitle for g in games if g.source == "remote" and g.subtitle}
-        remote_hosts.update(
-            host.get("name")
-            for host in self.config.network.get("remote_hosts", [])
-            if host.get("name")
+        target_category = sidebar_highlight_category(
+            preserve_category if preserve_category is not None else CATEGORY_HOME
         )
-        systems = {g.subtitle for g in games if g.source == "roms" and g.subtitle}
-        for entry in self.config.rom_dirs:
-            definition = get_system(entry.get("system", ""))
-            systems.add(definition.name if definition else entry.get("system", "ROMs"))
-
-        self._add_sidebar_header("HOME")
-        self._add_sidebar_row("Home", "home", None, CATEGORY_HOME)
-        if favorite_count:
-            self._add_sidebar_row("Favorites", "favorites", favorite_count, CATEGORY_FAVORITES)
-        self._add_sidebar_header("MEDIA")
-        game_count = sum(1 for item in games if kind_for(item).id == "game")
-        self._add_sidebar_row("Games", "all", game_count, ("type", "game"))
-        for kind in FOLDER_KINDS:
-            count = sum(1 for item in games if kind_for(item).id == kind.id)
-            if count:
-                self._add_sidebar_row(kind.plural, kind.id, count, ("type", kind.id))
-        if steam_count or desktop_count:
-            self._add_sidebar_header("PC")
-            if steam_count:
-                self._add_sidebar_row("Steam", "steam", steam_count, ("source", "steam"))
-            if desktop_count:
-                self._add_sidebar_row("Other Apps", "desktop", desktop_count, ("source", "desktop"))
-        if remote_hosts:
-            self._add_sidebar_header("KABIN HOSTS")
-            for host in sorted(remote_hosts):
-                count = sum(1 for game in games if game.source == "remote" and game.subtitle == host)
-                status = self._host_statuses.get(host, {})
-                state = status.get("state")
-                badge = "Re-pair" if state == "auth" else ("Offline" if state == "offline" else count)
-                icon = "network-offline" if state in ("auth", "offline") else "remote"
-                self._add_sidebar_row(host, icon, badge, ("host", host))
-        populated = []
-        for system in sorted(systems):
-            count = sum(1 for game in games if game.source == "roms" and game.subtitle == system)
-            if count:
-                populated.append((system, count))
-        if populated:
-            self._add_sidebar_header("CONSOLES")
-            for system, count in populated:
-                self._add_sidebar_row(system, "roms", count, ("system", system))
-
-        self._add_sidebar_header("MANAGE")
-        self._add_sidebar_row("Network & Hosts", "remote", None, ("action", "network"))
-        self._add_sidebar_row("Emulation Center", "roms", None, ("action", "emulation"))
-
-        target_category = preserve_category if preserve_category is not None else CATEGORY_HOME
         target_row = next(
             (row for row, category in self._sidebar_rows.items() if category == target_category),
             None,
@@ -1336,7 +1298,10 @@ class MainWindow(Adw.ApplicationWindow):
         fallback = next(
             (row for row, category in self._sidebar_rows.items() if category == CATEGORY_HOME), None
         )
+        self._syncing_sidebar = True
         self.sidebar_list.select_row(target_row or fallback)
+        self._syncing_sidebar = False
+        self._update_game_scope()
 
     # -- data loading -----------------------------------------------------
 
@@ -1395,6 +1360,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._update_stack_visibility()
         self._update_library_header()
         self._update_filter_bar()
+        self._update_game_scope()
 
         if (
             self.game_selection.get_n_items()
@@ -1775,6 +1741,9 @@ class MainWindow(Adw.ApplicationWindow):
         kind, value = self._category
         if kind == "type":
             return get_kind(value)
+        group = library_group_for(self._category)
+        if group:
+            return get_kind(group.tile_kind)
         return CABINET_KIND
 
     def _visible_count(self) -> int:
@@ -1814,6 +1783,8 @@ class MainWindow(Adw.ApplicationWindow):
             title, context = "Not opened yet", "Titles you have not launched from Kabin"
         elif kind == "home":
             title, context = "Home", "Continue, or open a library"
+        elif library_group_for(self._category):
+            title, context = library_group_for(self._category).label, ""
         elif kind == "type":
             title = media.plural
             context = ""
@@ -1867,17 +1838,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._sync_selection_to_filter()
         return False
 
-    def _on_sidebar_selected(self, listbox, row):
-        category = self._sidebar_rows.get(row, CATEGORY_HOME) if row else CATEGORY_HOME
-        if category[0] == "action":
-            self._open_settings(category[1])
-            current_row = next(
-                (item for item, value in self._sidebar_rows.items() if value == self._category),
-                None,
-            )
-            if current_row:
-                self.sidebar_list.select_row(current_row)
-            return
+    def _apply_category(self, category):
         self._category = category
         self._apply_grid_metrics()
         self._close_details()
@@ -1886,7 +1847,32 @@ class MainWindow(Adw.ApplicationWindow):
         self._update_recent_visibility()
         self._update_library_header()
         self._update_filter_bar()
+        self._update_game_scope()
         self._sync_selection_to_filter()
+
+    def _update_game_scope(self):
+        if not hasattr(self, "game_scope"):
+            return
+        while (child := self.game_scope.get_first_child()) is not None:
+            self.game_scope.remove(child)
+        filters = library_scope_filters(self._category, self._games)
+        visible = len(filters) > 1
+        self.game_scope_scroller.set_visible(visible)
+        if not visible:
+            return
+        for category, label, _count in filters:
+            button = Gtk.Button(label=label)
+            button.add_css_class("kabin-filter-chip")
+            if category == self._category:
+                button.add_css_class("kabin-filter-active")
+            button.connect("clicked", lambda *_args, chosen=category: self._select_category(chosen))
+            self.game_scope.append(button)
+
+    def _on_sidebar_selected(self, listbox, row):
+        if self._syncing_sidebar:
+            return
+        category = self._sidebar_rows.get(row, CATEGORY_HOME) if row else CATEGORY_HOME
+        self._apply_category(category)
 
     def _sync_selection_to_filter(self):
         selected = self.game_selection.get_selected_item()
@@ -3185,16 +3171,21 @@ class MainWindow(Adw.ApplicationWindow):
         return [category for category in self._sidebar_rows.values() if category[0] != "action"]
 
     def _select_category(self, category):
-        row = next((item for item, value in self._sidebar_rows.items() if value == category), None)
+        self._apply_category(category)
+        highlight = sidebar_highlight_category(category)
+        row = next((item for item, value in self._sidebar_rows.items() if value == highlight), None)
         if row:
+            self._syncing_sidebar = True
             self.sidebar_list.select_row(row)
+            self._syncing_sidebar = False
 
     def _cycle_category(self, delta: int):
         categories = self._sidebar_categories()
         if not categories:
             return
+        current = sidebar_highlight_category(self._category)
         try:
-            index = categories.index(self._category)
+            index = categories.index(current)
         except ValueError:
             index = 0
         self._select_category(categories[cycle_index(index, len(categories), delta)])

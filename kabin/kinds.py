@@ -123,6 +123,25 @@ KINDS = {
         empty_hint="Add a Movies folder in Settings. Kabin plays films here and remembers your place.",
         accent="#7ec8e3",
     ),
+    "tv": MediaKind(
+        id="tv",
+        label="Episode",
+        plural="TV",
+        verb="Watch",
+        last_opened="Last watched",
+        icon="video-display-symbolic",
+        source="tv",
+        shape="landscape",
+        tile_width=256,
+        tile_height=144,
+        details_width=480,
+        details_height=270,
+        min_columns=2,
+        max_columns=6,
+        extensions=frozenset({".mkv", ".mp4", ".avi", ".webm", ".mov", ".m4v"}),
+        empty_hint="Add a TV folder in Settings. Kabin plays episodes here and remembers your place.",
+        accent="#6ea8ff",
+    ),
 }
 
 CABINET_KIND = KINDS["game"]
@@ -140,4 +159,6 @@ def kind_for(item) -> MediaKind:
 def count_noun(count: int, kind: MediaKind) -> str:
     if kind.id == "music":
         return "album" if count == 1 else "albums"
+    if kind.id == "tv":
+        return "episode" if count == 1 else "episodes"
     return kind.label.lower() if count == 1 else kind.plural.lower()

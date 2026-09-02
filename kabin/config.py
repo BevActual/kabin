@@ -42,6 +42,7 @@ DEFAULT_CONFIG = {
         "comic": True,
         "music": True,
         "video": True,
+        "tv": True,
     },
     "steam_root": None,
     "recent": {},  # game id -> unix timestamp of last launch through kabin

@@ -42,13 +42,12 @@ launch like any other, and it isn't tied to the Quickshell bar.
 Kabin currently recognizes NES, SNES, Nintendo 64, Game Boy, Game Boy Color,
 Game Boy Advance, Genesis/Mega Drive, PlayStation, PlayStation 2, PSP,
 GameCube, Wii, and arcade libraries. Kabin detects dedicated emulators such as
-Mesen, Snes9x, RMG, mGBA, BlastEm, DuckStation, PCSX2, PPSSPP, Dolphin, and MAME.
+FCEUX, Mesen, Snes9x, RMG, mGBA, BlastEm, DuckStation, PCSX2, PPSSPP, Dolphin, and MAME.
 
 The Emulation Center also provides Balanced, Original Hardware, Quality, and
-Performance play profiles. Fullscreen, VSync, and integer-scaling controls
-form Kabin's unified settings layer and are translated by each standalone
-emulator adapter as support is added. Connected Linux game controllers are
-shown alongside these defaults.
+Performance play profiles. Fullscreen, VSync, integer scaling, and rewind
+are translated at launch for the emulators that accept them. Connected Linux
+game controllers are shown alongside these defaults.
 
 Optional console cover art comes from SteamGridDB. Add a personal API key in
 Settings → Artwork; Kabin then sends normalized game titles to the

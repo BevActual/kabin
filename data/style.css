@@ -439,7 +439,8 @@ button.kabin-tile:focus-visible .kabin-tile-art,
 .kabin-details-kicker.kabin-kind-book,
 .kabin-details-kicker.kabin-kind-comic,
 .kabin-details-kicker.kabin-kind-music,
-.kabin-details-kicker.kabin-kind-video {
+.kabin-details-kicker.kabin-kind-video,
+.kabin-details-kicker.kabin-kind-tv {
   background-color: transparent;
   padding: 0;
 }
@@ -472,6 +473,12 @@ button.kabin-tile:focus-visible .kabin-tile-art,
 .kabin-details-kicker.kabin-kind-video,
 .kabin-kind-chip.kabin-kind-video {
   color: #7ec8e3;
+}
+
+.kabin-kicker.kabin-kind-tv,
+.kabin-details-kicker.kabin-kind-tv,
+.kabin-kind-chip.kabin-kind-tv {
+  color: #6ea8ff;
 }
 
 .kabin-details-page {
@@ -620,6 +627,11 @@ button.kabin-tile:focus-visible .kabin-tile-art,
 .kabin-hero .kabin-progress block.filled {
   background-color: white;
   border-radius: 0;
+}
+
+.kabin-scope-bar {
+  margin-top: 10px;
+  padding-bottom: 2px;
 }
 
 .kabin-filter-bar {

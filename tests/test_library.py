@@ -7,10 +7,17 @@ from types import SimpleNamespace
 from kabin.config import Config
 from kabin.kinds import get_kind
 from kabin.library import (
+    CATEGORY_GAMES,
+    CATEGORY_HOME,
+    CATEGORY_READING,
+    CATEGORY_WATCHING,
     can_play_media,
     can_read_remote,
     compare_items,
     empty_state_message,
+    game_library_filters,
+    reading_library_filters,
+    watching_library_filters,
     is_playing,
     item_progress,
     matches,
@@ -21,6 +28,8 @@ from kabin.library import (
     reader_progress_targets,
     related_items,
     resume_hint,
+    sidebar_entries,
+    sidebar_highlight_category,
 )
 from kabin.playback import save_progress
 
@@ -79,6 +88,22 @@ class TestMatchesContext(unittest.TestCase):
         self.assertTrue(matches_context(game, "", ("type", "music"), self.config))
         self.assertFalse(matches_context(game, "", ("type", "video"), self.config))
 
+    def test_reading_category_includes_books_and_comics(self):
+        book = _game("b1", source="book", media_type="book")
+        comic = _game("c1", source="comic", media_type="comic")
+        album = _game("m1", source="music", media_type="music")
+        self.assertTrue(matches_context(book, "", CATEGORY_READING, self.config))
+        self.assertTrue(matches_context(comic, "", CATEGORY_READING, self.config))
+        self.assertFalse(matches_context(album, "", CATEGORY_READING, self.config))
+
+    def test_watching_category_includes_movies_and_tv(self):
+        movie = _game("v1", source="video", media_type="video")
+        episode = _game("t1", source="tv", media_type="tv")
+        album = _game("m1", source="music", media_type="music")
+        self.assertTrue(matches_context(movie, "", CATEGORY_WATCHING, self.config))
+        self.assertTrue(matches_context(episode, "", CATEGORY_WATCHING, self.config))
+        self.assertFalse(matches_context(album, "", CATEGORY_WATCHING, self.config))
+
     def test_unplayed_preset_excludes_recently_played(self):
         game = _game("g1")
         self.assertTrue(matches_context(game, "", ("preset", "unplayed"), self.config))
@@ -107,6 +132,121 @@ class TestMatchesContext(unittest.TestCase):
         game = _game("g1", source="remote", subtitle="living-room")
         self.assertTrue(matches_context(game, "", ("host", "living-room"), self.config))
         self.assertFalse(matches_context(game, "", ("host", "bedroom"), self.config))
+
+
+class TestSidebarEntries(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.config = Config(path=Path(self._tmp.name) / "config.json")
+
+    def test_libraries_come_first_without_console_or_settings_rows(self):
+        games = [
+            _game("steam:1", source="steam"),
+            _game("rom:1", source="roms", subtitle="Nintendo 64"),
+            _game("book:1", source="book", media_type="book"),
+            _game("comic:1", source="comic", media_type="comic"),
+        ]
+        self.config.toggle_favorite("steam:1")
+        labels = [entry.label for entry in sidebar_entries(games, self.config)]
+        self.assertEqual(labels, ["Home", "Favorites", "Games", "Books"])
+        categories = [entry.category for entry in sidebar_entries(games, self.config) if entry.kind == "row"]
+        self.assertNotIn(("source", "steam"), categories)
+        self.assertNotIn(("system", "Nintendo 64"), categories)
+        self.assertNotIn(("type", "comic"), categories)
+        self.assertNotIn(("action", "network"), categories)
+        self.assertNotIn(("action", "emulation"), categories)
+        books_row = next(entry for entry in sidebar_entries(games, self.config) if entry.label == "Books")
+        self.assertEqual(books_row.count, 2)
+        self.assertEqual(books_row.category, CATEGORY_READING)
+
+    def test_hosts_follow_libraries(self):
+        games = [_game("remote:1", source="remote", subtitle="Den")]
+        entries = sidebar_entries(games, self.config, {"Den": {"state": "offline"}})
+        self.assertEqual(
+            [(entry.kind, entry.label, entry.count) for entry in entries],
+            [
+                ("row", "Home", None),
+                ("row", "Games", 1),
+                ("header", "HOSTS", None),
+                ("row", "Den", "Offline"),
+            ],
+        )
+
+    def test_console_and_steam_highlight_the_games_row(self):
+        self.assertEqual(sidebar_highlight_category(("system", "Nintendo 64")), CATEGORY_GAMES)
+        self.assertEqual(sidebar_highlight_category(("source", "steam")), CATEGORY_GAMES)
+        self.assertEqual(sidebar_highlight_category(CATEGORY_HOME), CATEGORY_HOME)
+
+    def test_books_and_comics_highlight_the_books_row(self):
+        self.assertEqual(sidebar_highlight_category(("type", "book")), CATEGORY_READING)
+        self.assertEqual(sidebar_highlight_category(("type", "comic")), CATEGORY_READING)
+        self.assertEqual(sidebar_highlight_category(CATEGORY_READING), CATEGORY_READING)
+
+    def test_games_page_filters_list_sources_then_consoles(self):
+        games = [
+            _game("steam:1", source="steam"),
+            _game("desk:1", source="desktop"),
+            _game("n64:1", source="roms", subtitle="Nintendo 64"),
+            _game("nes:1", source="roms", subtitle="Nintendo Entertainment System"),
+            _game("book:1", source="book", media_type="book"),
+        ]
+        self.assertEqual(
+            game_library_filters(games),
+            [
+                (CATEGORY_GAMES, "All", 4),
+                (("source", "steam"), "Steam", 1),
+                (("source", "desktop"), "Other Apps", 1),
+                (("system", "Nintendo Entertainment System"), "NES", 1),
+                (("system", "Nintendo 64"), "N64", 1),
+            ],
+        )
+
+    def test_books_page_filters_include_comics(self):
+        games = [
+            _game("book:1", source="book", media_type="book"),
+            _game("book:2", source="book", media_type="book"),
+            _game("comic:1", source="comic", media_type="comic"),
+        ]
+        self.assertEqual(
+            reading_library_filters(games),
+            [
+                (CATEGORY_READING, "All", 3),
+                (("type", "book"), "Books", 2),
+                (("type", "comic"), "Comics", 1),
+            ],
+        )
+        books_only = [_game("book:1", source="book", media_type="book")]
+        self.assertEqual(reading_library_filters(books_only), [(CATEGORY_READING, "All", 1)])
+
+    def test_comics_alone_still_use_the_books_row(self):
+        games = [_game("comic:1", source="comic", media_type="comic")]
+        entries = sidebar_entries(games, self.config)
+        self.assertEqual(
+            [(entry.label, entry.category, entry.count) for entry in entries if entry.kind == "row"],
+            [("Home", CATEGORY_HOME, None), ("Games", CATEGORY_GAMES, 0), ("Books", CATEGORY_READING, 1)],
+        )
+
+    def test_movies_and_tv_share_one_sidebar_row(self):
+        games = [
+            _game("movie:1", source="video", media_type="video"),
+            _game("tv:1", source="tv", media_type="tv"),
+        ]
+        labels = [entry.label for entry in sidebar_entries(games, self.config)]
+        self.assertEqual(labels, ["Home", "Games", "Movies"])
+        movies = next(entry for entry in sidebar_entries(games, self.config) if entry.label == "Movies")
+        self.assertEqual(movies.count, 2)
+        self.assertEqual(movies.category, CATEGORY_WATCHING)
+        self.assertEqual(sidebar_highlight_category(("type", "video")), CATEGORY_WATCHING)
+        self.assertEqual(sidebar_highlight_category(("type", "tv")), CATEGORY_WATCHING)
+        self.assertEqual(
+            watching_library_filters(games),
+            [
+                (CATEGORY_WATCHING, "All", 2),
+                (("type", "video"), "Movies", 1),
+                (("type", "tv"), "TV", 1),
+            ],
+        )
 
 
 class TestMatches(unittest.TestCase):

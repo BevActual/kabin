@@ -66,7 +66,125 @@ class TestEmulators(unittest.TestCase):
     def test_shared_fullscreen_setting_is_applied_per_emulator(self):
         profile = {"id": "snes9x", "runtime": "native", "executable": "/usr/bin/snes9x"}
         command = build_command(profile, Path("/games/test.sfc"), {"fullscreen": True})
-        self.assertEqual(command, ["/usr/bin/snes9x", "-fullscreen", "/games/test.sfc"])
+        self.assertEqual(
+            command,
+            [
+                "/usr/bin/snes9x",
+                "-fullscreen",
+                "-maxaspect",
+                "-rwbuffersize",
+                "0",
+                "/games/test.sfc",
+            ],
+        )
+
+    def test_snes9x_applies_integer_scale_and_rewind(self):
+        profile = {"id": "snes9x", "runtime": "native", "executable": "/usr/bin/snes9x"}
+        command = build_command(
+            profile,
+            Path("/games/test.sfc"),
+            {"fullscreen": False, "integer_scaling": True, "rewind": True},
+        )
+        self.assertEqual(
+            command,
+            ["/usr/bin/snes9x", "-rwbuffersize", "16", "/games/test.sfc"],
+        )
+
+    def test_mgba_applies_config_overrides(self):
+        profile = {"id": "mgba", "runtime": "native", "executable": "/usr/bin/mgba-qt"}
+        command = build_command(
+            profile,
+            Path("/games/test.gba"),
+            {
+                "fullscreen": True,
+                "vsync": True,
+                "integer_scaling": True,
+                "rewind": True,
+            },
+        )
+        self.assertEqual(
+            command,
+            [
+                "/usr/bin/mgba-qt",
+                "-f",
+                "-C",
+                "videoSync=1",
+                "-C",
+                "rewindEnable=1",
+                "-C",
+                "lockAspectRatio=1",
+                "-C",
+                "lockIntegerScaling=1",
+                "/games/test.gba",
+            ],
+        )
+
+    def test_mupen64plus_applies_windowed_vsync_without_saving(self):
+        profile = {
+            "id": "mupen64plus",
+            "runtime": "native",
+            "executable": "/usr/bin/mupen64plus",
+        }
+        command = build_command(
+            profile,
+            Path("/games/test.z64"),
+            {"fullscreen": False, "vsync": True, "integer_scaling": True},
+        )
+        self.assertEqual(
+            command,
+            [
+                "/usr/bin/mupen64plus",
+                "--windowed",
+                "--set",
+                "Video-General[VerticalSync]=True",
+                "--nosaveoptions",
+                "/games/test.z64",
+            ],
+        )
+
+    def test_dolphin_applies_config_overrides(self):
+        profile = {
+            "id": "dolphin",
+            "runtime": "native",
+            "executable": "/usr/bin/dolphin-emu",
+        }
+        command = build_command(
+            profile,
+            Path("/games/Mario.rvz"),
+            {"fullscreen": True, "vsync": True},
+        )
+        self.assertEqual(
+            command,
+            [
+                "/usr/bin/dolphin-emu",
+                "--batch",
+                "--exec",
+                "--config=Dolphin.Display.Fullscreen=True",
+                "--config=GFX.Hardware.VSync=True",
+                "/games/Mario.rvz",
+            ],
+        )
+
+    def test_ppsspp_applies_windowed_flag(self):
+        profile = {"id": "ppsspp", "runtime": "native", "executable": "/usr/bin/PPSSPPSDL"}
+        command = build_command(
+            profile, Path("/games/game.iso"), {"fullscreen": False}
+        )
+        self.assertEqual(command, ["/usr/bin/PPSSPPSDL", "--windowed", "/games/game.iso"])
+
+    def test_duckstation_applies_batch_and_fullscreen(self):
+        profile = {
+            "id": "duckstation",
+            "runtime": "native",
+            "executable": "/usr/bin/duckstation",
+        }
+        command = build_command(
+            profile, Path("/games/game.bin"), {"fullscreen": True}
+        )
+        self.assertEqual(
+            command,
+            ["/usr/bin/duckstation", "-batch", "-fullscreen", "/games/game.bin"],
+        )
 
     def test_detects_native_mgba(self):
         def which(executable):
@@ -87,6 +205,54 @@ class TestEmulators(unittest.TestCase):
         self.assertEqual(choices[0].id, "pcsx2")
         self.assertEqual(choices[0].runtime, "flatpak")
 
+    def test_fceux_applies_fullscreen_vsync_and_integer_scale(self):
+        profile = {"id": "fceux", "runtime": "native", "executable": "/usr/bin/fceux"}
+        rom = Path("/games/Super Mario Bros.nes")
+        command = build_command(
+            profile,
+            rom,
+            {"fullscreen": True, "vsync": True, "integer_scaling": True},
+        )
+        self.assertEqual(
+            command,
+            [
+                "/usr/bin/fceux",
+                "--fullscreen",
+                "1",
+                "--autoscale",
+                "0",
+                "--xstretch",
+                "0",
+                "--ystretch",
+                "0",
+                str(rom),
+            ],
+        )
+        windowed = build_command(profile, rom, {"fullscreen": False, "vsync": False})
+        self.assertEqual(
+            windowed,
+            [
+                "/usr/bin/fceux",
+                "--fullscreen",
+                "0",
+                "--autoscale",
+                "1",
+                "--keepratio",
+                "1",
+                str(rom),
+            ],
+        )
+
+    def test_detects_native_fceux_for_nes(self):
+        def which(executable):
+            return "/usr/bin/fceux" if executable == "fceux" else None
+
+        with patch("kabin.emulators.shutil.which", side_effect=which), patch(
+            "kabin.emulators.installed_executable", return_value=None
+        ):
+            choices = detect_emulators(get_system("nes"))
+        self.assertEqual([(choice.id, choice.name) for choice in choices], [("fceux", "FCEUX")])
+
     def test_mame_applies_vsync_flag(self):
         profile = {"id": "mame", "runtime": "native", "executable": "/usr/bin/mame"}
         command = build_command(
@@ -94,6 +260,35 @@ class TestEmulators(unittest.TestCase):
         )
         self.assertIn("-waitvsync", command)
         self.assertIn("-nowindow", command)
+
+    def test_mame_applies_integer_scale_and_rewind(self):
+        profile = {"id": "mame", "runtime": "native", "executable": "/usr/bin/mame"}
+        command = build_command(
+            profile,
+            Path("/games/arcade/pacman.zip"),
+            {
+                "fullscreen": False,
+                "vsync": False,
+                "integer_scaling": True,
+                "rewind": True,
+            },
+        )
+        self.assertEqual(
+            command,
+            [
+                "/usr/bin/mame",
+                "-window",
+                "-nowaitvsync",
+                "-intscalex",
+                "1",
+                "-intscaley",
+                "1",
+                "-rewind",
+                "-rompath",
+                "/games/arcade",
+                "pacman",
+            ],
+        )
 
     def test_prepare_bios_links_firmware_into_emulator_data_dir(self):
         with tempfile.TemporaryDirectory() as tmp:

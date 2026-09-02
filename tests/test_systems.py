@@ -11,6 +11,10 @@ class TestSystems(unittest.TestCase):
         self.assertTrue(get_system("ps2").firmware_required)
         self.assertFalse(get_system("gba").firmware_required)
 
+    def test_chip_label_uses_short_name(self):
+        self.assertEqual(get_system("nes").chip_label, "NES")
+        self.assertEqual(get_system("ps1").chip_label, "PS1")
+
     def test_firmware_scan_accepts_bin_and_rom_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)

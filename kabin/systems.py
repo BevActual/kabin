@@ -9,22 +9,33 @@ class SystemDefinition:
     extensions: tuple[str, ...]
     firmware_required: bool = False
     firmware_hint: str = ""
+    short: str = ""
+
+    @property
+    def chip_label(self) -> str:
+        return self.short or self.name
 
 
 SYSTEMS = (
-    SystemDefinition("nes", "Nintendo Entertainment System", ("nes", "fds", "zip")),
-    SystemDefinition("snes", "Super Nintendo", ("sfc", "smc", "fig", "zip")),
-    SystemDefinition("n64", "Nintendo 64", ("z64", "n64", "v64", "zip")),
-    SystemDefinition("gb", "Game Boy", ("gb", "zip")),
-    SystemDefinition("gbc", "Game Boy Color", ("gbc", "zip")),
-    SystemDefinition("gba", "Game Boy Advance", ("gba", "zip")),
-    SystemDefinition("genesis", "Sega Genesis / Mega Drive", ("md", "gen", "smd", "32x", "zip")),
+    SystemDefinition("nes", "Nintendo Entertainment System", ("nes", "fds", "zip"), short="NES"),
+    SystemDefinition("snes", "Super Nintendo", ("sfc", "smc", "fig", "zip"), short="SNES"),
+    SystemDefinition("n64", "Nintendo 64", ("z64", "n64", "v64", "zip"), short="N64"),
+    SystemDefinition("gb", "Game Boy", ("gb", "zip"), short="GB"),
+    SystemDefinition("gbc", "Game Boy Color", ("gbc", "zip"), short="GBC"),
+    SystemDefinition("gba", "Game Boy Advance", ("gba", "zip"), short="GBA"),
+    SystemDefinition(
+        "genesis",
+        "Sega Genesis / Mega Drive",
+        ("md", "gen", "smd", "32x", "zip"),
+        short="Genesis",
+    ),
     SystemDefinition(
         "ps1",
         "PlayStation",
         ("cue", "chd", "pbp", "iso"),
         True,
         "Choose a folder containing your dumped PlayStation BIOS.",
+        short="PS1",
     ),
     SystemDefinition(
         "ps2",
@@ -32,11 +43,12 @@ SYSTEMS = (
         ("iso", "chd", "cso"),
         True,
         "Choose a folder containing your dumped PlayStation 2 BIOS.",
+        short="PS2",
     ),
-    SystemDefinition("psp", "PlayStation Portable", ("iso", "cso", "pbp")),
-    SystemDefinition("gamecube", "Nintendo GameCube", ("iso", "gcm", "rvz", "wia")),
-    SystemDefinition("wii", "Nintendo Wii", ("iso", "wbfs", "rvz", "wia")),
-    SystemDefinition("arcade", "Arcade", ("zip", "7z")),
+    SystemDefinition("psp", "PlayStation Portable", ("iso", "cso", "pbp"), short="PSP"),
+    SystemDefinition("gamecube", "Nintendo GameCube", ("iso", "gcm", "rvz", "wia"), short="GameCube"),
+    SystemDefinition("wii", "Nintendo Wii", ("iso", "wbfs", "rvz", "wia"), short="Wii"),
+    SystemDefinition("arcade", "Arcade", ("zip", "7z"), short="Arcade"),
 )
 
 SYSTEM_BY_ID = {system.id: system for system in SYSTEMS}

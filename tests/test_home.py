@@ -78,6 +78,7 @@ class TestHomeShelves(unittest.TestCase):
 
     def test_hero_bleed_is_only_for_widescreen(self):
         self.assertTrue(hero_uses_bleed(get_kind("video")))
+        self.assertTrue(hero_uses_bleed(get_kind("tv")))
         self.assertFalse(hero_uses_bleed(get_kind("comic")))
         self.assertFalse(hero_uses_bleed(get_kind("music")))
         self.assertFalse(hero_uses_bleed(get_kind("book")))

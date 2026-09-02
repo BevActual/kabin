@@ -1,4 +1,5 @@
 from ..artwork import apply_chosen_covers
+from ..kinds import FOLDER_KINDS
 from . import desktop, media_dirs, remote, roms, steam
 
 
@@ -53,11 +54,7 @@ def discover_all_with_status(config) -> tuple[list, dict]:
             games.extend(remote_games)
         except Exception:
             pass
-    folder_kinds = [
-        kind
-        for kind in ("book", "comic", "music", "video")
-        if enabled.get(kind, True)
-    ]
+    folder_kinds = [kind.id for kind in FOLDER_KINDS if enabled.get(kind.id, True)]
     if folder_kinds:
         try:
             games.extend(
