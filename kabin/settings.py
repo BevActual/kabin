@@ -17,6 +17,11 @@ from .kinds import FOLDER_KINDS, get_kind
 from .streaming import media_capabilities
 
 
+# Text rows emit "changed" per keystroke; wait for a pause before acting
+# on edits that cost more than a repaint.
+TEXT_EDIT_DEBOUNCE_MS = 500
+
+
 def custom_emulator_command_error(text: str) -> str | None:
     """None if `text` is a usable custom emulator command, else a short
     reason it isn't. Checked here (before saving) rather than only at
@@ -332,6 +337,8 @@ class SettingsWindow(Adw.PreferencesWindow):
         super().__init__(**kwargs)
         self.config = config
         self.host_service = host_service
+        self._pending_edits: dict = {}
+        self.connect("close-request", self._on_close_request)
         self.set_title("Kabin Settings")
         self.set_default_size(820, 720)
         self.set_search_enabled(True)
@@ -617,9 +624,44 @@ class SettingsWindow(Adw.PreferencesWindow):
                 self.host_service.stop()
         self._update_host_status()
 
-    def _on_host_name_changed(self, row):
-        name = row.get_text().strip()
-        if not name:
+    def _debounce_edit(self, key: str, callback, delay_ms: int = TEXT_EDIT_DEBOUNCE_MS):
+        """Run `callback` once the user stops typing.
+
+        Text rows emit "changed" per keystroke, and some of these edits are
+        expensive enough that chasing every character is harmful - renaming
+        the host used to stop and restart the HTTP server (rebinding the
+        socket and respawning avahi-publish, dropping any in-flight request)
+        once per character typed.
+        """
+        pending = self._pending_edits.pop(key, None)
+        if pending:
+            GLib.source_remove(pending[0])
+
+        def fire():
+            self._pending_edits.pop(key, None)
+            callback()
+            return False
+
+        self._pending_edits[key] = (GLib.timeout_add(delay_ms, fire), callback)
+
+    def _flush_pending_edits(self):
+        """Apply anything still waiting on its debounce - closing the
+        window right after typing must not silently drop the edit."""
+        for key in list(self._pending_edits):
+            source, callback = self._pending_edits.pop(key)
+            GLib.source_remove(source)
+            callback()
+
+    def _on_close_request(self, *_args):
+        self._flush_pending_edits()
+        return False
+
+    def _on_host_name_changed(self, _row):
+        self._debounce_edit("host_name", self._apply_host_name)
+
+    def _apply_host_name(self):
+        name = self.host_name_row.get_text().strip()
+        if not name or name == self.config.network.get("host_name"):
             return
         self.config.network["host_name"] = name
         self.config.save()
@@ -794,6 +836,9 @@ class SettingsWindow(Adw.PreferencesWindow):
         return handler
 
     def _on_artwork_key_changed(self, row):
+        self._debounce_edit("artwork_key", lambda: self._apply_artwork_key(row))
+
+    def _apply_artwork_key(self, row):
         self.config.artwork["steamgriddb_api_key"] = row.get_text().strip()
         self.config.save()
 

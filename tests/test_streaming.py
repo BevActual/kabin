@@ -1,7 +1,15 @@
+import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from kabin.streaming import media_capabilities, stream_offer, test_pipeline_description
+from kabin.streaming import (
+    media_capabilities,
+    native_helper_status,
+    stream_offer,
+    test_pipeline_description,
+)
 
 
 class TestStreamingCapabilities(unittest.TestCase):
@@ -48,6 +56,38 @@ class TestStreamingCapabilities(unittest.TestCase):
         with patch("kabin.streaming.plugin_available", return_value=False):
             with self.assertRaisesRegex(RuntimeError, "WebRTC"):
                 test_pipeline_description()
+
+
+class TestNativeHelperStatusCache(unittest.TestCase):
+    def test_building_the_helper_mid_session_is_noticed(self):
+        # Regression: the status was cached forever, so after building the
+        # helper (a documented separate step) Settings and /v1/info kept
+        # reporting "helper is not built" until Kabin was restarted - and
+        # the cache went stale the other way if it was deleted.
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = Path(tmp) / "kabin-media-helper"
+
+            def fake_path():
+                return helper if helper.exists() else None
+
+            self_test = '{"ok":true,"transport":"webrtc","codec":"vp8"}'
+            with patch("kabin.streaming.native_helper_path", side_effect=fake_path), patch(
+                "kabin.streaming.subprocess.run",
+                return_value=SimpleNamespace(returncode=0, stdout=self_test, stderr=""),
+            ):
+                before = native_helper_status()
+                self.assertFalse(before["available"])
+                self.assertEqual(before["error"], "helper is not built")
+
+                helper.write_text("#!/bin/sh\n")
+                helper.chmod(0o755)
+
+                after = native_helper_status()
+                self.assertTrue(after["available"])
+                self.assertTrue(after["validated"])
+
+                helper.unlink()
+                self.assertFalse(native_helper_status()["available"])
 
 
 if __name__ == "__main__":

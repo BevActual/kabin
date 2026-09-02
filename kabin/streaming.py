@@ -25,14 +25,25 @@ def native_helper_path() -> Path | None:
     return Path(installed) if installed else None
 
 
-@lru_cache(maxsize=1)
-def native_helper_status() -> dict:
+def _helper_fingerprint() -> tuple | None:
+    """Identity of the helper binary right now, or None if there isn't one."""
     helper = native_helper_path()
     if helper is None:
+        return None
+    try:
+        info = helper.stat()
+    except OSError:
+        return None
+    return (str(helper), info.st_mtime_ns, info.st_size)
+
+
+@lru_cache(maxsize=4)
+def _native_helper_status(fingerprint: tuple | None) -> dict:
+    if fingerprint is None:
         return {"available": False, "validated": False, "error": "helper is not built"}
     try:
         result = subprocess.run(
-            [str(helper), "--self-test"],
+            [fingerprint[0], "--self-test"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -46,6 +57,19 @@ def native_helper_status() -> dict:
         "validated": result.returncode == 0 and payload.get("ok") is True,
         "error": result.stderr.strip() if result.returncode else "",
     }
+
+
+def native_helper_status() -> dict:
+    """Self-test result for the media helper, cached per binary.
+
+    The self-test spawns the helper with a 10s timeout, so this can't run
+    on every call (/v1/info hits it per request). Keying the cache on the
+    binary's path+mtime+size instead of caching one result forever means
+    building the helper mid-session - the documented workflow, since it's
+    a separate build step - is picked up straight away, rather than
+    Settings and /v1/info reporting "not built" until restart.
+    """
+    return _native_helper_status(_helper_fingerprint())
 
 
 def media_capabilities() -> dict:
