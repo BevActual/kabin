@@ -1,3 +1,4 @@
+import threading
 import unittest
 import urllib.error
 
@@ -55,6 +56,33 @@ class TestRemoteSource(unittest.TestCase):
             [host], fetcher=lambda *_args: {"games": []}
         )
         self.assertEqual(statuses["Host"]["state"], "online")
+
+    def test_hosts_are_queried_concurrently_and_results_keep_host_order(self):
+        # A powered-off host costs a full connect timeout. Querying hosts
+        # one after another made every refresh wait timeout × N.
+        hosts = [
+            {"name": "Slow", "token": "t"},
+            {"name": "Fast", "token": "t"},
+            {"name": "Down", "token": "t"},
+        ]
+        started = threading.Barrier(3, timeout=2)
+
+        def fetcher(host, _token):
+            # Only passes if all three fetches are in flight at once.
+            started.wait()
+            if host["name"] == "Down":
+                raise OSError("no route to host")
+            return {"games": [{"id": f"steam:{host['name']}", "title": host["name"]}]}
+
+        games, statuses = remote.discover(hosts, fetcher=fetcher)
+        self.assertEqual([game.title for game in games], ["Slow", "Fast"])
+        self.assertEqual(
+            [statuses[name]["state"] for name in ("Slow", "Fast", "Down")],
+            ["online", "online", "offline"],
+        )
+
+    def test_no_hosts_is_a_no_op(self):
+        self.assertEqual(remote.discover([]), ([], {}))
 
     def test_remote_game_defers_transferred_artwork(self):
         host = {"name": "Host", "token": "t"}

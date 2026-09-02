@@ -17,6 +17,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from http import HTTPStatus
+import socketserver
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .kinds import kind_for
@@ -199,6 +200,17 @@ def _catalog_counts(items: list[dict]) -> dict[str, int]:
 class _KabinHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+
+    def server_bind(self):
+        # HTTPServer.server_bind resolves the bind address with
+        # socket.getfqdn(), a reverse-DNS lookup that stalls for the full
+        # resolver timeout (5 s here) on hosts without a PTR record. That
+        # ran on the GTK main thread at startup and on every host toggle.
+        # Nothing in Kabin reads server_name, so bind without it.
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = host
+        self.server_port = port
 
     def handle_error(self, request, client_address):
         if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError, ssl.SSLError)):
@@ -554,7 +566,12 @@ class HostService:
             self.server = None
             return
         self.error = None
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        server = self.server
+        # A short poll keeps stop() (window close, host toggle) snappy;
+        # the default 0.5 s is a visible pause.
+        self.thread = threading.Thread(
+            target=lambda: server.serve_forever(poll_interval=0.1), daemon=True
+        )
         self.thread.start()
         self._publish(host_name, self.server.server_port)
 

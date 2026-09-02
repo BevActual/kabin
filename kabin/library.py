@@ -5,6 +5,7 @@ Extracted out of MainWindow so it can be tested without a live GTK window.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from .kinds import FOLDER_KINDS, kind_for
 from .network import media_stream_url
@@ -121,7 +122,14 @@ def sidebar_entries(games, config, host_statuses=None) -> list[SidebarEntry]:
             count = sum(1 for game in games if game.source == "remote" and game.subtitle == host)
             status = host_statuses.get(host, {})
             state = status.get("state")
-            badge = "Re-pair" if state == "auth" else ("Offline" if state == "offline" else count)
+            if state == "auth":
+                badge = "Re-pair"
+            elif state == "offline":
+                badge = "Offline"
+            elif state == "checking":
+                badge = "…"
+            else:
+                badge = count
             icon = "network-offline" if state in {"auth", "offline"} else "remote"
             entries.append(SidebarEntry("row", host, icon, badge, ("host", host)))
     return entries
@@ -422,6 +430,78 @@ def related_items(item, games, *, limit: int = 12) -> list:
     return matches[:limit]
 
 
+def local_path(item) -> Path | None:
+    """The file or folder behind a local item, or None for Steam/remote/apps."""
+    extra = getattr(item, "extra", None) or {}
+    raw = extra.get("path")
+    if not raw or getattr(item, "source", "") == "remote":
+        return None
+    return Path(raw)
+
+
+def format_size(size: int) -> str:
+    """'512 KB', '2.5 MB', '1.4 GB' - one decimal above KB, none below."""
+    if size < 1024:
+        return f"{size} B"
+    value = float(size)
+    for unit in ("KB", "MB", "GB", "TB"):
+        value /= 1024
+        if value < 1024 or unit == "TB":
+            break
+    if unit == "KB":
+        return f"{value:.0f} {unit}"
+    return f"{value:.1f}".rstrip("0").rstrip(".") + f" {unit}"
+
+
+def file_details(item) -> list[str]:
+    """Format and size for a file-backed item: ['SFC', '2.5 MB'].
+
+    Folders (albums, series) report nothing rather than the size of one
+    track. Items whose `media_format` already names the format (books,
+    video) don't repeat it here; only the ROM suffix is new information."""
+    path = local_path(item)
+    if path is None:
+        return []
+    try:
+        info = path.stat()
+    except OSError:
+        return []
+    if not path.is_file():
+        return []
+    parts = []
+    if getattr(item, "source", "") == "roms" and path.suffix:
+        parts.append(path.suffix.lstrip(".").upper())
+    parts.append(format_size(info.st_size))
+    return parts
+
+
+def rom_launch_summary(item, rom_dirs) -> str:
+    """'Plays with mGBA.' for a ROM, from the console folder it came from."""
+    if getattr(item, "source", "") != "roms":
+        return ""
+    path = local_path(item)
+    if path is None:
+        return ""
+    for entry in rom_dirs or []:
+        base = str(Path(entry.get("path", "")).expanduser())
+        if not base or not str(path).startswith(base.rstrip("/") + "/"):
+            continue
+        emulator = entry.get("emulator")
+        if isinstance(emulator, dict):
+            name = str(emulator.get("name") or "").split(" · ")[0].strip()
+            return f"Plays with {name}." if name else ""
+        if isinstance(emulator, str) and emulator.strip():
+            return f"Plays with a custom command: {emulator.split()[0]}."
+        return ""
+    return ""
+
+
+def play_count_label(count: int) -> str:
+    if count <= 1:
+        return ""
+    return f"{count} plays"
+
+
 def empty_state_message(kind, value, title, media, category_count: int, host_status=None) -> tuple[str, str]:
     """Title/description for the library's no-matches status page.
 
@@ -444,6 +524,11 @@ def empty_state_message(kind, value, title, media, category_count: int, host_sta
             return (
                 "Pair with this host again",
                 "Open Network & Hosts to pair again and verify this host's identity.",
+            )
+        if state == "checking":
+            return (
+                f"Checking {value}…",
+                "Kabin is asking this host for its library.",
             )
         return (
             f"{value} is offline",

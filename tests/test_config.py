@@ -308,6 +308,25 @@ class TestConfig(unittest.TestCase):
             self.assertIn("steam:553850", migrated.read_text())
             self.assertEqual(config._load_path, migrated)
 
+    def test_library_fingerprint_ignores_activity_but_not_scan_inputs(self):
+        # The window compares this before/after Settings to decide whether
+        # closing it needs a full rescan.
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            before = config.library_fingerprint()
+
+            config.record_played("steam:1")
+            config.record_play_time("steam:1", 600)
+            config.save_window_state(1280, 720, False)
+            self.assertEqual(config.library_fingerprint(), before)
+
+            config.add_media_dir(tmp, "book")
+            self.assertNotEqual(config.library_fingerprint(), before)
+
+            changed = config.library_fingerprint()
+            config.hide("steam:1")
+            self.assertNotEqual(config.library_fingerprint(), changed)
+
 
 if __name__ == "__main__":
     unittest.main()

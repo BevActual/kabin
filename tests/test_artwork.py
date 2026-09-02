@@ -67,6 +67,32 @@ class TestArtwork(unittest.TestCase):
             cover.touch()
             self.assertEqual(local_cover(rom), cover)
 
+    def test_local_cover_skips_missing_sidecar_folders(self):
+        # Without covers/ or media/, Kabin used to still probe 8 paths there.
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = Path(tmp) / "Game.gba"
+            rom.touch()
+            probed = []
+            real_is_file = Path.is_file
+            real_is_dir = Path.is_dir
+
+            def tracking_is_file(self):
+                probed.append(("file", str(self)))
+                return real_is_file(self)
+
+            def tracking_is_dir(self):
+                probed.append(("dir", str(self)))
+                return real_is_dir(self)
+
+            with patch.object(Path, "is_file", tracking_is_file), patch.object(
+                Path, "is_dir", tracking_is_dir
+            ):
+                self.assertIsNone(local_cover(rom))
+            file_probes = [path for kind, path in probed if kind == "file"]
+            # Four beside-ROM suffixes, then is_dir for covers/ and media/.
+            self.assertEqual(len(file_probes), 4)
+            self.assertTrue(all("/covers/" not in path and "/media/" not in path for path in file_probes))
+
     def test_finds_folder_cover_for_albums(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)

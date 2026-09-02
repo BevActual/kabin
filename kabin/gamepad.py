@@ -40,7 +40,9 @@ BUTTON_ACTIONS = {
     BTN_TR: "next",
     BTN_SELECT: "search",
     BTN_START: "options",
-    BTN_MODE: "options",
+    # Guide / Mode is free of the Start→Settings mapping and is the
+    # natural "reload the cabinet" button on a couch pad.
+    BTN_MODE: "refresh",
     BTN_THUMBL: "random",
 }
 
@@ -141,8 +143,13 @@ class GamepadMonitor:
         self._held: dict[str, float] = {}
         self._last_repeat: dict[str, float] = {}
         self._axis_actions: dict[int, str | None] = {}
+        self._has_pad = False
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    @property
+    def connected(self) -> bool:
+        return self._has_pad
 
     def close(self) -> None:
         self._stop.set()
@@ -200,6 +207,7 @@ class GamepadMonitor:
             except OSError:
                 continue
             opened[fd] = path
+            self._has_pad = True
         return opened
 
     def _run(self) -> None:

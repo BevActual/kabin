@@ -100,15 +100,19 @@ def get_games(
 
 def _make_launcher(emulator, rom_path: Path, emulation_settings=None, bios_path=None):
     def launch():
+        """Start the emulator and hand back its process so the window can
+        follow it (play time, early-exit warnings, refocus on quit)."""
         if isinstance(emulator, dict):
             command = build_command(emulator, rom_path, emulation_settings)
             environment = launch_environment(emulator, bios_path)
         else:
             command = custom_command(emulator, rom_path)
             environment = None
-        if environment is None:
-            subprocess.Popen(command)
-        else:
-            subprocess.Popen(command, env=environment)
+        # Own session: a Ctrl+C or crash in Kabin must not take the game
+        # with it, and the emulator must not inherit our controlling tty.
+        options = {"start_new_session": True}
+        if environment is not None:
+            options["env"] = environment
+        return subprocess.Popen(command, **options)
 
     return launch

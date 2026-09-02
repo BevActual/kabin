@@ -38,7 +38,11 @@ from .library import (  # noqa: E402
     can_read_remote,
     compare_items,
     empty_state_message,
+    file_details,
     library_group_for,
+    local_path,
+    play_count_label,
+    rom_launch_summary,
     library_scope_filters,
     is_playing,
     item_progress,
@@ -85,14 +89,25 @@ from .reader import (  # noqa: E402
     remote_read_cache_path,
     remote_read_suffix,
     resume_page,
+    resume_scroll,
     save_page_progress,
     scroll_adjustment,
     step_adjustment,
     sync_progress_from_remote,
     uses_tap_zones,
 )
+from .sessions import (  # noqa: E402
+    PlaySession,
+    format_play_time,
+    quick_failure_message,
+    recordable_seconds,
+)
 from .settings import SettingsWindow  # noqa: E402
-from .sources import discover_all_with_status  # noqa: E402
+from .sources import (  # noqa: E402
+    discover_local_with_errors,
+    discover_remote,
+    remote_host_names,
+)
 from .sources import steam as steam_source  # noqa: E402
 
 
@@ -471,6 +486,9 @@ class MainWindow(Adw.ApplicationWindow):
         self._unplayed_only = False
         self._refresh_generation = 0
         self._stream_helper = None
+        self._play_session = None
+        self._play_session_source = None
+        self._play_session_minimized = False
         self._playback = None
         self._playback_item = None
         self._playback_queue = []
@@ -541,7 +559,10 @@ class MainWindow(Adw.ApplicationWindow):
         self.search_entry.connect("search-changed", self._on_search_changed)
         header.set_title_widget(self.search_entry)
 
-        refresh_button = Gtk.Button(icon_name="view-refresh-symbolic", tooltip_text="Refresh")
+        refresh_button = Gtk.Button(
+            icon_name="view-refresh-symbolic",
+            tooltip_text="Refresh · F5 · Guide",
+        )
         refresh_button.add_css_class("kabin-icon-button")
         refresh_button.add_css_class("flat")
         refresh_button.connect("clicked", lambda *_: self.refresh())
@@ -573,7 +594,10 @@ class MainWindow(Adw.ApplicationWindow):
         self.sort_dropdown.connect("notify::selected", self._on_sort_changed)
         header.pack_end(self.sort_dropdown)
 
-        settings_button = Gtk.Button(icon_name="emblem-system-symbolic", tooltip_text="Settings")
+        settings_button = Gtk.Button(
+            icon_name="emblem-system-symbolic",
+            tooltip_text="Settings · Start",
+        )
         settings_button.add_css_class("kabin-icon-button")
         settings_button.add_css_class("flat")
         settings_button.connect("clicked", lambda *_: self._open_settings())
@@ -1089,7 +1113,13 @@ class MainWindow(Adw.ApplicationWindow):
         hide_button = Gtk.Button(child=Adw.ButtonContent(icon_name="view-conceal-symbolic", label="Hide from Library"))
         hide_button.add_css_class("flat")
         hide_button.connect("clicked", self._hide_selected_game)
+        self.details_open_folder_button = Gtk.Button(
+            child=Adw.ButtonContent(icon_name="folder-open-symbolic", label="Open folder")
+        )
+        self.details_open_folder_button.add_css_class("flat")
+        self.details_open_folder_button.connect("clicked", self._open_selected_folder)
         more_content.append(cover_button)
+        more_content.append(self.details_open_folder_button)
         more_content.append(hide_button)
         more_popover.set_child(more_content)
         self.details_more_button.set_popover(more_popover)
@@ -1318,12 +1348,25 @@ class MainWindow(Adw.ApplicationWindow):
             self.loading_status.set_description("Finding titles on this device…")
 
         def worker():
+            # Local sources first, so a paired host that's powered off (a
+            # full connect timeout per host) never keeps this device's own
+            # titles behind "Updating your library…".
             try:
-                games, host_statuses = discover_all_with_status(self.config)
+                games, scan_errors = discover_local_with_errors(self.config)
             except Exception as exc:
                 GLib.idle_add(self._on_games_load_failed, generation, exc)
                 return
-            GLib.idle_add(self._on_games_loaded, generation, games, host_statuses)
+            pending_hosts = remote_host_names(self.config)
+            checking = {
+                name: {"state": "checking", "message": "Checking…"} for name in pending_hosts
+            }
+            GLib.idle_add(self._on_games_loaded, generation, games, checking)
+            if scan_errors:
+                GLib.idle_add(self._report_scan_errors, generation, scan_errors)
+            if not pending_hosts:
+                return
+            remote_games, host_statuses = discover_remote(self.config)
+            GLib.idle_add(self._on_remote_loaded, generation, remote_games, host_statuses)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -1340,6 +1383,15 @@ class MainWindow(Adw.ApplicationWindow):
         self._toast(f"Could not refresh your library · {error}")
         if hasattr(self, "content_stack"):
             self._update_stack_visibility()
+        return False
+
+    def _report_scan_errors(self, generation, errors):
+        """One toast per source that blew up mid-scan. Without this a
+        permission error or bad path empties a whole section with no hint."""
+        if generation != self._refresh_generation:
+            return False
+        for label, detail in errors.items():
+            self._toast(f"Couldn't scan {label} · {detail}")
         return False
 
     def _on_games_loaded(self, generation, games, host_statuses=None):
@@ -1372,6 +1424,31 @@ class MainWindow(Adw.ApplicationWindow):
             self._show_details(None)
         if not self._search_text:
             self._set_nav_target(self._library_nav_target(), show_focus=False)
+        return False
+
+    def _on_remote_loaded(self, generation, remote_games, host_statuses):
+        """Second half of refresh(): fold paired hosts' catalogs into the
+        already-visible local library without disturbing what the user is
+        looking at (selection, details, Home focus)."""
+        if generation != self._refresh_generation:
+            return False
+        for game in remote_games:
+            adopt_progress(self.config, game.id, game.extra.get("progress"))
+        games = [game for game in self._games if game.source != "remote"] + list(remote_games)
+        games.sort(key=lambda g: g.sort_key)
+        self._games = games
+        self._host_statuses = host_statuses or {}
+        if remote_games:
+            sync_progress_from_remote(games, self.config)
+        self._rebuild_sidebar(games, preserve_category=self._category)
+        for game in remote_games:
+            self.game_store.append(GameItem(game))
+        if remote_games:
+            self._rebuild_recent_shelf(games)
+        self._update_stack_visibility()
+        self._update_library_header()
+        self._update_filter_bar()
+        self._update_game_scope()
         return False
 
     def _clear_box(self, box):
@@ -1730,12 +1807,22 @@ class MainWindow(Adw.ApplicationWindow):
         )
         if host_unavailable:
             self.content_stack.set_visible_child_name("no-matches")
+        elif not self._games and self._hosts_being_checked():
+            # Nothing local yet, but paired hosts haven't answered: don't
+            # flash "your library is empty" for the length of a timeout.
+            self.loading_status.set_description("Checking Kabin hosts…")
+            self.content_stack.set_visible_child_name("loading")
         elif not self._games:
             self.content_stack.set_visible_child_name("empty")
         elif not any(self._matches(g) for g in self._games):
             self.content_stack.set_visible_child_name("no-matches")
         else:
             self.content_stack.set_visible_child_name("games")
+
+    def _hosts_being_checked(self) -> bool:
+        return any(
+            status.get("state") == "checking" for status in self._host_statuses.values()
+        )
 
     def _tile_kind(self):
         kind, value = self._category
@@ -1901,12 +1988,72 @@ class MainWindow(Adw.ApplicationWindow):
             return
         if not game.launch:
             return
-        self.config.record_played(game.id)
-        self._rebuild_recent_shelf(self._games)
+        if self._play_session and self._play_session.game_id == game.id:
+            self._toast(f"{game.title} is already running.")
+            return
         try:
-            game.launch()
+            process = game.launch()
         except Exception as exc:
             self._toast(f"Could not launch {game.title} · {exc}")
+            return
+        # Only count it as played once the process actually started; a
+        # missing emulator shouldn't put the game on the Continue shelf.
+        self.config.record_played(game.id)
+        self._rebuild_recent_shelf(self._games)
+        if hasattr(process, "poll"):
+            self._begin_play_session(game, process)
+
+    # -- launched-process tracking ----------------------------------------
+
+    def _begin_play_session(self, game, process):
+        self._end_play_session(record=True)
+        self._play_session = PlaySession(game.id, game.title, process)
+        self._play_session_source = GLib.timeout_add(1000, self._poll_play_session)
+        self._sync_play_button(game)
+        # Get out of the way of a fullscreen emulator; restore in
+        # _finish_play_session when the process exits.
+        self._play_session_minimized = True
+        self.minimize()
+
+    def _poll_play_session(self):
+        session = self._play_session
+        if session is None:
+            self._play_session_source = None
+            return False
+        returncode = session.returncode()
+        if returncode is None:
+            return True
+        self._play_session_source = None
+        self._finish_play_session(session, returncode)
+        return False
+
+    def _finish_play_session(self, session, returncode):
+        elapsed = session.elapsed()
+        self._play_session = None
+        was_minimized = getattr(self, "_play_session_minimized", False)
+        self._play_session_minimized = False
+        self.config.record_play_time(session.game_id, recordable_seconds(elapsed))
+        game = self._selected_game
+        if game is not None and game.id == session.game_id:
+            self._show_details(game)
+        message = quick_failure_message(session.title, returncode, elapsed)
+        if message:
+            self._toast(message)
+        if not self._closing and was_minimized:
+            # The emulator just went away; put the cabinet back in front so
+            # the controller lands on the library, not the desktop.
+            self.present()
+
+    def _end_play_session(self, *, record: bool):
+        """Stop following the current process without killing it."""
+        if self._play_session_source is not None:
+            GLib.source_remove(self._play_session_source)
+            self._play_session_source = None
+        session = self._play_session
+        self._play_session = None
+        self._play_session_minimized = False
+        if session is not None and record:
+            self.config.record_play_time(session.game_id, recordable_seconds(session.elapsed()))
 
     def _can_play_media(self, game) -> bool:
         return can_play_media(game)
@@ -1995,6 +2142,8 @@ class MainWindow(Adw.ApplicationWindow):
         return queue_for(game)
 
     def _play_button_label(self, game) -> str:
+        if self._is_running(game):
+            return "Playing"
         return play_button_label(
             game,
             self.config,
@@ -2002,15 +2151,21 @@ class MainWindow(Adw.ApplicationWindow):
             playback=self._playback,
         )
 
+    def _is_running(self, game) -> bool:
+        return self._play_session is not None and self._play_session.game_id == game.id
+
     def _sync_play_button(self, game):
         if self._selected_game is not game:
             return
         self.details_play_button.set_label(self._play_button_label(game))
         self.details_play_button.set_sensitive(
-            bool(game.launch)
-            or self._can_play_media(game)
-            or self._opens_in_reader(game)
-            or (game.source == "remote" and kind_for(game).id == "game")
+            not self._is_running(game)
+            and (
+                bool(game.launch)
+                or self._can_play_media(game)
+                or self._opens_in_reader(game)
+                or (game.source == "remote" and kind_for(game).id == "game")
+            )
         )
 
     def _show_player_bar(self, visible: bool):
@@ -2709,6 +2864,21 @@ class MainWindow(Adw.ApplicationWindow):
             except Exception as exc:
                 result = (None, None, exc)
             GLib.idle_add(self._on_reader_page_ready, request_id, item, index, total, result)
+            # Warm the next page while the current one paints. Back-flips
+            # already hit the LRU; forward on CBR/CB7 used to cold-extract
+            # every time. Same thread as the render (Poppler isn't reentrant).
+            if result[2] is None and index + 1 < total and backend in {
+                "comic-7z",
+                "comic-rar",
+                "pdf",
+            }:
+                try:
+                    if backend == "pdf":
+                        pages.page_bytes(index + 1, target_width=target_width or PDF_RENDER_WIDTH)
+                    else:
+                        pages.page_bytes(index + 1)
+                except Exception:
+                    pass
 
     def _on_reader_page_ready(self, request_id, item, index, total, result):
         if self._closing or request_id != self._reader_request or self._reader_item is not item:
@@ -2739,6 +2909,16 @@ class MainWindow(Adw.ApplicationWindow):
         elif backend == "text":
             self.reader_text_view.get_buffer().set_text(data.decode("utf-8", errors="replace"))
             self.reader_content_stack.set_visible_child_name("text")
+            self._reader_page_index = index
+            self.reader_page_label.set_label(f"{index + 1} / {total}")
+            self.reader_seek.set_value(index)
+            # Keep any saved mid-page scroll; restoring happens after GTK
+            # has laid out the text so the adjustment has a real upper.
+            self._persist_reader_progress(item)
+            saved_scroll = resume_scroll(self.config, item.id)
+            if saved_scroll > 0:
+                GLib.idle_add(self._restore_reader_scroll, saved_scroll)
+            return False
         else:
             try:
                 texture = Gdk.Texture.new_from_bytes(GLib.Bytes.new(data))
@@ -2753,10 +2933,42 @@ class MainWindow(Adw.ApplicationWindow):
         self._persist_reader_progress(item)
         return False
 
-    def _persist_reader_progress(self, item):
+    def _reader_scroll_fraction(self) -> float:
+        adj = scroll_adjustment(getattr(self, "reader_text_scroller", None))
+        if adj is None:
+            return 0.0
+        span = adj.get_upper() - adj.get_page_size()
+        if span <= 0:
+            return 0.0
+        return max(0.0, min(1.0, adj.get_value() / span))
+
+    def _restore_reader_scroll(self, fraction: float):
+        adj = scroll_adjustment(getattr(self, "reader_text_scroller", None))
+        if adj is None:
+            return False
+        span = adj.get_upper() - adj.get_page_size()
+        if span > 0:
+            adj.set_value(fraction * span)
+        return False
+
+    def _persist_reader_progress(self, item, *, write_scroll: bool = False):
         if not item or not self._reader_pages or not self._reader_page_count:
             return
-        save_page_progress(self.config, item.id, self._reader_page_index, self._reader_page_count)
+        scroll = None
+        if self._reader_backend == "text":
+            fraction = self._reader_scroll_fraction()
+            # Opening a TXT lays out at scroll 0; writing that would wipe the
+            # saved place before the idle restore runs. Only commit scroll
+            # when the reader is leaving or the user has moved.
+            if write_scroll or fraction > 0:
+                scroll = fraction
+        save_page_progress(
+            self.config,
+            item.id,
+            self._reader_page_index,
+            self._reader_page_count,
+            scroll=scroll,
+        )
         page = self._reader_page_index
         total = self._reader_page_count
         for host, item_id in reader_progress_targets(item, getattr(self, "_games", [])):
@@ -2817,7 +3029,7 @@ class MainWindow(Adw.ApplicationWindow):
     def _close_reader(self):
         item = self._reader_item
         if item and self._reader_pages and self._reader_page_count:
-            self._persist_reader_progress(item)
+            self._persist_reader_progress(item, write_scroll=True)
             self._sync_play_button(item)
             self._rebuild_recent_shelf(self._games)
         self._close_reader_resources()
@@ -2884,6 +3096,18 @@ class MainWindow(Adw.ApplicationWindow):
             self._update_backdrop(path)
         self.game_filter.changed(Gtk.FilterChange.DIFFERENT)
         self._rebuild_recent_shelf(self._games)
+
+    def _open_selected_folder(self, _button):
+        game = self._selected_game
+        self.details_more_button.popdown()
+        path = local_path(game) if game else None
+        if path is None:
+            return
+        folder = path if path.is_dir() else path.parent
+        try:
+            Gio.AppInfo.launch_default_for_uri(folder.as_uri(), None)
+        except GLib.Error as exc:
+            self._toast(f"Could not open {folder.name} · {exc.message}")
 
     def _hide_selected_game(self, _button):
         game = self._selected_game
@@ -2974,6 +3198,15 @@ class MainWindow(Adw.ApplicationWindow):
         if last_played:
             played_date = time.strftime("%b %d, %Y", time.localtime(last_played)).replace(" 0", " ")
             meta_parts.append(f"{kind.last_opened} {played_date}")
+        if kind.id == "game":
+            played_for = format_play_time(self.config.play_seconds(game.id))
+            if played_for:
+                meta_parts.append(f"Played {played_for}")
+            plays = play_count_label(self.config.play_count(game.id))
+            if plays:
+                meta_parts.append(plays)
+        meta_parts.extend(file_details(game))
+        self.details_open_folder_button.set_visible(local_path(game) is not None)
 
         if game.source == "remote" and kind.id == "game":
             remote_system = game.extra.get("remote_system")
@@ -3006,6 +3239,8 @@ class MainWindow(Adw.ApplicationWindow):
             self.details_description.set_label(
                 "Kabin plays this here and remembers your place." + self._resume_hint(game)
             )
+        elif game.source == "roms":
+            self.details_description.set_label(rom_launch_summary(game, self.config.rom_dirs))
         if game.source == "remote" and game.extra.get("has_artwork") and not game.extra.get("appid"):
             host = game.extra["host"]
             _remote_artwork.request(
@@ -3087,7 +3322,17 @@ class MainWindow(Adw.ApplicationWindow):
             initial_page=page,
             transient_for=self,
         )
-        settings_window.connect("close-request", lambda *_: self.refresh() or False)
+        before = self.config.library_fingerprint()
+
+        def on_close(*_args):
+            # Only rescan when something that feeds the scan changed;
+            # glancing at Settings and backing out shouldn't drop the
+            # user on "Updating your library…" and lose their place.
+            if self.config.library_fingerprint() != before:
+                self.refresh()
+            return False
+
+        settings_window.connect("close-request", on_close)
         settings_window.present()
 
     def _on_close_request(self, *_args):
@@ -3096,6 +3341,7 @@ class MainWindow(Adw.ApplicationWindow):
             GLib.source_remove(self._search_timeout)
             self._search_timeout = 0
         self.config.save_window_state(self.get_width(), self.get_height(), self.is_maximized())
+        self._end_play_session(record=True)
         self._stop_playback()
         self._close_reader_resources()
         self._replace_stream_helper(None)
@@ -3224,6 +3470,9 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_cabinet_action(self, action: str):
         if action == "options":
             self._open_settings()
+            return False
+        if action == "refresh":
+            self.refresh()
             return False
         if action == "random":
             self._surprise_selected()

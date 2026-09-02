@@ -32,6 +32,7 @@ from kabin.reader import (
     remote_read_cache_path,
     remote_read_suffix,
     resume_page,
+    resume_scroll,
     save_page_progress,
     step_adjustment,
     sync_progress_from_remote,
@@ -750,6 +751,25 @@ class TestReaderProgress(unittest.TestCase):
             config = Config(path=Path(tmp) / "config.json")
             save_page_progress(config, "comic:1", 95, 100)
             self.assertEqual(resume_page(config, "comic:1"), 0)
+
+    def test_txt_scroll_is_remembered_across_page_saves(self):
+        # TXT is a single "page"; without scroll memory reopen always
+        # tops out even after reading halfway down.
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            save_page_progress(config, "book:notes.txt", 0, 1, scroll=0.42)
+            self.assertEqual(resume_scroll(config, "book:notes.txt"), 0.42)
+            # Updating only the page index must not wipe mid-page place.
+            save_page_progress(config, "book:notes.txt", 0, 1)
+            self.assertEqual(resume_scroll(config, "book:notes.txt"), 0.42)
+            save_page_progress(config, "book:notes.txt", 0, 1, scroll=0.0)
+            self.assertEqual(resume_scroll(config, "book:notes.txt"), 0.0)
+
+    def test_finished_book_clears_scroll_on_resume(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            save_page_progress(config, "book:notes.txt", 1, 1, scroll=0.9)
+            self.assertEqual(resume_scroll(config, "book:notes.txt"), 0.0)
 
 
 def _local(item_id, media_type="comic", directory=None, contents=b"local book bytes"):

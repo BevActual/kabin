@@ -780,6 +780,24 @@ class TestNetwork(unittest.TestCase):
                 response = sock.recv(200)
         self.assertIn(b"400", response)
 
+    def test_start_does_not_do_a_reverse_dns_lookup(self):
+        # Regression: HTTPServer.server_bind calls socket.getfqdn() on the
+        # bind address, which blocks for the resolver timeout (5 s on this
+        # machine) - and HostService.start() runs on the GTK main thread at
+        # startup and on every Kabin Host toggle in Settings.
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Config(path=Path(tmp) / "config.json")
+            config.network["port"] = 0
+            service = HostService(config, lambda: [], tls=False)
+            with patch.object(service, "_publish"), patch(
+                "kabin.network.socket.getfqdn",
+                side_effect=AssertionError("reverse DNS lookup on start"),
+            ):
+                service.start()
+            self.addCleanup(service.stop)
+            self.assertIsNone(service.error)
+            self.assertEqual(service.server.server_name, "0.0.0.0")
+
     def test_pairing_locks_after_repeated_failures(self):
         with tempfile.TemporaryDirectory() as tmp:
             service = HostService(

@@ -15,7 +15,12 @@ from kabin.library import (
     can_read_remote,
     compare_items,
     empty_state_message,
+    file_details,
+    format_size,
     game_library_filters,
+    local_path,
+    play_count_label,
+    rom_launch_summary,
     reading_library_filters,
     watching_library_filters,
     is_playing,
@@ -172,6 +177,20 @@ class TestSidebarEntries(unittest.TestCase):
                 ("row", "Den", "Offline"),
             ],
         )
+
+    def test_host_still_being_checked_shows_ellipsis_not_zero(self):
+        # Local titles appear before paired hosts have answered; a "0"
+        # badge would read as "this host has nothing" for the length of a
+        # connect timeout.
+        self.config.network["remote_hosts"] = [{"name": "Den", "token": "t"}]
+        entries = sidebar_entries([], self.config, {"Den": {"state": "checking"}})
+        den = next(entry for entry in entries if entry.label == "Den")
+        self.assertEqual(den.count, "…")
+        self.assertEqual(den.icon_key, "remote")
+        title, _description = empty_state_message(
+            "host", "Den", "Den", None, 0, {"state": "checking"}
+        )
+        self.assertEqual(title, "Checking Den…")
 
     def test_console_and_steam_highlight_the_games_row(self):
         self.assertEqual(sidebar_highlight_category(("system", "Nintendo 64")), CATEGORY_GAMES)
@@ -608,6 +627,63 @@ class TestNextQueueIndex(unittest.TestCase):
 
     def test_empty_queue_is_always_out_of_range(self):
         self.assertIsNone(next_queue_index(0, 0))
+
+
+class TestDetailsHelpers(unittest.TestCase):
+    def test_format_size(self):
+        self.assertEqual(format_size(512), "512 B")
+        self.assertEqual(format_size(524288), "512 KB")
+        self.assertEqual(format_size(2_621_440), "2.5 MB")
+        self.assertEqual(format_size(4 * 1024**3), "4 GB")
+
+    def test_rom_file_details_show_format_and_size(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = Path(tmp) / "Game.sfc"
+            rom.write_bytes(b"x" * 2048)
+            game = _game("roms:snes:Game.sfc", source="roms", extra={"path": str(rom)})
+            self.assertEqual(file_details(game), ["SFC", "2 KB"])
+            self.assertEqual(local_path(game), rom)
+
+    def test_books_do_not_repeat_the_format_and_folders_report_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            book = Path(tmp) / "Novel.epub"
+            book.write_bytes(b"x" * 1024)
+            item = _game("book:Novel.epub", source="book", media_type="book", extra={"path": str(book)})
+            self.assertEqual(file_details(item), ["1 KB"])
+            album = _game("music:Album", source="music", media_type="music", extra={"path": tmp})
+            self.assertEqual(file_details(album), [])
+
+    def test_remote_and_steam_items_have_no_local_path(self):
+        self.assertIsNone(local_path(_game("steam:1")))
+        remote = _game("remote:Den:book:x", source="remote", extra={"path": "/on/the/host.epub"})
+        self.assertIsNone(local_path(remote))
+        self.assertEqual(file_details(remote), [])
+
+    def test_rom_launch_summary_names_the_console_folder_emulator(self):
+        rom_dirs = [
+            {"path": "/roms/gba", "system": "gba", "emulator": {"id": "mgba", "name": "mGBA"}},
+            {
+                "path": "/roms/psp",
+                "system": "psp",
+                "emulator": {"id": "ppsspp", "name": "PPSSPP · Managed by Kabin"},
+            },
+            {"path": "/roms/nes", "system": "nes", "emulator": "retroarch -L nes.so {rom}"},
+        ]
+        gba = _game("roms:gba:x", source="roms", extra={"path": "/roms/gba/x.gba"})
+        self.assertEqual(rom_launch_summary(gba, rom_dirs), "Plays with mGBA.")
+        psp = _game("roms:psp:x", source="roms", extra={"path": "/roms/psp/x.iso"})
+        self.assertEqual(rom_launch_summary(psp, rom_dirs), "Plays with PPSSPP.")
+        nes = _game("roms:nes:x", source="roms", extra={"path": "/roms/nes/x.nes"})
+        self.assertEqual(rom_launch_summary(nes, rom_dirs), "Plays with a custom command: retroarch.")
+        # "/roms/gbax" must not match the "/roms/gba" folder by prefix.
+        stray = _game("roms:gba:y", source="roms", extra={"path": "/roms/gbax/y.gba"})
+        self.assertEqual(rom_launch_summary(stray, rom_dirs), "")
+        self.assertEqual(rom_launch_summary(_game("steam:1"), rom_dirs), "")
+
+    def test_play_count_label_only_once_it_is_interesting(self):
+        self.assertEqual(play_count_label(0), "")
+        self.assertEqual(play_count_label(1), "")
+        self.assertEqual(play_count_label(7), "7 plays")
 
 
 class TestEmptyStateMessage(unittest.TestCase):

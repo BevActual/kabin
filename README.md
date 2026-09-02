@@ -49,6 +49,13 @@ Performance play profiles. Fullscreen, VSync, integer scaling, and rewind
 are translated at launch for the emulators that accept them. Connected Linux
 game controllers are shown alongside these defaults.
 
+Kabin follows the emulator it launches: the details page shows total play
+time and play count next to the ROM's format and size, an emulator that
+exits within seconds of launch is called out with its exit code (the usual
+sign of a rejected flag or missing BIOS), and the cabinet minimizes while
+you play then comes back to the front when the game quits. On a controller,
+Start opens Settings and the Guide/Mode button refreshes the library.
+
 Optional console cover art comes from SteamGridDB. Add a personal API key in
 Settings → Artwork; Kabin then sends normalized game titles to the
 SteamGridDB search API and caches portrait covers locally. The key is stored

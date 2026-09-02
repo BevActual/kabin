@@ -26,6 +26,7 @@ def progress_for(config, item_id: str) -> dict:
         "position": float(raw.get("position") or 0),
         "duration": float(raw.get("duration") or 0),
         "track": int(raw.get("track") or 0),
+        "scroll": max(0.0, min(1.0, float(raw.get("scroll") or 0))),
         "updated_at": float(raw.get("updated_at") or 0),
     }
 
@@ -35,17 +36,36 @@ def public_progress(info: dict) -> dict:
         "position": float(info.get("position") or 0),
         "duration": float(info.get("duration") or 0),
         "track": int(info.get("track") or 0),
+        "scroll": max(0.0, min(1.0, float(info.get("scroll") or 0))),
         "updated_at": float(info.get("updated_at") or 0),
     }
 
 
-def save_progress(config, item_id: str, position: float, duration: float = 0, track: int = 0) -> None:
-    progress_map(config)[item_id] = {
+def save_progress(
+    config,
+    item_id: str,
+    position: float,
+    duration: float = 0,
+    track: int = 0,
+    scroll: float | None = None,
+) -> None:
+    existing = progress_map(config).get(item_id) or {}
+    payload = {
         "position": max(0.0, float(position)),
         "duration": max(0.0, float(duration)),
         "track": max(0, int(track)),
         "updated_at": time.time(),
     }
+    if scroll is not None:
+        payload["scroll"] = max(0.0, min(1.0, float(scroll)))
+    elif "scroll" in existing:
+        # Keep mid-page scroll when only the page index is being updated
+        # (opening a TXT file must not wipe the place you left off).
+        try:
+            payload["scroll"] = max(0.0, min(1.0, float(existing["scroll"] or 0)))
+        except (TypeError, ValueError):
+            pass
+    progress_map(config)[item_id] = payload
     config.save()
 
 

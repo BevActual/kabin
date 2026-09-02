@@ -988,8 +988,21 @@ def resume_page(config, item_id: str) -> int:
     return int(position)
 
 
-def save_page_progress(config, item_id: str, page: int, total: int) -> None:
-    playback.save_progress(config, item_id, position=page, duration=total, track=0)
+def resume_scroll(config, item_id: str) -> float:
+    """0–1 fraction down the current page. Used for single-page backends
+    (TXT) where the page index alone always tops out at the start."""
+    info = playback.progress_for(config, item_id)
+    if info["duration"] and info["position"] >= info["duration"] * playback.FINISHED_RATIO:
+        return 0.0
+    return float(info.get("scroll") or 0.0)
+
+
+def save_page_progress(
+    config, item_id: str, page: int, total: int, scroll: float | None = None
+) -> None:
+    playback.save_progress(
+        config, item_id, position=page, duration=total, track=0, scroll=scroll
+    )
 
 
 def sync_progress_from_remote(games, config) -> None:

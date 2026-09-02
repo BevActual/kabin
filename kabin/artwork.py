@@ -51,23 +51,37 @@ class CoverCandidate:
 def cached_cover(game_id: str, root: Path | None = None) -> Path | None:
     digest = hashlib.sha256(game_id.encode()).hexdigest()
     directory = root or artwork_root()
-    return next(
-        (path for suffix in _IMAGE_SUFFIXES if (path := directory / f"{digest}{suffix}").is_file()),
-        None,
-    )
+    # Skip the four suffix probes when the cache dir was never created.
+    if not directory.is_dir():
+        return None
+    for suffix in _IMAGE_SUFFIXES:
+        path = directory / f"{digest}{suffix}"
+        if path.is_file():
+            return path
+    return None
 
 
 def local_cover(rom_path: Path) -> Path | None:
-    candidates = []
+    """Sidecar art beside the ROM, then in covers/ or media/.
+
+    Checks layouts in order and returns on the first hit so a library with
+    covers next to the ROMs pays one `is_file` per title, and a library
+    without a covers/ folder skips those four probes entirely."""
+    parent = rom_path.parent
     for suffix in _IMAGE_SUFFIXES:
-        candidates.extend(
-            (
-                rom_path.with_suffix(suffix),
-                rom_path.parent / "covers" / f"{rom_path.stem}{suffix}",
-                rom_path.parent / "media" / f"{rom_path.stem}{suffix}",
-            )
-        )
-    return next((path for path in candidates if path.is_file()), None)
+        path = rom_path.with_suffix(suffix)
+        if path.is_file():
+            return path
+    stem = rom_path.stem
+    for subdir in ("covers", "media"):
+        folder = parent / subdir
+        if not folder.is_dir():
+            continue
+        for suffix in _IMAGE_SUFFIXES:
+            path = folder / f"{stem}{suffix}"
+            if path.is_file():
+                return path
+    return None
 
 
 def folder_cover(directory: Path) -> Path | None:

@@ -7,6 +7,7 @@ from kabin.gamepad import (
     ABS_X,
     ABS_Y,
     BTN_EAST,
+    BTN_MODE,
     BTN_SOUTH,
     BTN_START,
     BTN_THUMBL,
@@ -57,6 +58,7 @@ class TestGamepad(unittest.TestCase):
         self.assertEqual(button_to_action(BTN_SOUTH, 1), "confirm")
         self.assertEqual(button_to_action(BTN_EAST, 1), "back")
         self.assertEqual(button_to_action(BTN_START, 1), "options")
+        self.assertEqual(button_to_action(BTN_MODE, 1), "refresh")
         self.assertEqual(button_to_action(BTN_THUMBL, 1), "random")
         self.assertIsNone(button_to_action(BTN_SOUTH, 0))
 

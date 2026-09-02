@@ -47,6 +47,7 @@ DEFAULT_CONFIG = {
     "steam_root": None,
     "recent": {},  # game id -> unix timestamp of last launch through kabin
     "play_counts": {},
+    "play_time": {},  # game id -> total seconds the launched process ran
     "favorites": [],
     "emulation": DEFAULT_EMULATION_SETTINGS,
     "artwork": {"steamgriddb_api_key": "", "openlibrary_covers": True, "covers": {}},
@@ -108,6 +109,20 @@ class Config:
                 continue
             self.data[key] = value
         return True
+
+    # Activity bookkeeping that changes on its own while Settings is open
+    # (a stream finishing, progress ticking) and never affects what a
+    # library scan would find.
+    _LIBRARY_NEUTRAL_KEYS = frozenset({"recent", "play_counts", "play_time", "progress", "window"})
+
+    def library_fingerprint(self) -> str:
+        """Stable digest of everything that can change a library scan's
+        result; compare before/after Settings to skip a needless refresh."""
+        relevant = {
+            key: value for key, value in self.data.items()
+            if key not in self._LIBRARY_NEUTRAL_KEYS
+        }
+        return json.dumps(relevant, sort_keys=True, default=str)
 
     def save(self):
         with _SAVE_LOCK:
@@ -203,6 +218,20 @@ class Config:
 
     def play_count(self, game_id: str) -> int:
         return int(self.play_counts.get(game_id, 0))
+
+    @property
+    def play_time(self) -> dict:
+        """game id -> total seconds Kabin has watched it run."""
+        return self.data.setdefault("play_time", {})
+
+    def record_play_time(self, game_id: str, seconds: int):
+        if seconds <= 0:
+            return
+        self.play_time[game_id] = int(self.play_time.get(game_id, 0)) + int(seconds)
+        self.save()
+
+    def play_seconds(self, game_id: str) -> int:
+        return int(self.play_time.get(game_id, 0))
 
     def recent_ids(self, limit: int = 8) -> list:
         ordered = sorted(self.recent.items(), key=lambda kv: kv[1], reverse=True)

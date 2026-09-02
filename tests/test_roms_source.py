@@ -138,11 +138,13 @@ class TestGetGames(unittest.TestCase):
             }]
             game = roms.get_games(config)[0]
             with patch("kabin.sources.roms.subprocess.Popen") as popen:
-                game.launch()
-            popen.assert_called_once_with([
-                "/usr/bin/mgba-qt",
-                str(rom),
-            ])
+                process = game.launch()
+            popen.assert_called_once_with(
+                ["/usr/bin/mgba-qt", str(rom)], start_new_session=True
+            )
+            # The window follows the process to record play time and to
+            # warn when an emulator dies right after launch.
+            self.assertIs(process, popen.return_value)
 
 
 if __name__ == "__main__":
