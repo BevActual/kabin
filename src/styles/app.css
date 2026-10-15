@@ -1,0 +1,78 @@
+@import "../../design/tokens.css";
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--kabin-font-sans);
+  --color-kabin-base: var(--kabin-bg-base);
+  --color-kabin-elevated: var(--kabin-bg-elevated);
+  --color-kabin-grouped: var(--kabin-bg-grouped);
+  --color-kabin-primary: var(--kabin-label-primary);
+  --color-kabin-secondary: var(--kabin-label-secondary);
+  --color-kabin-tertiary: var(--kabin-label-tertiary);
+  --color-kabin-separator: var(--kabin-separator);
+  --color-kabin-accent: var(--kabin-accent);
+  --radius-kabin-control: var(--kabin-radius-control);
+  --radius-kabin-tile: var(--kabin-radius-tile);
+  --radius-kabin-sheet: var(--kabin-radius-sheet);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--kabin-font-sans);
+  font-size: calc(15px * var(--kabin-type-scale));
+  background: var(--kabin-bg-base);
+  color: var(--kabin-label-primary);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--kabin-focus-ring);
+}
+
+.kabin-material-bar {
+  background: var(--kabin-bg-sidebar);
+  backdrop-filter: var(--kabin-material-blur);
+  -webkit-backdrop-filter: var(--kabin-material-blur);
+  border-bottom: 1px solid var(--kabin-separator);
+}
+
+.kabin-sidebar {
+  background: var(--kabin-bg-sidebar);
+  backdrop-filter: var(--kabin-material-blur);
+  -webkit-backdrop-filter: var(--kabin-material-blur);
+  border-right: 1px solid var(--kabin-separator);
+}
+
+.kabin-grouped {
+  background: var(--kabin-bg-elevated);
+  border-radius: var(--kabin-radius-sheet);
+  overflow: hidden;
+  border: 1px solid var(--kabin-separator);
+}
+
+.kabin-grouped-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kabin-space-4);
+  padding: var(--kabin-space-3) var(--kabin-space-4);
+  border-bottom: 1px solid var(--kabin-separator);
+}
+
+.kabin-grouped-row:last-child {
+  border-bottom: none;
+}

@@ -5,3 +5,15 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+
+# Frontend / Tauri
+node_modules/
+dist/
+dist-ssr/
+*.local
+.DS_Store
+
+# Rust
+src-tauri/target/
+.rustup/
+.cargo/

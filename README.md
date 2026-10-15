@@ -8,8 +8,26 @@ serves it to paired Kabin devices, plays music and video itself, and reads
 PDF, EPUB, FB2, TXT, CBZ, CBR, CBT, and CB7 books and comics in its own
 reader. MOBI and AZW3 books still open in your system reader.
 
-This is not an Omarchy shell plugin. It's a regular GTK4/libadwaita app you
-launch like any other, and it isn't tied to the Quickshell bar.
+This is not an Omarchy shell plugin. It's a regular desktop app you launch
+like any other, and it isn't tied to the Quickshell bar.
+
+## Tauri shell (in progress)
+
+Kabin is migrating to **Tauri 2 + Rust + React (TypeScript) + Vite**. The
+new cabinet UI uses an Apple-first design system ([`design/`](design/)).
+Architecture and migration phases: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+```bash
+npm install
+npm run tauri dev    # desktop app (Linux: WebKit GTK prerequisites)
+npm run dev          # web UI only (placeholder catalog outside Tauri)
+```
+
+The **legacy GTK4** application remains available until feature parity:
+
+```bash
+python3 -m kabin
+```
 
 ## Sources
 
@@ -122,6 +140,8 @@ this). It needs GStreamer WebRTC plus a capture plugin (`pipewiresrc` or
 
 ## Install
 
+### Legacy GTK app
+
 ```bash
 ./scripts/install.sh
 ```
@@ -133,11 +153,17 @@ ships. Make sure `~/.local/bin` is on your `PATH`. Reading PDF, CBZ, and
 CBT books/comics needs nothing beyond that; EPUB additionally needs
 `webkitgtk-6.0` — install.sh warns (without failing) if it isn't found.
 
-Run directly during development with:
+### Tauri app
+
+Install [Tauri prerequisites](https://tauri.app/start/prerequisites/) for
+your OS, then from the repo root:
 
 ```bash
-python3 -m kabin
+npm install
+npm run tauri dev
 ```
+
+Production builds: `npm run tauri build`.
 
 ## Config
 
