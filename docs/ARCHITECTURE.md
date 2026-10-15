@@ -63,7 +63,7 @@ Config read/write: `~/.config/kabin/config.json` (`config.rs`). Launch updates `
 
 1. **Shell** — done (cabinet UI, Settings, design system).
 2. **Library + launch** — done for local sources (scan + Play/Launch).
-3. **Playback & reader** — not started (still GTK + `kabin-media-helper`).
+3. **Playback & reader** — music/video/TV in webview player + config progress (Rust); reader and GStreamer helper still GTK.
 4. **Host** — not started (Python TLS/WebRTC).
 5. **Retire GTK** — after phase 3–4; GTK remains for emulation setup UI and host until then.
 
