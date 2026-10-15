@@ -3,11 +3,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addMediaDir,
   addRomDir,
+  createHostPairingCode,
   getAppInfo,
+  getHostStatus,
   getSettings,
   listEmulators,
   listSystems,
   pickFolder,
+  setHostEnabled,
   setSourceEnabled,
   type EmulatorChoice,
   type SystemInfo,
@@ -128,6 +131,8 @@ export function SettingsView() {
         </div>
       </SettingsGroup>
 
+      <KabinHostPanel />
+
       <EmulationCenterPanel
         romDirs={settings?.romDirs ?? []}
         onAdded={() => {
@@ -152,6 +157,104 @@ export function SettingsView() {
         </p>
       </SettingsGroup>
     </div>
+  );
+}
+
+function KabinHostPanel() {
+  const queryClient = useQueryClient();
+  const hostQuery = useQuery({
+    queryKey: ["hostStatus"],
+    queryFn: getHostStatus,
+    refetchInterval: (query) =>
+      query.state.data?.enabled ? 5000 : false,
+  });
+  const toggleHost = useMutation({
+    mutationFn: (enabled: boolean) => setHostEnabled(enabled),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["hostStatus"] });
+    },
+  });
+  const pairing = useMutation({
+    mutationFn: () => createHostPairingCode(300),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["hostStatus"] });
+    },
+  });
+
+  const host = hostQuery.data;
+  const pairingCode = host?.pairingCode;
+
+  return (
+    <SettingsGroup title="Kabin Host">
+      <SettingsRow label="Share this library">
+        <input
+          type="checkbox"
+          checked={Boolean(host?.enabled)}
+          disabled={toggleHost.isPending}
+          onChange={(e) => toggleHost.mutate(e.target.checked)}
+          className="h-4 w-4 accent-[var(--kabin-accent)]"
+        />
+      </SettingsRow>
+      {host?.enabled ? (
+        <>
+          <SettingsRow label="Status">
+            <span className="text-kabin-secondary">
+              {host.error
+                ? `Error · ${host.error}`
+                : host.running
+                  ? `Running on port ${host.port}`
+                  : "Starting…"}
+            </span>
+          </SettingsRow>
+          <SettingsRow label="Name">
+            <span className="text-kabin-secondary">{host.hostName}</span>
+          </SettingsRow>
+          {host.fingerprint ? (
+            <div className="kabin-grouped-row flex-col items-start gap-1">
+              <span className="text-[calc(15px*var(--kabin-type-scale))]">
+                TLS fingerprint
+              </span>
+              <span className="break-all font-mono text-[calc(11px*var(--kabin-type-scale))] text-kabin-secondary">
+                {host.fingerprint}
+              </span>
+            </div>
+          ) : null}
+          <div className="space-y-2 p-4">
+            <button
+              type="button"
+              disabled={!host.running || pairing.isPending}
+              onClick={() => pairing.mutate()}
+              className="rounded-[var(--kabin-radius-control)] bg-kabin-accent px-3 py-2 text-[calc(14px*var(--kabin-type-scale))] font-medium text-white disabled:opacity-40"
+            >
+              Generate pairing code
+            </button>
+            {pairingCode ? (
+              <p className="text-[calc(14px*var(--kabin-type-scale))] text-kabin-primary">
+                Code:{" "}
+                <span className="font-mono text-lg tracking-widest">
+                  {pairingCode}
+                </span>
+                <span className="block text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
+                  Enter on another device within 5 minutes.
+                </span>
+              </p>
+            ) : null}
+            {pairing.isError ? (
+              <p className="text-[calc(13px*var(--kabin-type-scale))] text-red-400">
+                {pairing.error instanceof Error
+                  ? pairing.error.message
+                  : "Could not create code"}
+              </p>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <p className="px-4 pb-3 text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
+          TLS catalog API for paired Kabin apps. Game streaming (WebRTC) remains
+          on the GTK host for now.
+        </p>
+      )}
+    </SettingsGroup>
   );
 }
 

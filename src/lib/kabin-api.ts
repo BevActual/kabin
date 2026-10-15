@@ -28,6 +28,17 @@ export type SettingsSnapshot = {
   romDirs: unknown[];
 };
 
+export type HostStatus = {
+  running: boolean;
+  enabled: boolean;
+  port: number;
+  hostName: string;
+  fingerprint: string;
+  pairingCode: string | null;
+  pairingExpiresAt: number | null;
+  error: string | null;
+};
+
 const isTauri = () =>
   typeof window !== "undefined" &&
   ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
@@ -192,6 +203,29 @@ export function listEmulators(systemId: string) {
     { systemId },
     [],
   );
+}
+
+export function getHostStatus() {
+  return invokeOrMock<HostStatus>("get_host_status", undefined, {
+    running: false,
+    enabled: false,
+    port: 42424,
+    hostName: "Kabin",
+    fingerprint: "",
+    pairingCode: null,
+    pairingExpiresAt: null,
+    error: null,
+  });
+}
+
+export function setHostEnabled(enabled: boolean) {
+  return invokeOrMock<HostStatus>("set_host_enabled", { enabled });
+}
+
+export function createHostPairingCode(lifetimeSecs?: number) {
+  return invokeOrMock<string>("create_host_pairing_code", {
+    lifetimeSecs,
+  });
 }
 
 export function addRomDir(

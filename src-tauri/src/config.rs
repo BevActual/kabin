@@ -3,7 +3,12 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use rand::Rng;
+use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 
 use crate::catalog::{LaunchPlan, LibrarySnapshot};
 
@@ -326,6 +331,118 @@ impl KabinConfig {
         Ok(())
     }
 
+    fn network_mut(&mut self) -> &mut serde_json::Map<String, Value> {
+        let root = self.data.as_object_mut().expect("config root");
+        if !root.contains_key("network") {
+            root.insert("network".into(), default_network());
+        }
+        root.get_mut("network")
+            .and_then(|v| v.as_object_mut())
+            .expect("network object")
+    }
+
+    fn network(&self) -> Value {
+        self.data
+            .get("network")
+            .cloned()
+            .unwrap_or_else(default_network)
+    }
+
+    pub fn host_enabled(&self) -> bool {
+        self.network()
+            .get("host_enabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
+
+    pub fn host_port(&self) -> u16 {
+        self.network()
+            .get("port")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(42424) as u16
+    }
+
+    pub fn host_name(&self) -> String {
+        self.network()
+            .get("host_name")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(default_host_name)
+    }
+
+    pub fn set_host_enabled(&mut self, enabled: bool) {
+        self.network_mut()
+            .insert("host_enabled".into(), json!(enabled));
+    }
+
+    pub fn ensure_network_token(&mut self) -> Result<String, String> {
+        let missing = self
+            .network()
+            .get("token")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .is_none();
+        if missing {
+            self.network_mut()
+                .insert("token".into(), json!(new_network_token()));
+            self.save()?;
+        }
+        Ok(self
+            .network()
+            .get("token")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string())
+    }
+
+    pub fn network_token_valid(&self, token: &str) -> bool {
+        if token.is_empty() {
+            return false;
+        }
+        if let Some(master) = self
+            .network()
+            .get("token")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+        {
+            if master.as_bytes().ct_eq(token.as_bytes()).into() {
+                return true;
+            }
+        }
+        let digest = hex::encode(Sha256::digest(token.as_bytes()));
+        self.network()
+            .get("paired_devices")
+            .and_then(|v| v.as_array())
+            .map(|devices| {
+                devices.iter().any(|device| {
+                    device
+                        .get("token_hash")
+                        .and_then(|v| v.as_str())
+                        .map(|hash| hash.as_bytes().ct_eq(digest.as_bytes()).into())
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false)
+    }
+
+    pub fn add_paired_device(&mut self, name: &str) -> String {
+        let token = new_network_token();
+        let digest = hex::encode(Sha256::digest(token.as_bytes()));
+        let network = self.network_mut();
+        let devices = network
+            .entry("paired_devices".to_string())
+            .or_insert_with(|| json!([]));
+        if let Some(arr) = devices.as_array_mut() {
+            arr.push(json!({
+                "name": name,
+                "token_hash": digest,
+            }));
+        }
+        let _ = self.save();
+        token
+    }
+
     pub fn library_fingerprint(&self) -> String {
         let neutral = [
             "recent", "play_counts", "play_time", "progress", "window",
@@ -364,8 +481,9 @@ pub fn app_info() -> AppInfo {
     }
 }
 
+#[derive(Clone)]
 pub struct AppState {
-    cache: Mutex<CatalogCache>,
+    cache: Arc<Mutex<CatalogCache>>,
 }
 
 struct CatalogCache {
@@ -378,7 +496,7 @@ struct CatalogCache {
 impl Default for AppState {
     fn default() -> Self {
         Self {
-            cache: Mutex::new(CatalogCache {
+            cache: Arc::new(Mutex::new(CatalogCache {
                 fingerprint: String::new(),
                 snapshot: LibrarySnapshot {
                     shelves: Vec::new(),
@@ -389,9 +507,38 @@ impl Default for AppState {
                 },
                 launch_by_id: HashMap::new(),
                 items_by_id: HashMap::new(),
-            }),
+            })),
         }
     }
+}
+
+fn default_network() -> Value {
+    json!({
+        "host_enabled": false,
+        "host_name": "",
+        "port": 42424,
+        "token": "",
+        "paired_devices": [],
+        "remote_hosts": [],
+    })
+}
+
+fn default_host_name() -> String {
+    std::env::var("HOSTNAME")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            fs::read_to_string("/etc/hostname")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        })
+        .unwrap_or_else(|| "Kabin".into())
+}
+
+fn new_network_token() -> String {
+    let bytes: [u8; 32] = rand::thread_rng().gen();
+    URL_SAFE_NO_PAD.encode(bytes)
 }
 
 impl AppState {

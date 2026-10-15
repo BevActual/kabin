@@ -1,3 +1,4 @@
+pub mod host;
 pub mod playback;
 pub mod reader;
 pub mod settings;
