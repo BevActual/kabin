@@ -8,6 +8,7 @@ import { AppShell } from "./components/AppShell";
 import { HomeView } from "./routes/HomeView";
 import { LibraryView } from "./routes/LibraryView";
 import { SettingsView } from "./routes/SettingsView";
+import { PlayerView } from "./routes/PlayerView";
 import { TitleDetailsView } from "./routes/TitleDetailsView";
 
 const rootRoute = createRootRoute({
@@ -42,10 +43,17 @@ const settingsRoute = createRoute({
   component: SettingsView,
 });
 
+const playerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/player/$titleId",
+  component: PlayerView,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   libraryRoute,
   titleRoute,
+  playerRoute,
   settingsRoute,
 ]);
 

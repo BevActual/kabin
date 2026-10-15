@@ -21,7 +21,9 @@ export function AppShell({ children }: Props) {
         ? libraryLabel(pathname.split("/").pop() ?? "")
         : pathname.startsWith("/title/")
           ? "Details"
-          : pathname === "/settings"
+          : pathname.startsWith("/player/")
+            ? "Now Playing"
+            : pathname === "/settings"
             ? "Settings"
             : "Kabin";
 

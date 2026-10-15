@@ -6,6 +6,21 @@ import type {
   LibrarySnapshot,
 } from "../types/catalog";
 
+export type PlaybackTrack = {
+  path: string;
+  label: string;
+};
+
+export type PlaybackSession = {
+  titleId: string;
+  title: string;
+  subtitle: string;
+  kind: string;
+  tracks: PlaybackTrack[];
+  initialTrack: number;
+  initialPosition: number;
+};
+
 export type SettingsSnapshot = {
   configPath: string;
   sources: Record<string, boolean | string | number>;
@@ -82,6 +97,28 @@ export function getLibraryCounts() {
 
 export function launchTitle(titleId: string) {
   return invokeOrMock<void>("launch_title", { titleId });
+}
+
+export function getPlaybackSession(titleId: string) {
+  return invokeOrMock<PlaybackSession | null>(
+    "get_playback_session",
+    { titleId },
+    null,
+  );
+}
+
+export function savePlaybackProgress(
+  titleId: string,
+  position: number,
+  duration: number,
+  track: number,
+) {
+  return invokeOrMock<void>("save_playback_progress", {
+    titleId,
+    position,
+    duration,
+    track,
+  });
 }
 
 export function getSettings() {

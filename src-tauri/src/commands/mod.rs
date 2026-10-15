@@ -1,3 +1,4 @@
+pub mod playback;
 pub mod settings;
 
 use crate::catalog::{CatalogTitle, HomeShelfDto, LibrarySnapshot};

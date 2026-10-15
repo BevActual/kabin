@@ -20,6 +20,8 @@ pub fn run() {
             commands::get_title,
             commands::get_library_counts,
             commands::launch_title,
+            commands::playback::get_playback_session,
+            commands::playback::save_playback_progress,
             commands::settings::get_settings,
             commands::settings::set_source_enabled,
             commands::settings::add_media_dir,

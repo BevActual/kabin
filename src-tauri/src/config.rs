@@ -127,6 +127,50 @@ impl KabinConfig {
         pairs.into_iter().map(|(id, _)| id).collect()
     }
 
+    pub fn progress_fields(&self, item_id: &str) -> (f64, f64, u32) {
+        let Some(entry) = self.data.get("progress").and_then(|p| p.get(item_id)) else {
+            return (0.0, 0.0, 0);
+        };
+        let position = entry.get("position").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let duration = entry.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let track = entry
+            .get("track")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        (position, duration, track)
+    }
+
+    pub fn save_progress(
+        &mut self,
+        item_id: &str,
+        position: f64,
+        duration: f64,
+        track: u32,
+    ) -> Result<(), String> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
+        let progress = self
+            .data
+            .as_object_mut()
+            .expect("config root")
+            .entry("progress")
+            .or_insert_with(|| json!({}));
+        if let Some(obj) = progress.as_object_mut() {
+            obj.insert(
+                item_id.to_string(),
+                json!({
+                    "position": position.max(0.0),
+                    "duration": duration.max(0.0),
+                    "track": track,
+                    "updated_at": now,
+                }),
+            );
+        }
+        self.save()
+    }
+
     pub fn progress_ratio(&self, item_id: &str, track_total: u32) -> Option<f32> {
         let entry = self.data.get("progress")?.get(item_id)?;
         let position = entry.get("position").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
@@ -304,6 +348,7 @@ struct CatalogCache {
     fingerprint: String,
     snapshot: LibrarySnapshot,
     launch_by_id: HashMap<String, LaunchPlan>,
+    items_by_id: HashMap<String, crate::catalog::item::LibraryItem>,
 }
 
 impl Default for AppState {
@@ -319,6 +364,7 @@ impl Default for AppState {
                     fingerprint: String::new(),
                 },
                 launch_by_id: HashMap::new(),
+                items_by_id: HashMap::new(),
             }),
         }
     }
@@ -337,15 +383,21 @@ impl AppState {
         if !force && cache.fingerprint == fingerprint {
             return cache.snapshot.clone();
         }
-        let (snapshot, launch_by_id) = crate::catalog::build_snapshot(&config);
+        let (snapshot, launch_by_id, items_by_id) = crate::catalog::build_snapshot(&config);
         cache.fingerprint = fingerprint;
         cache.snapshot = snapshot.clone();
         cache.launch_by_id = launch_by_id;
+        cache.items_by_id = items_by_id;
         snapshot
     }
 
     pub fn launch_plan(&self, title_id: &str) -> Option<LaunchPlan> {
         let cache = self.cache.lock().expect("catalog cache poisoned");
         cache.launch_by_id.get(title_id).cloned()
+    }
+
+    pub fn find_item(&self, title_id: &str) -> Option<crate::catalog::item::LibraryItem> {
+        let cache = self.cache.lock().expect("catalog cache poisoned");
+        cache.items_by_id.get(title_id).cloned()
     }
 }

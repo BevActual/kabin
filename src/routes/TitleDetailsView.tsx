@@ -1,4 +1,4 @@
-import { Link, getRouteApi } from "@tanstack/react-router";
+import { Link, getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import { coverUrl, getTitle, launchTitle } from "../lib/kabin-api";
@@ -7,6 +7,7 @@ const route = getRouteApi("/title/$titleId");
 
 export function TitleDetailsView() {
   const { titleId } = route.useParams();
+  const navigate = useNavigate();
   const titleQuery = useQuery({
     queryKey: ["title", titleId],
     queryFn: () => getTitle(titleId),
@@ -16,6 +17,9 @@ export function TitleDetailsView() {
   const launch = useMutation({
     mutationFn: () => launchTitle(titleId),
   });
+
+  const playsInKabin = (kind: string) =>
+    kind === "music" || kind === "video" || kind === "tv";
 
   if (titleQuery.isLoading) {
     return <p className="text-kabin-secondary">Loading…</p>;
@@ -60,10 +64,18 @@ export function TitleDetailsView() {
         <button
           type="button"
           disabled={launch.isPending}
-          onClick={() => launch.mutate()}
+          onClick={() => {
+            if (playsInKabin(title.kind)) {
+              void navigate({ to: "/player/$titleId", params: { titleId } });
+              return;
+            }
+            launch.mutate();
+          }}
           className="rounded-[var(--kabin-radius-control)] bg-kabin-accent px-5 py-2.5 text-[calc(17px*var(--kabin-type-scale))] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {launch.isPending ? "Launching…" : primaryAction(title.kind)}
+          {launch.isPending && !playsInKabin(title.kind)
+            ? "Launching…"
+            : primaryAction(title.kind)}
         </button>
         {launch.isError ? (
           <p className="w-full text-[calc(14px*var(--kabin-type-scale))] text-red-400">

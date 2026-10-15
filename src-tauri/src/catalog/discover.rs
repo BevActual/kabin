@@ -115,12 +115,22 @@ fn count_by_kind(items: &[LibraryItem]) -> HashMap<String, u32> {
     counts
 }
 
-pub fn build_snapshot(config: &KabinConfig) -> (LibrarySnapshot, std::collections::HashMap<String, super::LaunchPlan>) {
+pub fn build_snapshot(
+    config: &KabinConfig,
+) -> (
+    LibrarySnapshot,
+    std::collections::HashMap<String, super::LaunchPlan>,
+    std::collections::HashMap<String, super::item::LibraryItem>,
+) {
     let fingerprint = config.library_fingerprint();
     let (items, mut errors) = discover_local(config);
     let launch_by_id = items
         .iter()
         .map(|item| (item.id.clone(), item.launch.clone()))
+        .collect();
+    let items_by_id = items
+        .iter()
+        .map(|item| (item.id.clone(), item.clone()))
         .collect();
     let shelves: Vec<HomeShelfDto> = home::build_home_shelves(config, &items)
         .into_iter()
@@ -152,5 +162,6 @@ pub fn build_snapshot(config: &KabinConfig) -> (LibrarySnapshot, std::collection
             fingerprint,
         },
         launch_by_id,
+        items_by_id,
     )
 }
