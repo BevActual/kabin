@@ -136,6 +136,10 @@ pub fn build_snapshot(
         }
         items.extend(remote_items);
         items.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
+        let mut cfg = KabinConfig::load();
+        if crate::remote::sync_progress_from_remote(&items, &mut cfg) {
+            let _ = cfg.save();
+        }
     }
     let launch_by_id = items
         .iter()

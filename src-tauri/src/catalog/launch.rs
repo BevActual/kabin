@@ -12,12 +12,15 @@ pub enum LaunchPlan {
         host_name: String,
         remote_id: String,
         playable: bool,
+        has_artwork: bool,
+        appid: String,
     },
     RemoteStream {
         host_name: String,
         remote_id: String,
         playable: bool,
         size: u64,
+        has_artwork: bool,
     },
 }
 

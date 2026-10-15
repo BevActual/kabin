@@ -1,3 +1,4 @@
+mod artwork;
 mod catalog;
 mod cert;
 mod pairing;

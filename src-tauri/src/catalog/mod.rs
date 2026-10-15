@@ -1,4 +1,4 @@
-mod artwork;
+pub mod artwork;
 mod desktop;
 mod discover;
 mod home;

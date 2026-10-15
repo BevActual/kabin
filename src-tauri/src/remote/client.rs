@@ -31,6 +31,43 @@ pub fn fetch_remote_library(host: &RemoteHostEntry, token: &str) -> Result<Value
     get_json(host, "/v1/library", Some(token))
 }
 
+pub fn fetch_remote_artwork_bytes(
+    host: &RemoteHostEntry,
+    token: &str,
+    item_id: &str,
+) -> Result<(Vec<u8>, String), String> {
+    let query = format!("/v1/artwork?id={}", urlencoding(item_id));
+    let bytes = get_bytes(host, &query, Some(token), DEFAULT_TIMEOUT)?;
+    let ext = super::artwork::extension_for_image(&bytes)
+        .unwrap_or(".jpg")
+        .to_string();
+    Ok((bytes, ext))
+}
+
+pub fn push_remote_progress(
+    host: &RemoteHostEntry,
+    token: &str,
+    item_id: &str,
+    position: f64,
+    duration: f64,
+    track: u32,
+    scroll: Option<f64>,
+) -> Result<(), String> {
+    let mut body = serde_json::json!({
+        "id": item_id,
+        "position": position,
+        "duration": duration,
+        "track": track,
+    });
+    if let Some(scroll) = scroll {
+        if let Some(obj) = body.as_object_mut() {
+            obj.insert("scroll".into(), serde_json::json!(scroll));
+        }
+    }
+    post_json(host, "/v1/media/progress", Some(token), &body)?;
+    Ok(())
+}
+
 pub fn fetch_remote_stream(
     host: &RemoteHostEntry,
     token: &str,

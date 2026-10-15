@@ -17,6 +17,8 @@ Kabin’s **Tauri shell** is the primary app for daily use on the desktop. GTK r
 | Cover art | Local sidecar / folder art |
 | **Kabin Host (partial)** | TLS API on port 42424: `/v1/info`, `/v1/pair`, `/v1/library`, media stream + progress; mDNS when `avahi-publish-service` is available (Settings) |
 | **Remote library client** | LAN discovery + pairing (Settings), merged catalog when **Remote hosts** source is on; in-app play/read for host media via cached stream download |
+| **Remote covers & progress** | Host `/v1/artwork`, cached remote art; reading progress sync across matching local/remote IDs; push progress back to host while playing |
+| **Steam cover cache** | Uses existing `~/.cache/kabin/steam/cover/` (or legacy omagames) in library grids and host artwork |
 
 ## Deferred (GTK or future Rust work)
 

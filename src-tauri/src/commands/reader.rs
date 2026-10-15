@@ -13,6 +13,7 @@ pub fn get_reader_session(
 
 #[tauri::command]
 pub fn save_reader_progress(
+    state: tauri::State<'_, AppState>,
     title_id: String,
     page: u32,
     total: u32,
@@ -44,7 +45,28 @@ pub fn save_reader_progress(
                 );
             }
         }
-        obj.insert(title_id, payload);
+        obj.insert(title_id.clone(), payload);
     }
-    config.save()
+    config.save()?;
+    let snapshot = state.snapshot(false);
+    if let Some(item) = state.find_item(&title_id) {
+        let items: Vec<_> = snapshot
+            .titles
+            .iter()
+            .filter_map(|t| state.find_item(&t.id))
+            .collect();
+        let config = KabinConfig::load();
+        let item = item.clone();
+        std::thread::spawn(move || {
+            crate::remote::push_reader_to_targets(
+                &config,
+                &items,
+                &item,
+                page,
+                total,
+                scroll,
+            );
+        });
+    }
+    Ok(())
 }

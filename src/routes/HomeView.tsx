@@ -77,8 +77,8 @@ export function HomeView() {
 
       {shelves.length === 0 ? (
         <StatusMessage>
-          No titles found yet. Add media folders or Steam in Settings (GTK app
-          for now), then refresh.
+          No titles found yet. Add media folders, Steam, or paired remote hosts
+          in Settings, then refresh.
         </StatusMessage>
       ) : (
         shelves.map((shelf) => <ShelfRow key={shelf.id} shelf={shelf} />)

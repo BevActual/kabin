@@ -13,11 +13,20 @@ pub fn get_playback_session(
 
 #[tauri::command]
 pub fn save_playback_progress(
+    state: tauri::State<'_, AppState>,
     title_id: String,
     position: f64,
     duration: f64,
     track: u32,
 ) -> Result<(), String> {
     let mut config = KabinConfig::load();
-    config.save_progress(&title_id, position, duration, track)
+    config.save_progress(&title_id, position, duration, track)?;
+    if let Some(item) = state.find_item(&title_id) {
+        let config = KabinConfig::load();
+        let item = item.clone();
+        std::thread::spawn(move || {
+            crate::remote::push_playback_to_host(&config, &item, position, duration, track);
+        });
+    }
+    Ok(())
 }

@@ -3,6 +3,7 @@ use std::thread;
 
 use serde_json::Value;
 
+use super::artwork::enrich_remote_artwork;
 use super::client::fetch_remote_library;
 use crate::catalog::item::LibraryItem;
 use crate::catalog::launch::LaunchPlan;
@@ -61,7 +62,8 @@ fn fetch_host_catalog(
     };
     match fetch_remote_library(&host, &token) {
         Ok(payload) => {
-            let items = items_from_payload(&host, &payload, &hidden);
+            let mut items = items_from_payload(&host, &payload, &hidden);
+            enrich_remote_artwork(&host, &mut items);
             (
                 name.clone(),
                 RemoteHostStatus {
@@ -151,11 +153,22 @@ fn item_from_remote(
         .unwrap_or(0) as u32;
     let host_progress = remote.get("progress").cloned();
     let size = remote.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
+    let has_artwork = remote
+        .get("has_artwork")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let appid = remote
+        .get("appid")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     let launch = if kind_id == "game" {
         LaunchPlan::RemoteGame {
             host_name: host_name.clone(),
             remote_id: remote_id.to_string(),
             playable,
+            has_artwork,
+            appid,
         }
     } else {
         LaunchPlan::RemoteStream {
@@ -163,6 +176,7 @@ fn item_from_remote(
             remote_id: remote_id.to_string(),
             playable,
             size,
+            has_artwork,
         }
     };
     Some(LibraryItem {

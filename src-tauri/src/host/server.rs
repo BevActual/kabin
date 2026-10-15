@@ -35,6 +35,11 @@ struct ServerState {
 }
 
 #[derive(Debug, Deserialize)]
+struct ArtworkQuery {
+    id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct StreamQuery {
     id: Option<String>,
     track: Option<String>,
@@ -99,6 +104,7 @@ fn build_router(state: ServerState) -> Router {
         .route("/v1/library", get(library_handler))
         .route("/v1/media/progress", get(get_progress_handler).post(post_progress_handler))
         .route("/v1/media/stream", get(stream_handler))
+        .route("/v1/artwork", get(artwork_handler))
         .route("/v1/sessions", post(sessions_not_implemented))
         .route("/v1/sessions/{session_id}", get(sessions_not_implemented))
         .route("/v1/sessions/{session_id}/signal", post(sessions_not_implemented))
@@ -277,6 +283,21 @@ async fn post_progress_handler(
         obj.insert("id".to_string(), json!(item.id));
     }
     Json(body).into_response()
+}
+
+async fn artwork_handler(
+    State(state): State<ServerState>,
+    headers: HeaderMap,
+    Query(query): Query<ArtworkQuery>,
+) -> impl IntoResponse {
+    if !authorized(&headers) {
+        return json_error(StatusCode::UNAUTHORIZED, "authentication required");
+    }
+    let item_id = query.id.unwrap_or_default();
+    if item_id.is_empty() {
+        return json_error(StatusCode::NOT_FOUND, "artwork not found");
+    }
+    super::artwork::artwork_response(&state.app, &item_id).await
 }
 
 async fn stream_handler(

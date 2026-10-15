@@ -4,6 +4,7 @@ use std::process::Command;
 use regex::Regex;
 
 use super::item::LibraryItem;
+use super::artwork::steam_cached_cover;
 use super::launch::LaunchPlan;
 
 fn default_roots() -> Vec<PathBuf> {
@@ -153,7 +154,7 @@ pub fn scan_steam(
                 subtitle: "Steam".into(),
                 kind_id: "game".into(),
                 source: "steam".into(),
-                cover_path: None,
+                cover_path: steam_cached_cover(appid).map(|p| p.to_string_lossy().into_owned()),
                 added_at: safe_mtime(&entry.path()),
                 track_count: 1,
                 launch: LaunchPlan::Steam {

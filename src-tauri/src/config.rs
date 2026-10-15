@@ -168,6 +168,44 @@ impl KabinConfig {
         (position, duration, track)
     }
 
+    pub fn adopt_progress(
+        &mut self,
+        item_id: &str,
+        payload: &serde_json::Value,
+        save: bool,
+    ) -> bool {
+        let incoming_updated = payload
+            .get("updated_at")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        if incoming_updated <= 0.0 {
+            return false;
+        }
+        let local_updated = self
+            .data
+            .get("progress")
+            .and_then(|p| p.get(item_id))
+            .and_then(|e| e.get("updated_at"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        if incoming_updated <= local_updated {
+            return false;
+        }
+        let progress = self
+            .data
+            .as_object_mut()
+            .expect("config root")
+            .entry("progress")
+            .or_insert_with(|| json!({}));
+        if let Some(obj) = progress.as_object_mut() {
+            obj.insert(item_id.to_string(), payload.clone());
+        }
+        if save {
+            let _ = self.save();
+        }
+        true
+    }
+
     pub fn save_progress(
         &mut self,
         item_id: &str,
