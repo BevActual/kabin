@@ -1,37 +1,30 @@
 # GTK → Tauri parity
 
-Kabin’s **Tauri shell** is the primary app for daily use on the desktop. GTK remains for features not yet ported.
+Kabin’s **Tauri shell** is the primary desktop app. See [`CONVERSION.md`](CONVERSION.md).
 
 ## Shipped in Tauri
 
 | Area | Status |
 |------|--------|
-| Cabinet UI | Sidebar, Home shelves, libraries, details, Settings |
-| Local library scan | Media folders, Steam, desktop games, ROM folders |
-| Config | Read/write `~/.config/kabin/config.json` |
-| Launch | Steam, desktop entries, ROM emulators |
-| Playback | Music and video/TV in-app + progress |
-| Reader | PDF (pdf.js), EPUB (epub.js), CBZ (extracted pages), TXT + progress |
-| Emulation Center | Add ROM folder + auto-detect native emulators (Settings) |
-| Shortcuts | `/` and Ctrl+F search, Esc back, Ctrl+, Settings |
-| Cover art | Local sidecar / folder art |
-| **Kabin Host (partial)** | TLS API on port 42424: `/v1/info`, `/v1/pair`, `/v1/library`, media stream + progress; mDNS when `avahi-publish-service` is available (Settings) |
-| **Remote library client** | LAN discovery + pairing (Settings), merged catalog when **Remote hosts** source is on; in-app play/read for host media via cached stream download |
-| **Remote covers & progress** | Host `/v1/artwork`, cached remote art; reading progress sync across matching local/remote IDs; push progress back to host while playing |
-| **Steam cover cache** | Uses existing `~/.cache/kabin/steam/cover/` (or legacy omagames) in library grids and host artwork |
+| Cabinet UI | Sidebar, Home, libraries, details, Settings |
+| Local library | Media folders, Steam (+ CDN covers), desktop, ROMs |
+| Config | `~/.config/kabin/config.json` |
+| Launch | Steam, desktop, ROM emulators (+ BIOS symlink for DuckStation/PCSX2) |
+| Playback | Music, video, TV + progress sync to remote hosts |
+| Reader | PDF, EPUB, CBZ, TXT, FB2; CBR/CBT/CB7 via `bsdtar`; MOBI/AZW3 via system |
+| Emulation Center | ROM folders, native emulator detect, BIOS folder picker (PS1/PS2) |
+| Shortcuts | `/`, Ctrl+F, Esc, Ctrl+, |
+| Covers | Sidecar/folder art, Steam cache, host `/v1/artwork`, remote cache |
+| Kabin Host | TLS API, pairing, library, stream, progress, artwork, mDNS |
+| Remote client | Discovery, pairing, merged catalog, play/read, progress |
 
-## Deferred (GTK or future Rust work)
+## GTK-only (optional)
 
 | Area | Notes |
 |------|--------|
-| **Kabin Host — streaming** | WebRTC game sessions (`/v1/sessions/*`) and `kabin-media-helper` — still GTK `kabin/network.py`. |
-| **Remote game launch** | Paired host games appear in the library but streaming play stays GTK-only. |
-| **Artwork fetch** | SteamGridDB, Open Library queues — GTK `artwork.py`. |
-| **Reader gaps** | FB2, CBR/CBT/CB7, MOBI/AZW3 (GTK or system reader). |
-| **Managed emulators** | Download verified runtimes — GTK `managed.py`. |
-| **BIOS picker UI** | Path stored in config; full picker still in GTK Settings. |
-| **Gamepad / TV** | Full focus model and couch scaling polish. |
-| **GStreamer helper** | Remote game stream decode path via `kabin-media-helper`. |
+| Remote **game** streaming | WebRTC `/v1/sessions/*` + `kabin-media-helper` |
+| Managed emulator **downloads** | `kabin/managed.py` AppImage fetch |
+| Advanced TV/gamepad polish | Couch focus model (basic keyboard/gamepad still usable in webview) |
 
 ## Development
 
@@ -39,7 +32,7 @@ Kabin’s **Tauri shell** is the primary app for daily use on the desktop. GTK r
 npm run tauri dev
 ```
 
-Remote game streaming and managed emulators:
+WebRTC streaming or managed emulator install:
 
 ```bash
 python3 -m kabin

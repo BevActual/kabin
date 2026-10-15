@@ -9,6 +9,7 @@ import ePub from "epubjs";
 import {
   coverUrl,
   getReaderSession,
+  openExternalPath,
   saveReaderProgress,
 } from "../lib/kabin-api";
 
@@ -36,6 +37,12 @@ export function ReaderView() {
     if (session) {
       setPage(session.initialPage);
       setNumPages(session.pageCount || 1);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (session?.backend === "external" && session.filePath) {
+      void openExternalPath(session.filePath);
     }
   }, [session]);
 
@@ -113,7 +120,8 @@ export function ReaderView() {
     return (
       <div>
         <p className="text-kabin-secondary">
-          Kabin cannot read this file in-app (try MOBI/AZW3/CBR in the GTK app).
+          Kabin cannot read this file in-app. Install bsdtar for CBR/CBT/CB7, or
+          use MOBI/AZW3 with your system reader.
         </p>
         <Link to="/title/$titleId" params={{ titleId }} className="mt-4 inline-block text-kabin-accent">
           Back
@@ -153,7 +161,7 @@ export function ReaderView() {
           </Document>
         ) : null}
 
-        {session.backend === "cbz" ? (
+        {session.backend === "cbz" || session.backend === "comic-archive" ? (
           session.pages[page] ? (
             <img
               src={coverUrl(session.pages[page]) ?? undefined}
@@ -171,10 +179,18 @@ export function ReaderView() {
           <div id="kabin-epub-view" className="min-h-[70vh]" />
         ) : null}
 
-        {session.backend === "fb2" ? (
+        {session.backend === "fb2" && session.pages[page] ? (
+          <iframe
+            title={session.title}
+            srcDoc={session.pages[page]}
+            className="h-[70vh] w-full rounded-[var(--kabin-radius-control)] border-0 bg-white"
+            sandbox="allow-same-origin"
+          />
+        ) : null}
+
+        {session.backend === "external" ? (
           <p className="text-kabin-secondary">
-            FB2 in-app reading is not ported yet. Use{" "}
-            <span className="font-mono">python3 -m kabin</span>.
+            Opening in your default reader…
           </p>
         ) : null}
       </div>

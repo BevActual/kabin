@@ -18,7 +18,14 @@ pub fn execute(plan: &LaunchPlan) -> Result<(), String> {
                 .spawn()
                 .map_err(|e| format!("Could not launch desktop entry: {e}"))?;
         }
-        LaunchPlan::Command { argv } => {
+        LaunchPlan::Command {
+            argv,
+            emulator_id,
+            bios_path,
+        } => {
+            if let (Some(id), Some(path)) = (emulator_id.as_deref(), bios_path.as_deref()) {
+                let _ = crate::emulators::bios::prepare_bios_env(id, path);
+            }
             crate::emulators::spawn_detached(argv, None)?;
         }
         LaunchPlan::OpenPath { path } => {

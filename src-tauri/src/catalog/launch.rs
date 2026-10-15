@@ -6,6 +6,8 @@ pub enum LaunchPlan {
     Desktop { desktop_file: PathBuf },
     Command {
         argv: Vec<String>,
+        emulator_id: Option<String>,
+        bios_path: Option<PathBuf>,
     },
     OpenPath { path: PathBuf },
     RemoteGame {

@@ -118,7 +118,7 @@ fn items_from_payload(
 
 fn reader_supported(remote_id: &str) -> bool {
     let lower = remote_id.to_lowercase();
-    [".pdf", ".epub", ".cbz", ".txt"]
+    [".pdf", ".epub", ".cbz", ".txt", ".fb2", ".cbr", ".cbt", ".cb7"]
         .iter()
         .any(|ext| lower.ends_with(ext))
 }

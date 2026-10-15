@@ -26,6 +26,7 @@ export type SettingsSnapshot = {
   sources: Record<string, boolean | string | number>;
   mediaDirs: unknown[];
   romDirs: unknown[];
+  biosPaths: Record<string, string>;
 };
 
 export type HostStatus = {
@@ -138,7 +139,16 @@ export function getSettings() {
     sources: {},
     mediaDirs: [],
     romDirs: [],
+    biosPaths: {},
   });
+}
+
+export function setSystemBiosPath(systemId: string, path: string) {
+  return invokeOrMock<void>("set_system_bios_path", { systemId, path });
+}
+
+export function openExternalPath(path: string) {
+  return invokeOrMock<void>("open_external_path", { path });
 }
 
 export function setSourceEnabled(key: string, enabled: boolean) {

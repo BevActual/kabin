@@ -10,6 +10,7 @@ pub struct SettingsSnapshot {
     pub sources: serde_json::Map<String, serde_json::Value>,
     pub media_dirs: Vec<serde_json::Value>,
     pub rom_dirs: Vec<serde_json::Value>,
+    pub bios_paths: serde_json::Map<String, serde_json::Value>,
 }
 
 #[tauri::command]
@@ -25,6 +26,12 @@ pub fn get_settings() -> SettingsSnapshot {
             .cloned()
             .unwrap_or_default(),
         rom_dirs: config.rom_dirs_raw(),
+        bios_paths: config
+            .emulation_settings()
+            .and_then(|v| v.get("bios"))
+            .and_then(|v| v.as_object())
+            .cloned()
+            .unwrap_or_default(),
     }
 }
 
@@ -90,6 +97,27 @@ pub fn add_rom_dir(
     config.save()?;
     state.invalidate();
     Ok(())
+}
+
+#[tauri::command]
+pub fn set_system_bios_path(system_id: String, path: String) -> Result<(), String> {
+    let mut config = KabinConfig::load();
+    if !crate::emulators::detect::validate_bios_folder(&path) {
+        return Err("Choose a folder that contains .bin or .rom firmware files".into());
+    }
+    let root = config
+        .data
+        .as_object_mut()
+        .expect("config root")
+        .entry("emulation")
+        .or_insert_with(|| serde_json::json!({}));
+    if let Some(obj) = root.as_object_mut() {
+        let bios = obj.entry("bios").or_insert_with(|| serde_json::json!({}));
+        if let Some(map) = bios.as_object_mut() {
+            map.insert(system_id, serde_json::json!(path));
+        }
+    }
+    config.save()
 }
 
 #[tauri::command]

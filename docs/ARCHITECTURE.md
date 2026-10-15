@@ -1,6 +1,6 @@
-# Kabin architecture (Tauri migration)
+# Kabin architecture (Tauri)
 
-Kabin is moving from **Python + GTK4/libadwaita** to **Tauri 2 + Rust + React (TypeScript) + Vite**. The legacy Python app remains runnable until feature parity; new UI and host logic land in this stack.
+Kabin’s **primary desktop app** is **Tauri 2 + Rust + React (TypeScript) + Vite**. The legacy **Python + GTK4** tree remains for remote game streaming (WebRTC) and managed emulator downloads — see [`CONVERSION.md`](CONVERSION.md) and [`PARITY.md`](PARITY.md).
 
 ## Layers
 
@@ -12,7 +12,7 @@ Kabin is moving from **Python + GTK4/libadwaita** to **Tauri 2 + Rust + React (T
                             │ invoke + events
 ┌───────────────────────────▼─────────────────────────────┐
 │  Tauri 2 (Rust)                                          │
-│  config · library scan · host API · playback (later)   │
+│  config · library · host · remote · playback · reader  │
 └───────────────────────────┬─────────────────────────────┘
                             │
          ~/.config/kabin/config.json · ~/.cache/kabin/
@@ -23,7 +23,7 @@ Kabin is moving from **Python + GTK4/libadwaita** to **Tauri 2 + Rust + React (T
 | Path | Role |
 |------|------|
 | `src/` | Web UI (cabinet shell, routes, components) |
-| `src-tauri/` | Rust crate: commands, config, future library/host |
+| `src-tauri/` | Rust crate: catalog, host, remote, launch, commands |
 | `design/` | Design tokens and language |
 | `kabin/` | **Legacy** GTK application (still `python3 -m kabin`) |
 | `native/` | **Legacy** `kabin-media-helper` (GStreamer/WebRTC); to be absorbed into Rust |
@@ -63,9 +63,9 @@ Config read/write: `~/.config/kabin/config.json` (`config.rs`). Launch updates `
 
 1. **Shell** — done (cabinet UI, Settings, design system).
 2. **Library + launch** — done for local sources (scan + Play/Launch).
-3. **Playback & reader** — music/video/TV player + PDF/EPUB/CBZ/TXT reader in Tauri; FB2/CBR/MOBI and GStreamer helper still GTK.
-4. **Host + remote** — TLS host + paired remote catalogs in Rust; WebRTC streaming still GTK; see [`PARITY.md`](PARITY.md).
-5. **Retire GTK** — when host + managed emulators land; GTK optional for advanced setup.
+3. **Playback & reader** — done in Tauri (see [`CONVERSION.md`](CONVERSION.md)).
+4. **Host + remote** — done in Rust; WebRTC game streaming remains GTK-only.
+5. **GTK optional** — managed emulator downloads + remote game stream; see [`PARITY.md`](PARITY.md).
 
 ## Development
 

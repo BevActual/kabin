@@ -16,6 +16,7 @@ import {
   pickFolder,
   setHostEnabled,
   setSourceEnabled,
+  setSystemBiosPath,
   type EmulatorChoice,
   type SystemInfo,
 } from "../lib/kabin-api";
@@ -146,6 +147,7 @@ export function SettingsView() {
 
       <EmulationCenterPanel
         romDirs={settings?.romDirs ?? []}
+        biosPaths={settings?.biosPaths ?? {}}
         onAdded={() => {
           void queryClient.invalidateQueries({ queryKey: ["settings"] });
           void queryClient.invalidateQueries({ queryKey: ["libraryScan"] });
@@ -400,9 +402,11 @@ function KabinHostPanel() {
 
 function EmulationCenterPanel({
   romDirs,
+  biosPaths,
   onAdded,
 }: {
   romDirs: unknown[];
+  biosPaths: Record<string, string>;
   onAdded: () => void;
 }) {
   const systemsQuery = useQuery({
@@ -414,6 +418,14 @@ function EmulationCenterPanel({
     queryKey: ["emulators", systemId],
     queryFn: () => listEmulators(systemId),
     enabled: Boolean(systemId),
+  });
+  const addBios = useMutation({
+    mutationFn: async () => {
+      const path = await pickFolder();
+      if (!path) return;
+      await setSystemBiosPath(systemId, path);
+    },
+    onSuccess: onAdded,
   });
   const addRom = useMutation({
     mutationFn: async () => {
@@ -459,8 +471,23 @@ function EmulationCenterPanel({
           Emulator:{" "}
           {(emulatorsQuery.data ?? [])
             .map((e: EmulatorChoice) => e.name)
-            .join(", ") || "None detected — install an emulator or use GTK."}
+            .join(", ") || "None detected — install an emulator on this system."}
         </p>
+        {(systemId === "ps1" || systemId === "ps2") && (
+          <div className="text-[calc(13px*var(--kabin-type-scale))] text-kabin-secondary">
+            BIOS folder:{" "}
+            <span className="font-mono text-kabin-primary">
+              {biosPaths[systemId] ?? "Not set"}
+            </span>
+            <button
+              type="button"
+              onClick={() => addBios.mutate()}
+              className="ml-2 text-kabin-accent"
+            >
+              Choose…
+            </button>
+          </div>
+        )}
         <button
           type="button"
           disabled={addRom.isPending || !(emulatorsQuery.data?.length ?? 0)}

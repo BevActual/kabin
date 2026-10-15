@@ -6,6 +6,7 @@ use serde::Serialize;
 
 use super::item::LibraryItem;
 use super::playback::{path_allowed, playable_tracks};
+use super::reader_comic;
 use crate::config::KabinConfig;
 
 #[derive(Debug, Clone, Serialize)]
@@ -27,11 +28,15 @@ fn backend_for_suffix(suffix: &str) -> Option<&'static str> {
         ".cbz" => Some("cbz"),
         ".txt" => Some("txt"),
         ".fb2" => Some("fb2"),
+        ".mobi" | ".azw3" => Some("external"),
+        ".cbr" if reader_comic::bsdtar_available() => Some("comic-archive"),
+        ".cbt" if reader_comic::bsdtar_available() => Some("comic-archive"),
+        ".cb7" if reader_comic::bsdtar_available() => Some("comic-archive"),
         _ => None,
     }
 }
 
-fn reader_cache_root(title_id: &str) -> PathBuf {
+pub(crate) fn reader_cache_root(title_id: &str) -> PathBuf {
     let base = dirs::cache_dir().unwrap_or_else(|| PathBuf::from(".cache"));
     let safe: String = title_id
         .chars()
@@ -123,23 +128,36 @@ pub fn build_reader_session(item: &LibraryItem, config: &KabinConfig) -> Option<
     let backend = backend_for_suffix(&suffix)?;
     let (initial_page, page_count, file_path, pages) = match backend {
         "cbz" => {
-            let pages = extract_cbz(&file, &item.id).ok()?;
-            let count = pages.len() as u32;
+            let paths = extract_cbz(&file, &item.id).ok()?;
+            comic_session_pages(config, &item.id, paths)
+        }
+        "comic-archive" => {
+            let paths = reader_comic::extract_bsdtar_comic(&file, &item.id).ok()?;
+            comic_session_pages(config, &item.id, paths)
+        }
+        "fb2" => {
+            let html_pages = super::fb2::extract_fb2_pages(&file, &item.id).ok()?;
+            let count = html_pages.len() as u32;
             let (pos, dur, _) = config.progress_fields(&item.id);
-            let page = if dur > 0.0 {
-                resume_page(pos, dur, count)
-            } else {
-                0
-            };
+            let page = resume_page(pos, dur, count);
             (
                 page,
                 count.max(1),
                 None,
-                pages
-                    .into_iter()
-                    .map(|p| p.to_string_lossy().into_owned())
-                    .collect(),
+                html_pages,
             )
+        }
+        "external" => {
+            let path = file.to_string_lossy().into_owned();
+            return Some(ReaderSession {
+                title_id: item.id.clone(),
+                title: item.title.clone(),
+                backend: "external".into(),
+                file_path: Some(path),
+                pages: Vec::new(),
+                initial_page: 0,
+                page_count: 1,
+            });
         }
         _ => {
             let (pos, dur, _) = config.progress_fields(&item.id);
@@ -160,6 +178,29 @@ pub fn build_reader_session(item: &LibraryItem, config: &KabinConfig) -> Option<
         initial_page,
         page_count,
     })
+}
+
+fn comic_session_pages(
+    config: &KabinConfig,
+    item_id: &str,
+    paths: Vec<PathBuf>,
+) -> (u32, u32, Option<String>, Vec<String>) {
+    let count = paths.len() as u32;
+    let (pos, dur, _) = config.progress_fields(item_id);
+    let page = if dur > 0.0 {
+        resume_page(pos, dur, count)
+    } else {
+        0
+    };
+    (
+        page,
+        count.max(1),
+        None,
+        paths
+            .into_iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect(),
+    )
 }
 
 fn resume_page(position: f64, duration: f64, max: u32) -> u32 {

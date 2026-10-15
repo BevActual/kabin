@@ -323,12 +323,21 @@ impl KabinConfig {
         emulator: serde_json::Value,
         extensions: Vec<String>,
     ) {
-        let entry = json!({
-            "path": path,
-            "system": system,
-            "emulator": emulator,
-            "extensions": extensions,
-        });
+        let mut entry = serde_json::Map::from_iter([
+            ("path".into(), json!(path)),
+            ("system".into(), json!(system)),
+            ("emulator".into(), emulator),
+            ("extensions".into(), json!(extensions)),
+        ]);
+        if let Some(bios) = self
+            .emulation_settings()
+            .and_then(|e| e.get("bios"))
+            .and_then(|b| b.get(system))
+            .and_then(|v| v.as_str())
+        {
+            entry.insert("bios_path".into(), json!(bios));
+        }
+        let entry = Value::Object(entry);
         let dirs = self
             .data
             .as_object_mut()

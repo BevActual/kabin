@@ -33,6 +33,8 @@ hex = "0.4"
 subtle = "2"
 rand = "0.8"
 base64 = "0.22"
+roxmltree = "0.20"
+ureq = "2.10"
 hyper-util = { version = "0.1", features = ["tokio", "server-auto"] }
 
 [profile.release]

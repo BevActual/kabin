@@ -1,3 +1,4 @@
+pub mod bios;
 pub mod detect;
 
 use std::path::Path;

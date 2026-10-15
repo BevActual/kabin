@@ -22,10 +22,10 @@ npm install
 npm run tauri dev    # desktop app (Linux: WebKit GTK prerequisites)
 ```
 
-Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Features still in
-GTK only: [`docs/PARITY.md`](docs/PARITY.md).
+Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Conversion status:
+[`docs/CONVERSION.md`](docs/CONVERSION.md). GTK-only gaps: [`docs/PARITY.md`](docs/PARITY.md).
 
-**Legacy GTK4** (playback, reader, Kabin Host, Emulation Center setup):
+**Optional GTK4** (remote game streaming, managed emulator downloads only):
 
 ```bash
 python3 -m kabin
@@ -41,9 +41,9 @@ python3 -m kabin
 - **Other apps** — any installed `.desktop` entry with `Categories=Game`
   (catches things like custom shortcuts for non-Steam games).
 - **Books, comics, music, and movies** — add a folder in Settings → Library.
-  Kabin groups music by album folder, plays music and video in
-  `kabin-media-helper`, and remembers resume position on this device and the
-  host. Albums play through as a queue. Space pauses; the bottom bar seeks,
+  Kabin groups music by album folder, plays music and video in-app (Tauri) or
+  via `kabin-media-helper` (GTK), and remembers resume position on this device
+  and the host. Albums play through as a queue. Space pauses; the bottom bar seeks,
   skips tracks, and stops. Kabin reads PDF, EPUB, FB2, TXT, CBZ, CBR, CBT,
   and CB7 books and comics itself, with the same resume-position tracking
   — the arrow keys, Page Up/Down, and Space turn pages, and a page slider

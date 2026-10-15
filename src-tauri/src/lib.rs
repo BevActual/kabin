@@ -46,6 +46,8 @@ pub fn run() {
             commands::settings::set_source_enabled,
             commands::settings::add_media_dir,
             commands::settings::pick_folder,
+            commands::settings::set_system_bios_path,
+            commands::open::open_external_path,
             commands::host::get_host_status,
             commands::host::set_host_enabled,
             commands::host::create_host_pairing_code,

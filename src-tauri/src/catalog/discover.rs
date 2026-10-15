@@ -124,6 +124,7 @@ pub fn build_snapshot(
 ) {
     let fingerprint = config.library_fingerprint();
     let (mut items, mut errors) = discover_local(config);
+    super::steam_art::enrich_steam_covers(&mut items);
     if config.source_enabled("remote") {
         let (remote_items, statuses) = crate::remote::discover_remote(config);
         for (name, status) in statuses {

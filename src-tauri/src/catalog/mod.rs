@@ -1,4 +1,7 @@
 pub mod artwork;
+mod fb2;
+mod reader_comic;
+mod steam_art;
 mod desktop;
 mod discover;
 mod home;

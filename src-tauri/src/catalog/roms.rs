@@ -81,11 +81,23 @@ fn launch_plan_for_rom(
     if emulator.is_string() {
         let template = emulator.as_str()?;
         let argv = custom_command(template, rom_path).ok()?;
-        return Some(LaunchPlan::Command { argv });
+        return Some(LaunchPlan::Command {
+            argv,
+            emulator_id: None,
+            bios_path: None,
+        });
     }
     if emulator.is_object() {
         let argv = build_command(emulator, rom_path, emulation_settings).ok()?;
-        return Some(LaunchPlan::Command { argv });
+        let emulator_id = emulator
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        return Some(LaunchPlan::Command {
+            argv,
+            emulator_id,
+            bios_path: None,
+        });
     }
     None
 }
@@ -144,9 +156,22 @@ pub fn scan_rom_dirs(
             if hidden.contains(&id) {
                 return;
             }
-            let Some(launch) = launch_plan_for_rom(&emulator, rom_path, emulation_settings) else {
+            let Some(mut launch) =
+                launch_plan_for_rom(&emulator, rom_path, emulation_settings)
+            else {
                 return;
             };
+            if let LaunchPlan::Command {
+                bios_path: ref mut slot,
+                ..
+            } = &mut launch
+            {
+                *slot = obj
+                    .get("bios_path")
+                    .and_then(|v| v.as_str())
+                    .map(|raw| expand_path(raw))
+                    .filter(|p| p.is_dir());
+            }
             let cover = local_cover(rom_path);
             games.push(LibraryItem {
                 id,
