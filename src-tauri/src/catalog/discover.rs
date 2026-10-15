@@ -157,10 +157,11 @@ pub fn build_snapshot(
     let titles: Vec<CatalogTitle> = items
         .iter()
         .map(|item| {
-            CatalogTitle::from_item(
+            CatalogTitle::from_item_with_config(
                 item,
                 CatalogTitle::progress_for_item(item, config),
                 None,
+                Some(config),
             )
         })
         .collect();

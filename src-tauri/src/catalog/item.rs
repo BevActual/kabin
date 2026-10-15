@@ -56,10 +56,35 @@ pub struct CatalogTitle {
     pub accent_hue: u16,
     pub cover_path: Option<String>,
     pub can_launch: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub play_count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub play_time_label: Option<String>,
 }
 
 impl CatalogTitle {
     pub fn from_item(item: &LibraryItem, progress: Option<f32>, subtitle: Option<String>) -> Self {
+        Self::from_item_with_config(item, progress, subtitle, None)
+    }
+
+    pub fn from_item_with_config(
+        item: &LibraryItem,
+        progress: Option<f32>,
+        subtitle: Option<String>,
+        config: Option<&crate::config::KabinConfig>,
+    ) -> Self {
+        let (play_count, play_time_label) = if item.kind_id == "game" {
+            config.map(|cfg| {
+                let count = cfg.play_count(&item.id);
+                let label = crate::sessions::format_play_time(cfg.play_seconds(&item.id) as f64);
+                (
+                    if count > 0 { Some(count) } else { None },
+                    if label.is_empty() { None } else { Some(label) },
+                )
+            }).unwrap_or((None, None))
+        } else {
+            (None, None)
+        };
         Self {
             id: item.id.clone(),
             title: item.title.clone(),
@@ -70,6 +95,8 @@ impl CatalogTitle {
             accent_hue: kinds::accent_hue(&item.kind_id),
             cover_path: item.cover_path.clone(),
             can_launch: item.can_launch(),
+            play_count,
+            play_time_label,
         }
     }
 

@@ -4,7 +4,9 @@ mod config;
 mod emulators;
 mod host;
 mod launch_exec;
+mod launch_session;
 mod remote;
+mod sessions;
 
 use std::sync::Mutex;
 
@@ -13,6 +15,7 @@ use tauri::Manager;
 use commands::host::HostHandle;
 use config::AppState;
 use host::HostController;
+use launch_session::LaunchSessionState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,6 +23,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        .manage(LaunchSessionState::default())
         .manage(HostHandle(Mutex::new(HostController::default())))
         .setup(|app| {
             let state = app.state::<AppState>().inner().clone();
@@ -39,6 +43,8 @@ pub fn run() {
             commands::playback::save_playback_progress,
             commands::reader::get_reader_session,
             commands::reader::save_reader_progress,
+            commands::settings::list_emulation_presets,
+            commands::settings::set_emulation_preset,
             commands::settings::list_systems,
             commands::settings::list_emulators,
             commands::settings::recommended_managed_runtime,

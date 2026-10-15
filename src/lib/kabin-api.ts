@@ -27,6 +27,14 @@ export type SettingsSnapshot = {
   mediaDirs: unknown[];
   romDirs: unknown[];
   biosPaths: Record<string, string>;
+  emulation: Record<string, unknown>;
+  connectedControllers: string[];
+};
+
+export type EmulationPreset = {
+  id: string;
+  name: string;
+  description: string;
 };
 
 export type HostStatus = {
@@ -140,6 +148,18 @@ export function getSettings() {
     mediaDirs: [],
     romDirs: [],
     biosPaths: {},
+    emulation: { preset: "balanced" },
+    connectedControllers: [],
+  });
+}
+
+export function listEmulationPresets() {
+  return invokeOrMock<EmulationPreset[]>("list_emulation_presets", undefined, []);
+}
+
+export function setEmulationPreset(presetId: string) {
+  return invokeOrMock<Record<string, unknown>>("set_emulation_preset", {
+    presetId,
   });
 }
 

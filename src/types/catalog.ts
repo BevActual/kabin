@@ -10,6 +10,8 @@ export type CatalogTitle = {
   accentHue: number;
   coverPath?: string | null;
   canLaunch?: boolean;
+  playCount?: number | null;
+  playTimeLabel?: string | null;
 };
 
 export type HomeShelf = {

@@ -3,6 +3,8 @@ import { Search, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 import { useRef } from "react";
 import { useCabinetShortcuts } from "../hooks/useCabinetShortcuts";
+import { useGamepadCabinet } from "../hooks/useGamepadCabinet";
+import { useLaunchSessionEvents } from "../hooks/useLaunchSessionEvents";
 import { useUiStore } from "../store/ui";
 import { Sidebar } from "./Sidebar";
 
@@ -17,6 +19,10 @@ export function AppShell({ children }: Props) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const searchRef = useRef<HTMLInputElement>(null);
   useCabinetShortcuts(searchRef);
+  useGamepadCabinet(searchRef);
+  useLaunchSessionEvents();
+  const toast = useUiStore((s) => s.toast);
+  const setToast = useUiStore((s) => s.setToast);
 
   const pageTitle =
     pathname === "/"
@@ -66,6 +72,23 @@ export function AppShell({ children }: Props) {
           </Link>
         </header>
         <main className="min-h-0 flex-1 overflow-auto px-6 pb-8">{children}</main>
+        {toast ? (
+          <div
+            role="status"
+            className="fixed bottom-6 left-1/2 z-50 max-w-lg -translate-x-1/2 rounded-[var(--kabin-radius-sheet)] border border-kabin-separator bg-kabin-elevated px-4 py-3 text-[calc(14px*var(--kabin-type-scale))] text-kabin-primary shadow-[var(--kabin-shadow-tile-focus)]"
+          >
+            <div className="flex items-start gap-3">
+              <p className="flex-1">{toast}</p>
+              <button
+                type="button"
+                className="text-kabin-secondary hover:text-kabin-primary"
+                onClick={() => setToast(null)}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

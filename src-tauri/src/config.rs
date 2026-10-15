@@ -378,6 +378,60 @@ impl KabinConfig {
         }
     }
 
+    pub fn record_played(&mut self, game_id: &str) {
+        self.touch_recent(game_id);
+        let counts = self
+            .data
+            .as_object_mut()
+            .expect("config root")
+            .entry("play_counts")
+            .or_insert_with(|| json!({}));
+        if let Some(obj) = counts.as_object_mut() {
+            let next = obj
+                .get(game_id)
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0)
+                + 1;
+            obj.insert(game_id.to_string(), json!(next));
+        }
+    }
+
+    pub fn play_count(&self, game_id: &str) -> u32 {
+        self.data
+            .get("play_counts")
+            .and_then(|v| v.get(game_id))
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32
+    }
+
+    pub fn play_seconds(&self, game_id: &str) -> u64 {
+        self.data
+            .get("play_time")
+            .and_then(|v| v.get(game_id))
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0)
+    }
+
+    pub fn record_play_time(&mut self, game_id: &str, seconds: u64) {
+        if seconds == 0 {
+            return;
+        }
+        let times = self
+            .data
+            .as_object_mut()
+            .expect("config root")
+            .entry("play_time")
+            .or_insert_with(|| json!({}));
+        if let Some(obj) = times.as_object_mut() {
+            let total = obj
+                .get(game_id)
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0)
+                + seconds;
+            obj.insert(game_id.to_string(), json!(total));
+        }
+    }
+
     pub fn save(&self) -> Result<(), String> {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;

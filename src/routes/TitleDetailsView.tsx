@@ -61,6 +61,14 @@ export function TitleDetailsView() {
       <p className="mt-1 text-[calc(17px*var(--kabin-type-scale))] text-kabin-secondary">
         {title.subtitle}
       </p>
+      {title.kind === "game" &&
+      (title.playCount || title.playTimeLabel) ? (
+        <p className="mt-2 text-[calc(14px*var(--kabin-type-scale))] text-kabin-tertiary">
+          {title.playCount ? `${title.playCount} plays` : null}
+          {title.playCount && title.playTimeLabel ? " · " : null}
+          {title.playTimeLabel ? `${title.playTimeLabel} played` : null}
+        </p>
+      ) : null}
       <div className="mt-8 flex flex-wrap gap-3">
         <button
           type="button"

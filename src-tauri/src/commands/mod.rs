@@ -7,7 +7,8 @@ pub mod settings;
 
 use crate::catalog::{CatalogTitle, HomeShelfDto, LibrarySnapshot};
 use crate::config::{app_info, AppInfo, AppState, KabinConfig};
-use crate::launch_exec::{execute, touch_recent};
+use crate::launch_exec::{execute, LaunchExecution};
+use crate::launch_session::LaunchSessionState;
 
 #[tauri::command]
 pub fn get_app_info() -> AppInfo {
@@ -54,14 +55,32 @@ pub fn get_library_counts(
 }
 
 #[tauri::command]
-pub fn launch_title(state: tauri::State<'_, AppState>, title_id: String) -> Result<(), String> {
+pub fn launch_title(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    sessions: tauri::State<'_, LaunchSessionState>,
+    title_id: String,
+) -> Result<(), String> {
+    if sessions.is_active() {
+        return Err("A game is already running. Quit the emulator before launching another.".into());
+    }
     let plan = state
         .launch_plan(&title_id)
         .ok_or_else(|| "Title not found or not launchable".to_string())?;
-    execute(&plan)?;
+    let title = state
+        .find_item(&title_id)
+        .map(|item| item.title)
+        .unwrap_or_else(|| title_id.clone());
+    let outcome = execute(&plan)?;
     let mut config = KabinConfig::load();
-    touch_recent(&mut config, &title_id);
+    config.record_played(&title_id);
     config.save()?;
+    match outcome {
+        LaunchExecution::Detached => {}
+        LaunchExecution::Tracked(child) => {
+            sessions.start_monitor(app, state.inner().clone(), title_id, title, child);
+        }
+    }
     state.invalidate();
     Ok(())
 }

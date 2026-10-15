@@ -1,6 +1,8 @@
 pub mod bios;
+pub mod controllers;
 pub mod detect;
 pub mod managed;
+pub mod presets;
 
 use std::path::Path;
 use std::process::Command;
@@ -154,7 +156,7 @@ pub fn custom_command(template: &str, rom_path: &Path) -> Result<Vec<String>, St
         .collect())
 }
 
-pub fn spawn_detached(command: &[String], env: Option<&[(String, String)]>) -> Result<(), String> {
+pub fn spawn_detached(command: &[String], env: Option<&[(String, String)]>) -> Result<std::process::Child, String> {
     if command.is_empty() {
         return Err("Empty command".into());
     }
@@ -167,6 +169,5 @@ pub fn spawn_detached(command: &[String], env: Option<&[(String, String)]>) -> R
         }
     }
     cmd.spawn()
-        .map_err(|e| format!("Failed to launch {program}: {e}"))?;
-    Ok(())
+        .map_err(|e| format!("Failed to launch {program}: {e}"))
 }

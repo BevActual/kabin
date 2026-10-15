@@ -11,6 +11,8 @@ pub struct SettingsSnapshot {
     pub media_dirs: Vec<serde_json::Value>,
     pub rom_dirs: Vec<serde_json::Value>,
     pub bios_paths: serde_json::Map<String, serde_json::Value>,
+    pub emulation: serde_json::Value,
+    pub connected_controllers: Vec<String>,
 }
 
 #[tauri::command]
@@ -32,6 +34,11 @@ pub fn get_settings() -> SettingsSnapshot {
             .and_then(|v| v.as_object())
             .cloned()
             .unwrap_or_default(),
+        emulation: config
+            .emulation_settings()
+            .cloned()
+            .unwrap_or_else(|| crate::emulators::presets::settings_for_preset("balanced")),
+        connected_controllers: crate::emulators::controllers::connected_controllers(),
     }
 }
 
@@ -59,6 +66,24 @@ pub fn add_media_dir(
     config.save()?;
     state.invalidate();
     Ok(())
+}
+
+#[tauri::command]
+pub fn list_emulation_presets() -> Vec<crate::emulators::presets::EmulationPresetDto> {
+    crate::emulators::presets::list_presets()
+}
+
+#[tauri::command]
+pub fn set_emulation_preset(
+    state: tauri::State<'_, AppState>,
+    preset_id: String,
+) -> Result<serde_json::Value, String> {
+    let mut config = KabinConfig::load();
+    crate::emulators::presets::apply_preset_to_config(&mut config, &preset_id);
+    let settings = config.emulation_settings().cloned().unwrap_or_default();
+    config.save()?;
+    state.invalidate();
+    Ok(settings)
 }
 
 #[tauri::command]

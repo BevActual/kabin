@@ -8,6 +8,7 @@ import {
   getAppInfo,
   getHostStatus,
   getSettings,
+  listEmulationPresets,
   listRemoteHosts,
   pairRemoteHost,
   removeRemoteHost,
@@ -16,6 +17,7 @@ import {
   listSystems,
   pickFolder,
   recommendedManagedRuntime,
+  setEmulationPreset,
   setHostEnabled,
   setSourceEnabled,
   setSystemBiosPath,
@@ -144,6 +146,15 @@ export function SettingsView() {
         onChanged={() => {
           void queryClient.invalidateQueries({ queryKey: ["libraryScan"] });
           void queryClient.invalidateQueries({ queryKey: ["libraryCounts"] });
+        }}
+      />
+
+      <PlayDefaultsPanel
+        emulation={settings?.emulation}
+        controllers={settings?.connectedControllers ?? []}
+        onChanged={() => {
+          void queryClient.invalidateQueries({ queryKey: ["settings"] });
+          void queryClient.invalidateQueries({ queryKey: ["libraryScan"] });
         }}
       />
 
@@ -398,6 +409,60 @@ function KabinHostPanel() {
           on the GTK host for now.
         </p>
       )}
+    </SettingsGroup>
+  );
+}
+
+function PlayDefaultsPanel({
+  emulation,
+  controllers,
+  onChanged,
+}: {
+  emulation?: Record<string, unknown>;
+  controllers: string[];
+  onChanged: () => void;
+}) {
+  const presetsQuery = useQuery({
+    queryKey: ["emulationPresets"],
+    queryFn: listEmulationPresets,
+  });
+  const presetId = (emulation?.preset as string | undefined) ?? "balanced";
+  const setPreset = useMutation({
+    mutationFn: (id: string) => setEmulationPreset(id),
+    onSuccess: onChanged,
+  });
+  const current = presetsQuery.data?.find((p) => p.id === presetId);
+
+  return (
+    <SettingsGroup title="Play defaults">
+      <div className="space-y-3 p-4">
+        <label className="block text-[calc(14px*var(--kabin-type-scale))] text-kabin-secondary">
+          Profile
+          <select
+            value={presetId}
+            disabled={setPreset.isPending}
+            onChange={(e) => setPreset.mutate(e.target.value)}
+            className="mt-1 w-full rounded-[var(--kabin-radius-control)] border border-kabin-separator bg-kabin-grouped px-3 py-2 text-kabin-primary"
+          >
+            {(presetsQuery.data ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {current ? (
+          <p className="text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
+            {current.description}
+          </p>
+        ) : null}
+        <p className="text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
+          Controllers:{" "}
+          {controllers.length > 0
+            ? controllers.join(", ")
+            : "None detected on /dev/input/by-id"}
+        </p>
+      </div>
     </SettingsGroup>
   );
 }
