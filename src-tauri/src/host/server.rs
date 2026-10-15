@@ -23,7 +23,9 @@ use super::catalog::{
 };
 use super::cert::{ensure_host_certificate, load_rustls_config};
 use super::pairing::{PairingOutcome, PairingState};
+use super::sessions::SessionStore;
 use crate::config::{AppState, KabinConfig};
+use crate::media_helper;
 
 const MAX_PAYLOAD_BYTES: usize = 65536;
 
@@ -31,6 +33,7 @@ const MAX_PAYLOAD_BYTES: usize = 65536;
 struct ServerState {
     app: AppState,
     pairing: Arc<Mutex<PairingState>>,
+    sessions: Arc<SessionStore>,
     host_name: String,
 }
 
@@ -64,6 +67,7 @@ pub async fn run(
     let state = ServerState {
         app,
         pairing,
+        sessions: Arc::new(SessionStore::default()),
         host_name,
     };
     let router = build_router(state);
@@ -105,29 +109,121 @@ fn build_router(state: ServerState) -> Router {
         .route("/v1/media/progress", get(get_progress_handler).post(post_progress_handler))
         .route("/v1/media/stream", get(stream_handler))
         .route("/v1/artwork", get(artwork_handler))
-        .route("/v1/sessions", post(sessions_not_implemented))
-        .route("/v1/sessions/{session_id}", get(sessions_not_implemented))
-        .route("/v1/sessions/{session_id}/signal", post(sessions_not_implemented))
-        .route("/v1/sessions/{session_id}/launch", post(sessions_not_implemented))
+        .route("/v1/sessions", post(create_session_handler))
+        .route("/v1/sessions/{session_id}", get(get_session_handler))
+        .route("/v1/sessions/{session_id}/signal", post(signal_session_handler))
+        .route("/v1/sessions/{session_id}/launch", post(launch_session_handler))
         .with_state(state)
 }
 
-async fn sessions_not_implemented() -> impl IntoResponse {
-    json_error(
-        StatusCode::NOT_IMPLEMENTED,
-        "WebRTC game streaming is not available in the Tauri host yet",
-    )
-}
-
 async fn info_handler(State(state): State<ServerState>) -> impl IntoResponse {
+    let ready = media_helper::self_test().unwrap_or(false);
     Json(json!({
         "protocol": 1,
         "name": state.host_name,
         "service": "Kabin Host",
         "pairing_required": true,
-        "streaming": "none",
-        "media_ready": false,
+        "streaming": if ready { "kabin" } else { "none" },
+        "media_ready": ready,
     }))
+}
+
+async fn create_session_handler(
+    State(state): State<ServerState>,
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> impl IntoResponse {
+    if !authorized(&headers) {
+        return json_error(StatusCode::UNAUTHORIZED, "authentication required");
+    }
+    let payload = match read_json_payload(&headers, &body) {
+        Ok(v) => v,
+        Err(resp) => return resp,
+    };
+    let game_id = payload
+        .get("game_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    if game_id.is_empty() {
+        return json_error(StatusCode::BAD_REQUEST, "game_id is required");
+    }
+    let Some(item) = state.app.find_item(game_id) else {
+        return json_error(StatusCode::NOT_FOUND, "game not found or not launchable");
+    };
+    let Some(session) = state.sessions.prepare(&item) else {
+        return json_error(StatusCode::NOT_FOUND, "game not found or not launchable");
+    };
+    (StatusCode::CREATED, Json(session)).into_response()
+}
+
+async fn get_session_handler(
+    State(state): State<ServerState>,
+    headers: HeaderMap,
+    axum::extract::Path(session_id): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    if !authorized(&headers) {
+        return json_error(StatusCode::UNAUTHORIZED, "authentication required");
+    }
+    match state.sessions.get(&session_id) {
+        Some(session) => Json(session).into_response(),
+        None => json_error(StatusCode::NOT_FOUND, "session not found"),
+    }
+}
+
+async fn signal_session_handler(
+    State(state): State<ServerState>,
+    headers: HeaderMap,
+    axum::extract::Path(session_id): axum::extract::Path<String>,
+    body: axum::body::Bytes,
+) -> impl IntoResponse {
+    if !authorized(&headers) {
+        return json_error(StatusCode::UNAUTHORIZED, "authentication required");
+    }
+    let payload = match read_json_payload(&headers, &body) {
+        Ok(v) => v,
+        Err(resp) => return resp,
+    };
+    if payload.get("type").and_then(|v| v.as_str()) != Some("offer") {
+        return json_error(StatusCode::BAD_REQUEST, "offer sdp is required");
+    }
+    let Some(sdp) = payload.get("sdp").and_then(|v| v.as_str()) else {
+        return json_error(StatusCode::BAD_REQUEST, "offer sdp is required");
+    };
+    let sessions = state.sessions.clone();
+    let session_id_copy = session_id.clone();
+    let sdp_owned = sdp.to_string();
+    let answer = match tokio::task::spawn_blocking(move || {
+        sessions.negotiate(&session_id_copy, &sdp_owned)
+    })
+    .await
+    {
+        Ok(Ok(answer)) => answer,
+        Ok(Err(err)) => return json_error(StatusCode::SERVICE_UNAVAILABLE, &err),
+        Err(_) => return json_error(StatusCode::INTERNAL_SERVER_ERROR, "negotiation failed"),
+    };
+    Json(json!({ "type": "answer", "sdp": answer })).into_response()
+}
+
+async fn launch_session_handler(
+    State(state): State<ServerState>,
+    headers: HeaderMap,
+    axum::extract::Path(session_id): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    if !authorized(&headers) {
+        return json_error(StatusCode::UNAUTHORIZED, "authentication required");
+    }
+    let app = state.app.clone();
+    let sessions = state.sessions.clone();
+    match tokio::task::spawn_blocking(move || sessions.activate(&session_id, &app)).await {
+        Ok(Ok(session)) => Json(session).into_response(),
+        Ok(Err(err)) if err.contains("not connected") => {
+            json_error(StatusCode::CONFLICT, &err)
+        }
+        Ok(Err(err)) if err.contains("not found") => json_error(StatusCode::NOT_FOUND, &err),
+        Ok(Err(err)) => json_error(StatusCode::INTERNAL_SERVER_ERROR, &err),
+        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "launch failed"),
+    }
 }
 
 async fn pair_handler(

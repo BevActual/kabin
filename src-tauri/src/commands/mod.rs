@@ -47,6 +47,38 @@ pub fn get_title(state: tauri::State<'_, AppState>, title_id: String) -> Option<
         .find(|title| title.id == title_id)
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RelatedShelfDto {
+    pub heading: String,
+    pub titles: Vec<CatalogTitle>,
+}
+
+#[tauri::command]
+pub fn get_related_titles(
+    state: tauri::State<'_, AppState>,
+    title_id: String,
+) -> RelatedShelfDto {
+    let config = KabinConfig::load();
+    let snapshot = state.snapshot(false);
+    let items: Vec<_> = snapshot
+        .titles
+        .iter()
+        .filter_map(|t| state.find_item(&t.id))
+        .collect();
+    let Some(item) = state.find_item(&title_id) else {
+        return RelatedShelfDto {
+            heading: String::new(),
+            titles: Vec::new(),
+        };
+    };
+    let shelf = crate::catalog::related::related_shelf(&item, &items, &config);
+    RelatedShelfDto {
+        heading: shelf.heading,
+        titles: shelf.titles,
+    }
+}
+
 #[tauri::command]
 pub fn get_library_counts(
     state: tauri::State<'_, AppState>,

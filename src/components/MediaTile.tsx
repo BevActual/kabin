@@ -21,6 +21,8 @@ export function MediaTile({ title }: Props) {
       to="/title/$titleId"
       params={{ titleId: title.id }}
       className="group block shrink-0 rounded-[var(--kabin-radius-tile)] focus:outline-none"
+      data-cabinet-tile=""
+      tabIndex={0}
     >
       <motion.article
         whileHover={{ scale: 1.02 }}

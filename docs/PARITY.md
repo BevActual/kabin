@@ -16,14 +16,14 @@ Kabin’s **Tauri shell** is the primary desktop app. See [`CONVERSION.md`](CONV
 | Shortcuts | `/`, Ctrl+F, Esc, Ctrl+,; gamepad Back/Start/Guide/A (basic) |
 | Covers | Sidecar/folder art, Steam cache, host `/v1/artwork`, remote cache |
 | Kabin Host | TLS API, pairing, library, stream, progress, artwork, mDNS |
-| Remote client | Discovery, pairing, merged catalog, play/read, progress |
+| Remote client | Discovery, pairing, merged catalog, play/read, progress, remote game stream (with `kabin-media-helper`) |
+| Kabin Host streaming | `/v1/sessions/*` WebRTC via `kabin-media-helper` when built |
 
 ## GTK-only (optional)
 
 | Area | Notes |
 |------|--------|
-| Remote **game** streaming | WebRTC `/v1/sessions/*` + `kabin-media-helper` |
-| Advanced TV/gamepad polish | Spatial shelf focus / stick navigation (basic pad buttons work) |
+| Advanced TV/gamepad polish | Grid-aware shelf focus (basic stick stepping between tiles works) |
 
 ## Development
 
@@ -31,8 +31,8 @@ Kabin’s **Tauri shell** is the primary desktop app. See [`CONVERSION.md`](CONV
 npm run tauri dev
 ```
 
-Remote game streaming (WebRTC):
+Build the media helper for streaming and in-GTK playback:
 
 ```bash
-python3 -m kabin
+./scripts/build-media-helper.sh
 ```

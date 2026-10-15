@@ -31,6 +31,35 @@ pub fn fetch_remote_library(host: &RemoteHostEntry, token: &str) -> Result<Value
     get_json(host, "/v1/library", Some(token))
 }
 
+pub fn prepare_remote_session(
+    host: &RemoteHostEntry,
+    token: &str,
+    game_id: &str,
+) -> Result<Value, String> {
+    let body = serde_json::json!({ "game_id": game_id });
+    post_json(host, "/v1/sessions", Some(token), &body)
+}
+
+pub fn signal_remote_session(
+    host: &RemoteHostEntry,
+    token: &str,
+    session_id: &str,
+    offer_sdp: &str,
+) -> Result<Value, String> {
+    let path = format!("/v1/sessions/{}/signal", urlencoding(session_id));
+    let body = serde_json::json!({ "type": "offer", "sdp": offer_sdp });
+    post_json_with_timeout(host, &path, Some(token), &body, Duration::from_secs(20))
+}
+
+pub fn launch_remote_session(
+    host: &RemoteHostEntry,
+    token: &str,
+    session_id: &str,
+) -> Result<Value, String> {
+    let path = format!("/v1/sessions/{}/launch", urlencoding(session_id));
+    post_json(host, &path, Some(token), &serde_json::json!({}))
+}
+
 pub fn fetch_remote_artwork_bytes(
     host: &RemoteHostEntry,
     token: &str,
@@ -106,8 +135,18 @@ fn post_json(
     token: Option<&str>,
     body: &Value,
 ) -> Result<Value, String> {
+    post_json_with_timeout(host, path, token, body, DEFAULT_TIMEOUT)
+}
+
+fn post_json_with_timeout(
+    host: &RemoteHostEntry,
+    path: &str,
+    token: Option<&str>,
+    body: &Value,
+    timeout: Duration,
+) -> Result<Value, String> {
     let payload = serde_json::to_vec(body).map_err(|e| e.to_string())?;
-    let bytes = request(host, "POST", path, token, Some(payload), DEFAULT_TIMEOUT)?;
+    let bytes = request(host, "POST", path, token, Some(payload), timeout)?;
     serde_json::from_slice(&bytes).map_err(|e| e.to_string())
 }
 

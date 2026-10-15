@@ -1,8 +1,6 @@
 use std::process::{Child, Command};
 
 use crate::catalog::launch::LaunchPlan;
-use crate::config::KabinConfig;
-
 pub enum LaunchExecution {
     Detached,
     Tracked(Child),
@@ -53,8 +51,4 @@ pub fn execute(plan: &LaunchPlan) -> Result<LaunchExecution, String> {
             return Err("Open this title in the player or reader.".into());
         }
     }
-}
-
-pub fn touch_recent(config: &mut KabinConfig, title_id: &str) {
-    config.touch_recent(title_id);
 }

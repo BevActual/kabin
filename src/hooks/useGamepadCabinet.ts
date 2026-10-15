@@ -55,8 +55,23 @@ export function useGamepadCabinet(searchInputRef?: React.RefObject<HTMLInputElem
           const link = document.querySelector<HTMLElement>("main a[href], main button");
           link?.click();
         });
-        if (Math.abs(pad.axes[0] ?? 0) > DEADZONE || Math.abs(pad.axes[1] ?? 0) > DEADZONE) {
-          // Leave spatial focus to keyboard/TV polish; pads still get confirm/back/settings/refresh.
+        const ax = pad.axes[0] ?? 0;
+        const ay = pad.axes[1] ?? 0;
+        if (Math.abs(ax) > DEADZONE || Math.abs(ay) > DEADZONE) {
+          const tiles = Array.from(
+            document.querySelectorAll<HTMLElement>("[data-cabinet-tile]"),
+          );
+          if (tiles.length > 0) {
+            const current = document.activeElement as HTMLElement | null;
+            let index = tiles.findIndex((el) => el === current);
+            if (index < 0) index = 0;
+            if (Math.abs(ax) > Math.abs(ay)) {
+              index = ax > 0 ? Math.min(tiles.length - 1, index + 1) : Math.max(0, index - 1);
+            } else {
+              index = ay > 0 ? Math.min(tiles.length - 1, index + 1) : Math.max(0, index - 1);
+            }
+            tiles[index]?.focus();
+          }
         }
       }
       frame = requestAnimationFrame(poll);

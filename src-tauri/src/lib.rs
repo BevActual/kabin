@@ -5,6 +5,7 @@ mod emulators;
 mod host;
 mod launch_exec;
 mod launch_session;
+mod media_helper;
 mod remote;
 mod sessions;
 
@@ -16,6 +17,7 @@ use commands::host::HostHandle;
 use config::AppState;
 use host::HostController;
 use launch_session::LaunchSessionState;
+use remote::game_stream::RemoteGameStreamState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .manage(LaunchSessionState::default())
+        .manage(RemoteGameStreamState::default())
         .manage(HostHandle(Mutex::new(HostController::default())))
         .setup(|app| {
             let state = app.state::<AppState>().inner().clone();
@@ -63,6 +66,11 @@ pub fn run() {
             commands::remote::list_remote_hosts,
             commands::remote::pair_remote_host,
             commands::remote::remove_remote_host,
+            commands::remote::remote_game_stream_available,
+            commands::remote::start_remote_game_stream,
+            commands::remote::stop_remote_game_stream,
+            commands::remote::remote_game_stream_status,
+            commands::get_related_titles,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

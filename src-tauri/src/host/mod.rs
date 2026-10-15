@@ -2,6 +2,7 @@ mod artwork;
 mod catalog;
 mod cert;
 mod pairing;
+pub mod sessions;
 mod server;
 
 use std::process::{Command, Stdio};

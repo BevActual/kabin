@@ -405,8 +405,8 @@ function KabinHostPanel() {
         </>
       ) : (
         <p className="px-4 pb-3 text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
-          TLS catalog API for paired Kabin apps. Game streaming (WebRTC) remains
-          on the GTK host for now.
+          TLS catalog API for paired Kabin apps. Game streaming uses
+          kabin-media-helper when it is built on this machine.
         </p>
       )}
     </SettingsGroup>

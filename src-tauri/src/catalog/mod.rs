@@ -4,6 +4,7 @@ mod reader_comic;
 mod steam_art;
 mod desktop;
 mod discover;
+pub mod related;
 mod home;
 pub mod item;
 mod kinds;

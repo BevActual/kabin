@@ -1,8 +1,10 @@
 use serde::Serialize;
 
 use crate::config::{KabinConfig, RemoteHostEntry, RemoteHostSummary};
+use crate::config::AppState;
+use crate::remote::game_stream::RemoteGameStreamState;
 use crate::remote::{
-    discover_nearby_hosts, fetch_remote_library, pair_with_host, DiscoveredHost,
+    discover_nearby_hosts, fetch_remote_library, game_stream, pair_with_host, DiscoveredHost,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -24,7 +26,7 @@ pub fn list_remote_hosts() -> Vec<RemoteHostSummary> {
 
 #[tauri::command]
 pub fn pair_remote_host(
-    state: tauri::State<'_, crate::config::AppState>,
+    state: tauri::State<'_, AppState>,
     host: RemoteHostEntry,
     code: String,
 ) -> Result<PairRemoteHostResult, String> {
@@ -55,11 +57,38 @@ pub fn pair_remote_host(
 
 #[tauri::command]
 pub fn remove_remote_host(
-    state: tauri::State<'_, crate::config::AppState>,
+    state: tauri::State<'_, AppState>,
     name: String,
 ) -> Result<(), String> {
     let mut config = KabinConfig::load();
     config.remove_remote_host(&name)?;
     state.invalidate();
     Ok(())
+}
+
+#[tauri::command]
+pub fn remote_game_stream_available() -> bool {
+    game_stream::streaming_available()
+}
+
+#[tauri::command]
+pub fn start_remote_game_stream(
+    state: tauri::State<'_, AppState>,
+    streams: tauri::State<'_, RemoteGameStreamState>,
+    title_id: String,
+) -> Result<String, String> {
+    streams.start(&state, &title_id)
+}
+
+#[tauri::command]
+pub fn stop_remote_game_stream(streams: tauri::State<'_, RemoteGameStreamState>) -> Result<(), String> {
+    streams.stop();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn remote_game_stream_status(
+    streams: tauri::State<'_, RemoteGameStreamState>,
+) -> Option<String> {
+    streams.active_title()
 }

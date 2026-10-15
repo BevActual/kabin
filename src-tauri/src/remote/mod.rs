@@ -3,6 +3,7 @@ mod cache;
 mod catalog;
 mod client;
 mod discover;
+pub mod game_stream;
 mod progress;
 mod tls;
 

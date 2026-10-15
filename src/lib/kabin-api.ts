@@ -107,6 +107,31 @@ export function getTitle(titleId: string) {
   );
 }
 
+export type RelatedShelf = { heading: string; titles: CatalogTitle[] };
+
+export function getRelatedTitles(titleId: string) {
+  return invokeOrMock<RelatedShelf>("get_related_titles", { titleId }, {
+    heading: "",
+    titles: [],
+  });
+}
+
+export function remoteGameStreamAvailable() {
+  return invokeOrMock<boolean>("remote_game_stream_available", undefined, false);
+}
+
+export function startRemoteGameStream(titleId: string) {
+  return invokeOrMock<string>("start_remote_game_stream", { titleId });
+}
+
+export function stopRemoteGameStream() {
+  return invokeOrMock<void>("stop_remote_game_stream", undefined);
+}
+
+export function remoteGameStreamStatus() {
+  return invokeOrMock<string | null>("remote_game_stream_status", undefined, null);
+}
+
 export function getLibraryCounts() {
   return invokeOrMock<Record<string, number>>(
     "get_library_counts",
