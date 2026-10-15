@@ -1,3 +1,4 @@
+mod catalog;
 mod commands;
 mod config;
 
@@ -10,8 +11,11 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
+            commands::scan_library,
             commands::get_home_shelves,
             commands::get_library_titles,
+            commands::get_title,
+            commands::get_library_counts,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

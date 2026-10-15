@@ -42,15 +42,22 @@ Kabin is moving from **Python + GTK4/libadwaita** to **Tauri 2 + Rust + React (T
 
 Typed IPC: `src/lib/kabin-api.ts` wraps all `invoke` calls.
 
-## Rust surface (initial)
+## Rust surface
 
-Commands (expand over time):
+Commands:
 
-- `get_app_info` — version, config path, theme hints
-- `get_home_shelves` — catalog shelves for Home (stub → real scan)
-- `get_library_titles` — titles for a library kind
+- `get_app_info` — version and config path
+- `scan_library` — full local scan + Home shelves (cached by config fingerprint)
+- `get_home_shelves` / `get_library_titles` / `get_title` / `get_library_counts` — views over the cached scan
 
-Config reads/writes use the same paths as the Python app: `~/.config/kabin/config.json` (see `src-tauri/src/config.rs`).
+Local discovery (see `src-tauri/src/catalog/`):
+
+- **Media folders** — same layout rules as `kabin/sources/media_dirs.py`
+- **Steam** — `appmanifest_*.acf` + `libraryfolders.vdf`
+- **Desktop games** — `.desktop` entries with `Categories=Game`
+- **ROMs** — not yet ported (`sources/roms.py` is next)
+
+Config reads use the same path as the Python app: `~/.config/kabin/config.json` (`src-tauri/src/config.rs`). Progress and `recent` drive Continue shelves.
 
 ## Migration phases
 
@@ -67,6 +74,8 @@ npm install
 npm run tauri dev    # full app (needs Linux WebKit GTK deps)
 npm run dev          # Vite only (mock data when not in Tauri)
 ```
+
+Rust **stable** (see [`rust-toolchain.toml`](../rust-toolchain.toml)) — recent Tauri 2 releases need a current toolchain.
 
 Legacy:
 

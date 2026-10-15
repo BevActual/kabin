@@ -25,7 +25,8 @@ export function LibraryView() {
           No titles in this library yet.
         </p>
         <p className="mt-2 text-[calc(15px*var(--kabin-type-scale))] text-kabin-tertiary">
-          Library scanning from Rust will replace this placeholder grid.
+          Add folders in the GTK Settings app, or enable Steam scanning in your
+          config, then refresh from Home.
         </p>
       </div>
     );

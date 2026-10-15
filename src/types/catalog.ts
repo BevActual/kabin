@@ -8,12 +8,26 @@ export type CatalogTitle = {
   aspect: TileAspect;
   progress?: number | null;
   accentHue: number;
+  coverPath?: string | null;
 };
 
 export type HomeShelf = {
   id: string;
   label: string;
   titles: CatalogTitle[];
+};
+
+export type ScanError = {
+  source: string;
+  message: string;
+};
+
+export type LibrarySnapshot = {
+  shelves: HomeShelf[];
+  titles: CatalogTitle[];
+  counts: Record<string, number>;
+  errors: ScanError[];
+  fingerprint: string;
 };
 
 export type AppInfo = {

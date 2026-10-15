@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
   Film,
@@ -7,6 +8,7 @@ import {
   Library,
   Music2,
 } from "lucide-react";
+import { getLibraryCounts } from "../lib/kabin-api";
 
 const libraries = [
   { kind: "game", label: "Games", icon: Gamepad2 },
@@ -18,6 +20,11 @@ const libraries = [
 
 export function Sidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const countsQuery = useQuery({
+    queryKey: ["libraryCounts"],
+    queryFn: getLibraryCounts,
+  });
+  const counts = countsQuery.data ?? {};
 
   return (
     <aside className="kabin-sidebar flex w-[220px] shrink-0 flex-col px-3 py-4">
@@ -36,16 +43,20 @@ export function Sidebar() {
         <div className="mt-4 mb-2 px-3 text-[calc(12px*var(--kabin-type-scale))] font-medium text-kabin-tertiary">
           Libraries
         </div>
-        {libraries.map(({ kind, label, icon: Icon }) => (
-          <SidebarLink
-            key={kind}
-            to="/library/$kind"
-            params={{ kind }}
-            label={label}
-            icon={Icon}
-            active={pathname === `/library/${kind}`}
-          />
-        ))}
+        {libraries.map(({ kind, label, icon: Icon }) => {
+          const count = counts[kind];
+          return (
+            <SidebarLink
+              key={kind}
+              to="/library/$kind"
+              params={{ kind }}
+              label={label}
+              badge={count ? String(count) : undefined}
+              icon={Icon}
+              active={pathname === `/library/${kind}`}
+            />
+          );
+        })}
       </nav>
     </aside>
   );
@@ -56,10 +67,18 @@ type SidebarLinkProps = {
   label: string;
   icon: typeof Home;
   active: boolean;
+  badge?: string;
   params?: { kind: string };
 };
 
-function SidebarLink({ to, label, icon: Icon, active, params }: SidebarLinkProps) {
+function SidebarLink({
+  to,
+  label,
+  icon: Icon,
+  active,
+  badge,
+  params,
+}: SidebarLinkProps) {
   return (
     <Link
       to={to}
@@ -71,7 +90,12 @@ function SidebarLink({ to, label, icon: Icon, active, params }: SidebarLinkProps
       }`}
     >
       <Icon size={20} strokeWidth={1.5} />
-      {label}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {badge ? (
+        <span className="text-[calc(12px*var(--kabin-type-scale))] tabular-nums text-kabin-tertiary">
+          {badge}
+        </span>
+      ) : null}
     </Link>
   );
 }

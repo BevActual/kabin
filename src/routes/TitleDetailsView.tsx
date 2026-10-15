@@ -1,21 +1,19 @@
 import { Link, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { getHomeShelves } from "../lib/kabin-api";
+import { coverUrl, getTitle } from "../lib/kabin-api";
 
 const route = getRouteApi("/title/$titleId");
 
 export function TitleDetailsView() {
   const { titleId } = route.useParams();
-  const shelvesQuery = useQuery({
-    queryKey: ["homeShelves"],
-    queryFn: getHomeShelves,
+  const titleQuery = useQuery({
+    queryKey: ["title", titleId],
+    queryFn: () => getTitle(titleId),
   });
 
-  const title = shelvesQuery.data
-    ?.flatMap((s) => s.titles)
-    .find((t) => t.id === titleId);
+  const title = titleQuery.data;
 
-  if (shelvesQuery.isLoading) {
+  if (titleQuery.isLoading) {
     return <p className="text-kabin-secondary">Loading…</p>;
   }
 
@@ -30,14 +28,24 @@ export function TitleDetailsView() {
     );
   }
 
+  const art = coverUrl(title.coverPath);
+
   return (
     <div className="mx-auto max-w-3xl">
       <div
         className="mb-8 aspect-[2/3] max-w-xs overflow-hidden rounded-[var(--kabin-radius-sheet)] shadow-[var(--kabin-shadow-tile-focus)]"
-        style={{
-          background: `linear-gradient(145deg, hsl(${title.accentHue} 42% 38%), hsl(${title.accentHue} 28% 18%))`,
-        }}
-      />
+        style={
+          art
+            ? undefined
+            : {
+                background: `linear-gradient(145deg, hsl(${title.accentHue} 42% 38%), hsl(${title.accentHue} 28% 18%))`,
+              }
+        }
+      >
+        {art ? (
+          <img src={art} alt="" className="h-full w-full object-cover" />
+        ) : null}
+      </div>
       <h2 className="text-[calc(34px*var(--kabin-type-scale))] font-semibold tracking-tight">
         {title.title}
       </h2>
@@ -79,6 +87,7 @@ function primaryAction(kind: string) {
     case "music":
       return "Listen";
     case "video":
+    case "tv":
       return "Watch";
     default:
       return "Play";

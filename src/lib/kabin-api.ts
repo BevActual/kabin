@@ -1,36 +1,22 @@
-import { invoke } from "@tauri-apps/api/core";
-import type { AppInfo, CatalogTitle, HomeShelf } from "../types/catalog";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import type {
+  AppInfo,
+  CatalogTitle,
+  HomeShelf,
+  LibrarySnapshot,
+} from "../types/catalog";
 
 const isTauri = () =>
   typeof window !== "undefined" &&
   ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
 
-const mockAppInfo: AppInfo = {
-  productName: "Kabin",
-  version: "0.1.0-dev",
-  configPath: "~/.config/kabin/config.json",
-  legacyPython: true,
-  windowWidth: 1100,
-  windowHeight: 720,
+const emptySnapshot: LibrarySnapshot = {
+  shelves: [],
+  titles: [],
+  counts: {},
+  errors: [],
+  fingerprint: "",
 };
-
-const mockShelves: HomeShelf[] = [
-  {
-    id: "continue",
-    label: "Continue",
-    titles: [
-      {
-        id: "demo-1",
-        title: "Stellar Drift",
-        subtitle: "Resume · 42%",
-        kind: "game",
-        aspect: "poster",
-        progress: 0.42,
-        accentHue: 210,
-      },
-    ],
-  },
-];
 
 async function invokeOrMock<T>(
   cmd: string,
@@ -45,17 +31,54 @@ async function invokeOrMock<T>(
 }
 
 export function getAppInfo() {
-  return invokeOrMock<AppInfo>("get_app_info", undefined, mockAppInfo);
+  return invokeOrMock<AppInfo>("get_app_info", undefined, {
+    productName: "Kabin",
+    version: "0.1.0-dev",
+    configPath: "~/.config/kabin/config.json",
+    legacyPython: true,
+    windowWidth: 1100,
+    windowHeight: 720,
+  });
+}
+
+export function scanLibrary(force = false) {
+  return invokeOrMock<LibrarySnapshot>(
+    "scan_library",
+    { force },
+    emptySnapshot,
+  );
 }
 
 export function getHomeShelves() {
-  return invokeOrMock<HomeShelf[]>("get_home_shelves", undefined, mockShelves);
+  return invokeOrMock<HomeShelf[]>("get_home_shelves", undefined, []);
 }
 
 export function getLibraryTitles(kind: string) {
-  return invokeOrMock<CatalogTitle[]>(
-    "get_library_titles",
-    { kind },
-    mockShelves.flatMap((s) => s.titles).filter((t) => t.kind === kind),
+  return invokeOrMock<CatalogTitle[]>("get_library_titles", { kind }, []);
+}
+
+export function getTitle(titleId: string) {
+  return invokeOrMock<CatalogTitle | null>(
+    "get_title",
+    { titleId },
+    null,
   );
+}
+
+export function getLibraryCounts() {
+  return invokeOrMock<Record<string, number>>(
+    "get_library_counts",
+    undefined,
+    {},
+  );
+}
+
+export function coverUrl(coverPath?: string | null) {
+  if (!coverPath) return null;
+  if (!isTauri()) return null;
+  try {
+    return convertFileSrc(coverPath);
+  } catch {
+    return null;
+  }
 }
