@@ -15,7 +15,11 @@ export function ShelfRow({ shelf }: Props) {
       </h2>
       <div className="flex gap-4 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {shelf.titles.map((title) => (
-          <MediaTile key={title.id} title={title} />
+          <MediaTile
+            key={title.id}
+            title={title}
+            scale={shelf.titles.length === 1 ? 1.28 : 1}
+          />
         ))}
       </div>
     </section>

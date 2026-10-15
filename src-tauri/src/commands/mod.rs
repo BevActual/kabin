@@ -54,6 +54,48 @@ pub struct RelatedShelfDto {
     pub titles: Vec<CatalogTitle>,
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TitleDetailsDto {
+    pub title: CatalogTitle,
+    pub meta_lines: Vec<String>,
+}
+
+#[tauri::command]
+pub fn get_title_details(
+    state: tauri::State<'_, AppState>,
+    title_id: String,
+) -> Option<TitleDetailsDto> {
+    let config = KabinConfig::load();
+    let item = state.find_item(&title_id)?;
+    let title = CatalogTitle::from_item_with_config(
+        &item,
+        CatalogTitle::progress_for_item(&item, &config),
+        None,
+        Some(&config),
+    );
+    Some(TitleDetailsDto {
+        meta_lines: crate::catalog::detail_meta::detail_lines(&item),
+        title,
+    })
+}
+
+#[tauri::command]
+pub fn search_library(
+    state: tauri::State<'_, AppState>,
+    query: String,
+    limit: Option<usize>,
+) -> Vec<CatalogTitle> {
+    let config = KabinConfig::load();
+    let snapshot = state.snapshot(false);
+    let items: Vec<_> = snapshot
+        .titles
+        .iter()
+        .filter_map(|t| state.find_item(&t.id))
+        .collect();
+    crate::catalog::search::search_titles(&items, &config, &query, limit.unwrap_or(48))
+}
+
 #[tauri::command]
 pub fn get_related_titles(
     state: tauri::State<'_, AppState>,

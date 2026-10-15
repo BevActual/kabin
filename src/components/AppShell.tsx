@@ -6,6 +6,7 @@ import { useCabinetShortcuts } from "../hooks/useCabinetShortcuts";
 import { useGamepadCabinet } from "../hooks/useGamepadCabinet";
 import { useLaunchSessionEvents } from "../hooks/useLaunchSessionEvents";
 import { useUiStore } from "../store/ui";
+import { SearchView } from "../routes/SearchView";
 import { Sidebar } from "./Sidebar";
 
 type Props = {
@@ -71,7 +72,9 @@ export function AppShell({ children }: Props) {
             <Settings size={20} strokeWidth={1.5} />
           </Link>
         </header>
-        <main className="min-h-0 flex-1 overflow-auto px-6 pb-8">{children}</main>
+        <main className="min-h-0 flex-1 overflow-auto px-6 pb-8">
+          {searchQuery.trim() ? <SearchView /> : children}
+        </main>
         {toast ? (
           <div
             role="status"

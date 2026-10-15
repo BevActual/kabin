@@ -11,9 +11,10 @@ const aspectClass: Record<TileAspect, string> = {
 
 type Props = {
   title: CatalogTitle;
+  scale?: number;
 };
 
-export function MediaTile({ title }: Props) {
+export function MediaTile({ title, scale = 1 }: Props) {
   const art = coverUrl(title.coverPath);
 
   return (
@@ -24,6 +25,13 @@ export function MediaTile({ title }: Props) {
       data-cabinet-tile=""
       tabIndex={0}
     >
+      <div
+        style={
+          scale === 1
+            ? undefined
+            : { transform: `scale(${scale})`, transformOrigin: "bottom center" }
+        }
+      >
       <motion.article
         whileHover={{ scale: 1.02 }}
         transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
@@ -61,6 +69,7 @@ export function MediaTile({ title }: Props) {
           </div>
         ) : null}
       </motion.article>
+      </div>
     </Link>
   );
 }

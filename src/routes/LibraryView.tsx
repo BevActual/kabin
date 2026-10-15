@@ -2,15 +2,29 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { MediaTile } from "../components/MediaTile";
 import { getLibraryTitles } from "../lib/kabin-api";
+import { useUiStore } from "../store/ui";
 
 const route = getRouteApi("/library/$kind");
 
+function libraryTileScale(count: number) {
+  if (count <= 1) return 1.7;
+  if (count <= 3) return 1.5;
+  if (count <= 6) return 1.18;
+  return 1;
+}
+
 export function LibraryView() {
   const { kind } = route.useParams();
+  const searchQuery = useUiStore((s) => s.searchQuery.trim());
   const titlesQuery = useQuery({
     queryKey: ["library", kind],
     queryFn: () => getLibraryTitles(kind),
+    enabled: !searchQuery,
   });
+
+  if (searchQuery) {
+    return null;
+  }
 
   if (titlesQuery.isLoading) {
     return <p className="text-kabin-secondary">Loading…</p>;
@@ -35,7 +49,11 @@ export function LibraryView() {
   return (
     <div className="flex flex-wrap gap-4">
       {titles.map((title) => (
-        <MediaTile key={title.id} title={title} />
+        <MediaTile
+          key={title.id}
+          title={title}
+          scale={libraryTileScale(titles.length)}
+        />
       ))}
     </div>
   );

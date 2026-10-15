@@ -107,6 +107,27 @@ export function getTitle(titleId: string) {
   );
 }
 
+export type TitleDetails = {
+  title: CatalogTitle;
+  metaLines: string[];
+};
+
+export function getTitleDetails(titleId: string) {
+  return invokeOrMock<TitleDetails | null>(
+    "get_title_details",
+    { titleId },
+    null,
+  );
+}
+
+export function searchLibrary(query: string, limit?: number) {
+  return invokeOrMock<CatalogTitle[]>(
+    "search_library",
+    { query, limit },
+    [],
+  );
+}
+
 export type RelatedShelf = { heading: string; titles: CatalogTitle[] };
 
 export function getRelatedTitles(titleId: string) {

@@ -56,10 +56,11 @@ pub fn build_home_shelves(config: &KabinConfig, items: &[LibraryItem]) -> Vec<Ho
                 continue;
             }
             let progress = config.progress_ratio(&item.id, item.track_count);
-            row.push(CatalogTitle::from_item(
+            row.push(CatalogTitle::from_item_with_config(
                 item,
                 progress.filter(|p| *p > 0.0),
                 Some(continue_subtitle(config, item)),
+                Some(config),
             ));
             if row.len() >= SHELF_LIMIT {
                 break;
@@ -89,7 +90,7 @@ pub fn build_home_shelves(config: &KabinConfig, items: &[LibraryItem]) -> Vec<Ho
             .into_iter()
             .filter(|i| !continue_ids.contains(&i.id))
             .take(SHELF_LIMIT)
-            .map(|item| CatalogTitle::from_item(item, None, None))
+            .map(|item| CatalogTitle::from_item_with_config(item, None, None, Some(config)))
             .collect();
         if !titles.is_empty() {
             shelves.push(HomeShelf {

@@ -40,6 +40,8 @@ pub fn run() {
             commands::get_home_shelves,
             commands::get_library_titles,
             commands::get_title,
+            commands::get_title_details,
+            commands::search_library,
             commands::get_library_counts,
             commands::launch_title,
             commands::playback::get_playback_session,

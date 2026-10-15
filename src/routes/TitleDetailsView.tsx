@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import {
   coverUrl,
   getRelatedTitles,
-  getTitle,
+  getTitleDetails,
   launchTitle,
   remoteGameStreamAvailable,
   remoteGameStreamStatus,
@@ -20,7 +20,7 @@ export function TitleDetailsView() {
   const navigate = useNavigate();
   const titleQuery = useQuery({
     queryKey: ["title", titleId],
-    queryFn: () => getTitle(titleId),
+    queryFn: () => getTitleDetails(titleId),
   });
   const relatedQuery = useQuery({
     queryKey: ["related", titleId],
@@ -36,7 +36,9 @@ export function TitleDetailsView() {
     refetchInterval: 2000,
   });
 
-  const title = titleQuery.data;
+  const details = titleQuery.data;
+  const title = details?.title;
+  const metaLines = details?.metaLines ?? [];
   const launch = useMutation({
     mutationFn: () => launchTitle(titleId),
   });
@@ -105,6 +107,11 @@ export function TitleDetailsView() {
       <p className="mt-1 text-[calc(17px*var(--kabin-type-scale))] text-kabin-secondary">
         {title.subtitle}
       </p>
+      {metaLines.length > 0 ? (
+        <p className="mt-2 text-[calc(14px*var(--kabin-type-scale))] text-kabin-tertiary">
+          {metaLines.join(" · ")}
+        </p>
+      ) : null}
       {title.kind === "game" &&
       (title.playCount || title.playTimeLabel) ? (
         <p className="mt-2 text-[calc(14px*var(--kabin-type-scale))] text-kabin-tertiary">
