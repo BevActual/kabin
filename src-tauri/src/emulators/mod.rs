@@ -1,3 +1,5 @@
+pub mod detect;
+
 use std::path::Path;
 use std::process::Command;
 

@@ -9,6 +9,7 @@ import { HomeView } from "./routes/HomeView";
 import { LibraryView } from "./routes/LibraryView";
 import { SettingsView } from "./routes/SettingsView";
 import { PlayerView } from "./routes/PlayerView";
+import { ReaderView } from "./routes/ReaderView";
 import { TitleDetailsView } from "./routes/TitleDetailsView";
 
 const rootRoute = createRootRoute({
@@ -43,6 +44,12 @@ const settingsRoute = createRoute({
   component: SettingsView,
 });
 
+const readRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/read/$titleId",
+  component: ReaderView,
+});
+
 const playerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/player/$titleId",
@@ -53,6 +60,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   libraryRoute,
   titleRoute,
+  readRoute,
   playerRoute,
   settingsRoute,
 ]);

@@ -142,6 +142,74 @@ export function pickFolder() {
   return invokeOrMock<string | null>("pick_folder", undefined, null);
 }
 
+export type ReaderSession = {
+  titleId: string;
+  title: string;
+  backend: string;
+  filePath?: string | null;
+  pages: string[];
+  initialPage: number;
+  pageCount: number;
+};
+
+export function getReaderSession(titleId: string) {
+  return invokeOrMock<ReaderSession | null>(
+    "get_reader_session",
+    { titleId },
+    null,
+  );
+}
+
+export function saveReaderProgress(
+  titleId: string,
+  page: number,
+  total: number,
+  scroll?: number,
+) {
+  return invokeOrMock<void>("save_reader_progress", {
+    titleId,
+    page,
+    total,
+    scroll,
+  });
+}
+
+export type SystemInfo = { id: string; name: string; extensions: string[] };
+export type EmulatorChoice = {
+  id: string;
+  name: string;
+  runtime: string;
+  executable: string;
+};
+
+export function listSystems() {
+  return invokeOrMock<SystemInfo[]>("list_systems", undefined, []);
+}
+
+export function listEmulators(systemId: string) {
+  return invokeOrMock<EmulatorChoice[]>(
+    "list_emulators",
+    { systemId },
+    [],
+  );
+}
+
+export function addRomDir(
+  path: string,
+  systemId: string,
+  emulatorId: string,
+  executable: string,
+  runtime: string,
+) {
+  return invokeOrMock<void>("add_rom_dir", {
+    path,
+    systemId,
+    emulatorId,
+    executable,
+    runtime,
+  });
+}
+
 export function coverUrl(coverPath?: string | null) {
   if (!coverPath) return null;
   if (!isTauri()) return null;

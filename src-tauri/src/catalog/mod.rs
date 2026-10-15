@@ -7,8 +7,9 @@ mod kinds;
 pub mod launch;
 mod media_dirs;
 pub mod playback;
+pub mod reader;
 mod roms;
-mod systems;
+pub mod systems;
 mod steam;
 mod titles;
 

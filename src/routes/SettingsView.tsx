@@ -2,11 +2,17 @@ import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addMediaDir,
+  addRomDir,
   getAppInfo,
   getSettings,
+  listEmulators,
+  listSystems,
   pickFolder,
   setSourceEnabled,
+  type EmulatorChoice,
+  type SystemInfo,
 } from "../lib/kabin-api";
+import { useState } from "react";
 import { useUiStore, type ThemeMode } from "../store/ui";
 
 const SOURCE_ROWS: { key: string; label: string }[] = [
@@ -122,25 +128,13 @@ export function SettingsView() {
         </div>
       </SettingsGroup>
 
-      <SettingsGroup title="Console libraries">
-        {(settings?.romDirs ?? []).length === 0 ? (
-          <p className="px-4 py-3 text-[calc(14px*var(--kabin-type-scale))] text-kabin-secondary">
-            No ROM folders in config. Add them with the GTK app (Emulation Center)
-            for now.
-          </p>
-        ) : (
-          (settings?.romDirs ?? []).map((entry, index) => (
-            <div key={index} className="kabin-grouped-row text-[calc(13px*var(--kabin-type-scale))]">
-              <span className="text-kabin-secondary">
-                {(entry as { system?: string }).system ?? "roms"}
-              </span>
-              <span className="max-w-[240px] truncate font-mono text-kabin-primary">
-                {(entry as { path?: string }).path ?? ""}
-              </span>
-            </div>
-          ))
-        )}
-      </SettingsGroup>
+      <EmulationCenterPanel
+        romDirs={settings?.romDirs ?? []}
+        onAdded={() => {
+          void queryClient.invalidateQueries({ queryKey: ["settings"] });
+          void queryClient.invalidateQueries({ queryKey: ["libraryScan"] });
+        }}
+      />
 
       <SettingsGroup title="About">
         <SettingsRow label="Version">
@@ -158,6 +152,87 @@ export function SettingsView() {
         </p>
       </SettingsGroup>
     </div>
+  );
+}
+
+function EmulationCenterPanel({
+  romDirs,
+  onAdded,
+}: {
+  romDirs: unknown[];
+  onAdded: () => void;
+}) {
+  const systemsQuery = useQuery({
+    queryKey: ["systems"],
+    queryFn: listSystems,
+  });
+  const [systemId, setSystemId] = useState("snes");
+  const emulatorsQuery = useQuery({
+    queryKey: ["emulators", systemId],
+    queryFn: () => listEmulators(systemId),
+    enabled: Boolean(systemId),
+  });
+  const addRom = useMutation({
+    mutationFn: async () => {
+      const path = await pickFolder();
+      if (!path) return;
+      const emu = emulatorsQuery.data?.[0];
+      if (!emu) throw new Error("No emulator found for this system");
+      await addRomDir(path, systemId, emu.id, emu.executable, emu.runtime);
+    },
+    onSuccess: onAdded,
+  });
+
+  const systems = systemsQuery.data ?? [];
+
+  return (
+    <SettingsGroup title="Emulation Center">
+      {(romDirs ?? []).map((entry, index) => (
+        <div key={index} className="kabin-grouped-row text-[calc(13px*var(--kabin-type-scale))]">
+          <span className="text-kabin-secondary">
+            {(entry as { system?: string }).system ?? "roms"}
+          </span>
+          <span className="max-w-[240px] truncate font-mono text-kabin-primary">
+            {(entry as { path?: string }).path ?? ""}
+          </span>
+        </div>
+      ))}
+      <div className="space-y-3 p-4">
+        <label className="block text-[calc(14px*var(--kabin-type-scale))] text-kabin-secondary">
+          System
+          <select
+            value={systemId}
+            onChange={(e) => setSystemId(e.target.value)}
+            className="mt-1 w-full rounded-[var(--kabin-radius-control)] border border-kabin-separator bg-kabin-grouped px-3 py-2 text-kabin-primary"
+          >
+            {systems.map((s: SystemInfo) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
+          Emulator:{" "}
+          {(emulatorsQuery.data ?? [])
+            .map((e: EmulatorChoice) => e.name)
+            .join(", ") || "None detected — install an emulator or use GTK."}
+        </p>
+        <button
+          type="button"
+          disabled={addRom.isPending || !(emulatorsQuery.data?.length ?? 0)}
+          onClick={() => addRom.mutate()}
+          className="rounded-[var(--kabin-radius-control)] bg-kabin-accent px-3 py-2 text-[calc(14px*var(--kabin-type-scale))] font-medium text-white disabled:opacity-40"
+        >
+          Add ROM folder…
+        </button>
+        {addRom.isError ? (
+          <p className="text-[calc(13px*var(--kabin-type-scale))] text-red-400">
+            {addRom.error instanceof Error ? addRom.error.message : "Failed"}
+          </p>
+        ) : null}
+      </div>
+    </SettingsGroup>
   );
 }
 

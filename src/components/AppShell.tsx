@@ -1,6 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Search, Settings } from "lucide-react";
 import type { ReactNode } from "react";
+import { useRef } from "react";
+import { useCabinetShortcuts } from "../hooks/useCabinetShortcuts";
 import { useUiStore } from "../store/ui";
 import { Sidebar } from "./Sidebar";
 
@@ -13,6 +15,8 @@ export function AppShell({ children }: Props) {
   const searchQuery = useUiStore((s) => s.searchQuery);
   const setSearchQuery = useUiStore((s) => s.setSearchQuery);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const searchRef = useRef<HTMLInputElement>(null);
+  useCabinetShortcuts(searchRef);
 
   const pageTitle =
     pathname === "/"
@@ -45,6 +49,7 @@ export function AppShell({ children }: Props) {
               strokeWidth={1.5}
             />
             <input
+              ref={searchRef}
               type="search"
               placeholder="Search"
               value={searchQuery}

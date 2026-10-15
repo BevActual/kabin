@@ -55,6 +55,44 @@ pub fn add_media_dir(
 }
 
 #[tauri::command]
+pub fn list_systems() -> Vec<crate::emulators::detect::SystemInfo> {
+    crate::emulators::detect::list_systems()
+}
+
+#[tauri::command]
+pub fn list_emulators(system_id: String) -> Vec<crate::emulators::detect::EmulatorChoiceDto> {
+    crate::emulators::detect::detect_emulators(&system_id)
+}
+
+#[tauri::command]
+pub fn add_rom_dir(
+    state: tauri::State<'_, AppState>,
+    path: String,
+    system_id: String,
+    emulator_id: String,
+    executable: String,
+    runtime: String,
+) -> Result<(), String> {
+    let choice = crate::emulators::detect::EmulatorChoiceDto {
+        id: emulator_id,
+        name: executable.clone(),
+        runtime,
+        executable,
+    };
+    let extensions = crate::emulators::detect::default_extensions(&system_id);
+    let mut config = KabinConfig::load();
+    config.add_rom_dir(
+        &path,
+        &system_id,
+        crate::emulators::detect::emulator_to_config(&choice),
+        extensions,
+    );
+    config.save()?;
+    state.invalidate();
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
     app.dialog()
         .file()

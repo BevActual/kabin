@@ -250,6 +250,30 @@ impl KabinConfig {
         }
     }
 
+    pub fn add_rom_dir(
+        &mut self,
+        path: &str,
+        system: &str,
+        emulator: serde_json::Value,
+        extensions: Vec<String>,
+    ) {
+        let entry = json!({
+            "path": path,
+            "system": system,
+            "emulator": emulator,
+            "extensions": extensions,
+        });
+        let dirs = self
+            .data
+            .as_object_mut()
+            .expect("config root")
+            .entry("rom_dirs")
+            .or_insert_with(|| json!([]));
+        if let Some(arr) = dirs.as_array_mut() {
+            arr.push(entry);
+        }
+    }
+
     pub fn add_media_dir(&mut self, path: &str, media_type: &str) {
         let entry = json!({ "path": path, "media_type": media_type });
         let dirs = self

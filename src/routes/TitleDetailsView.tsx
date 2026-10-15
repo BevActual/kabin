@@ -20,6 +20,7 @@ export function TitleDetailsView() {
 
   const playsInKabin = (kind: string) =>
     kind === "music" || kind === "video" || kind === "tv";
+  const readsInKabin = (kind: string) => kind === "book" || kind === "comic";
 
   if (titleQuery.isLoading) {
     return <p className="text-kabin-secondary">Loading…</p>;
@@ -67,6 +68,10 @@ export function TitleDetailsView() {
           onClick={() => {
             if (playsInKabin(title.kind)) {
               void navigate({ to: "/player/$titleId", params: { titleId } });
+              return;
+            }
+            if (readsInKabin(title.kind)) {
+              void navigate({ to: "/read/$titleId", params: { titleId } });
               return;
             }
             launch.mutate();
