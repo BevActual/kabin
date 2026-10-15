@@ -72,6 +72,26 @@ pub fn list_emulators(system_id: String) -> Vec<crate::emulators::detect::Emulat
 }
 
 #[tauri::command]
+pub fn recommended_managed_runtime(
+    system_id: String,
+) -> Option<crate::emulators::detect::ManagedRuntimeDto> {
+    crate::emulators::detect::recommended_managed_runtime(&system_id)
+}
+
+#[tauri::command]
+pub async fn install_managed_runtime(runtime_id: String) -> Result<String, String> {
+    let spec = crate::emulators::managed::runtime_by_id(&runtime_id)
+        .ok_or_else(|| format!("Unknown managed runtime: {runtime_id}"))?;
+    let spec = *spec;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::emulators::managed::install_runtime(&spec)
+            .map(|path| path.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub fn add_rom_dir(
     state: tauri::State<'_, AppState>,
     path: String,

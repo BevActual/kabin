@@ -1,5 +1,6 @@
 pub mod bios;
 pub mod detect;
+pub mod managed;
 
 use std::path::Path;
 use std::process::Command;

@@ -25,7 +25,7 @@ npm run tauri dev    # desktop app (Linux: WebKit GTK prerequisites)
 Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Conversion status:
 [`docs/CONVERSION.md`](docs/CONVERSION.md). GTK-only gaps: [`docs/PARITY.md`](docs/PARITY.md).
 
-**Optional GTK4** (remote game streaming, managed emulator downloads only):
+**Optional GTK4** (remote game streaming only):
 
 ```bash
 python3 -m kabin

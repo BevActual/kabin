@@ -65,7 +65,7 @@ Config read/write: `~/.config/kabin/config.json` (`config.rs`). Launch updates `
 2. **Library + launch** — done for local sources (scan + Play/Launch).
 3. **Playback & reader** — done in Tauri (see [`CONVERSION.md`](CONVERSION.md)).
 4. **Host + remote** — done in Rust; WebRTC game streaming remains GTK-only.
-5. **GTK optional** — managed emulator downloads + remote game stream; see [`PARITY.md`](PARITY.md).
+5. **GTK optional** — remote game stream (WebRTC); see [`PARITY.md`](PARITY.md).
 
 ## Development
 

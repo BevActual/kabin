@@ -11,9 +11,11 @@ import {
   listRemoteHosts,
   pairRemoteHost,
   removeRemoteHost,
+  installManagedRuntime,
   listEmulators,
   listSystems,
   pickFolder,
+  recommendedManagedRuntime,
   setHostEnabled,
   setSourceEnabled,
   setSystemBiosPath,
@@ -414,10 +416,26 @@ function EmulationCenterPanel({
     queryFn: listSystems,
   });
   const [systemId, setSystemId] = useState("snes");
+  const queryClient = useQueryClient();
   const emulatorsQuery = useQuery({
     queryKey: ["emulators", systemId],
     queryFn: () => listEmulators(systemId),
     enabled: Boolean(systemId),
+  });
+  const managedQuery = useQuery({
+    queryKey: ["managedRuntime", systemId],
+    queryFn: () => recommendedManagedRuntime(systemId),
+    enabled: Boolean(systemId),
+  });
+  const installManaged = useMutation({
+    mutationFn: async () => {
+      const spec = managedQuery.data;
+      if (!spec) throw new Error("No managed emulator for this system");
+      await installManagedRuntime(spec.id);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["emulators", systemId] });
+    },
   });
   const addBios = useMutation({
     mutationFn: async () => {
@@ -468,11 +486,42 @@ function EmulationCenterPanel({
           </select>
         </label>
         <p className="text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
-          Emulator:{" "}
-          {(emulatorsQuery.data ?? [])
-            .map((e: EmulatorChoice) => e.name)
-            .join(", ") || "None detected — install an emulator on this system."}
+          {(emulatorsQuery.data ?? []).length > 0 ? (
+            <>
+              Emulator:{" "}
+              {(emulatorsQuery.data ?? [])
+                .map((e: EmulatorChoice) => e.name)
+                .join(", ")}
+            </>
+          ) : managedQuery.data ? (
+            <>
+              No supported emulator detected. Kabin can securely download and
+              manage {managedQuery.data.name} from its official release
+              repository.
+            </>
+          ) : (
+            "None detected — install a supported standalone emulator on this system."
+          )}
         </p>
+        {!(emulatorsQuery.data?.length ?? 0) && managedQuery.data ? (
+          <button
+            type="button"
+            disabled={installManaged.isPending}
+            onClick={() => installManaged.mutate()}
+            className="rounded-[var(--kabin-radius-control)] border border-kabin-separator px-3 py-2 text-[calc(14px*var(--kabin-type-scale))] text-kabin-primary disabled:opacity-40"
+          >
+            {installManaged.isPending
+              ? "Downloading…"
+              : `Install ${managedQuery.data.name}`}
+          </button>
+        ) : null}
+        {installManaged.isError ? (
+          <p className="text-[calc(13px*var(--kabin-type-scale))] text-red-400">
+            {installManaged.error instanceof Error
+              ? installManaged.error.message
+              : "Installation failed"}
+          </p>
+        ) : null}
         {(systemId === "ps1" || systemId === "ps2") && (
           <div className="text-[calc(13px*var(--kabin-type-scale))] text-kabin-secondary">
             BIOS folder:{" "}

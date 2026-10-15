@@ -12,7 +12,7 @@ Kabin’s **Tauri shell** is the primary desktop app. See [`CONVERSION.md`](CONV
 | Launch | Steam, desktop, ROM emulators (+ BIOS symlink for DuckStation/PCSX2) |
 | Playback | Music, video, TV + progress sync to remote hosts |
 | Reader | PDF, EPUB, CBZ, TXT, FB2; CBR/CBT/CB7 via `bsdtar`; MOBI/AZW3 via system |
-| Emulation Center | ROM folders, native emulator detect, BIOS folder picker (PS1/PS2) |
+| Emulation Center | ROM folders, native/Flatpak detect, managed AppImage install (PS1/PS2/PSP), BIOS picker |
 | Shortcuts | `/`, Ctrl+F, Esc, Ctrl+, |
 | Covers | Sidecar/folder art, Steam cache, host `/v1/artwork`, remote cache |
 | Kabin Host | TLS API, pairing, library, stream, progress, artwork, mDNS |
@@ -23,7 +23,6 @@ Kabin’s **Tauri shell** is the primary desktop app. See [`CONVERSION.md`](CONV
 | Area | Notes |
 |------|--------|
 | Remote **game** streaming | WebRTC `/v1/sessions/*` + `kabin-media-helper` |
-| Managed emulator **downloads** | `kabin/managed.py` AppImage fetch |
 | Advanced TV/gamepad polish | Couch focus model (basic keyboard/gamepad still usable in webview) |
 
 ## Development
@@ -32,7 +31,7 @@ Kabin’s **Tauri shell** is the primary desktop app. See [`CONVERSION.md`](CONV
 npm run tauri dev
 ```
 
-WebRTC streaming or managed emulator install:
+Remote game streaming (WebRTC):
 
 ```bash
 python3 -m kabin

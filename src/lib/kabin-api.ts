@@ -215,6 +215,20 @@ export function listEmulators(systemId: string) {
   );
 }
 
+export type ManagedRuntime = { id: string; name: string };
+
+export function recommendedManagedRuntime(systemId: string) {
+  return invokeOrMock<ManagedRuntime | null>(
+    "recommended_managed_runtime",
+    { systemId },
+    null,
+  );
+}
+
+export function installManagedRuntime(runtimeId: string) {
+  return invokeOrMock<string>("install_managed_runtime", { runtimeId });
+}
+
 export function getHostStatus() {
   return invokeOrMock<HostStatus>("get_host_status", undefined, {
     running: false,

@@ -41,6 +41,8 @@ pub fn run() {
             commands::reader::save_reader_progress,
             commands::settings::list_systems,
             commands::settings::list_emulators,
+            commands::settings::recommended_managed_runtime,
+            commands::settings::install_managed_runtime,
             commands::settings::add_rom_dir,
             commands::settings::get_settings,
             commands::settings::set_source_enabled,

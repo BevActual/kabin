@@ -24,12 +24,12 @@ native GStreamer/WebRTC (see below).
 
 ## Optional GTK (`python3 -m kabin`)
 
-Use only when you need:
+Use only when you need **remote game streaming** — WebRTC sessions and
+`kabin-media-helper`.
 
-1. **Remote game streaming** — WebRTC sessions and `kabin-media-helper`
-2. **Managed emulator downloads** — verified DuckStation/PCSX2/PPSSPP AppImages
-
-Everything else should be done in **`npm run tauri dev`**.
+Managed DuckStation, PCSX2, and PPSSPP AppImages install from **Settings →
+Emulation Center** in Tauri. Everything else should be done in
+**`npm run tauri dev`**.
 
 ## Config
 
