@@ -1,6 +1,7 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
+import { navigateCabinetTiles } from "../lib/cabinetFocus";
 import { scanLibrary } from "../lib/kabin-api";
 
 const DEADZONE = 0.45;
@@ -58,19 +59,10 @@ export function useGamepadCabinet(searchInputRef?: React.RefObject<HTMLInputElem
         const ax = pad.axes[0] ?? 0;
         const ay = pad.axes[1] ?? 0;
         if (Math.abs(ax) > DEADZONE || Math.abs(ay) > DEADZONE) {
-          const tiles = Array.from(
-            document.querySelectorAll<HTMLElement>("[data-cabinet-tile]"),
-          );
-          if (tiles.length > 0) {
-            const current = document.activeElement as HTMLElement | null;
-            let index = tiles.findIndex((el) => el === current);
-            if (index < 0) index = 0;
-            if (Math.abs(ax) > Math.abs(ay)) {
-              index = ax > 0 ? Math.min(tiles.length - 1, index + 1) : Math.max(0, index - 1);
-            } else {
-              index = ay > 0 ? Math.min(tiles.length - 1, index + 1) : Math.max(0, index - 1);
-            }
-            tiles[index]?.focus();
+          if (Math.abs(ax) > Math.abs(ay)) {
+            navigateCabinetTiles(ax > 0 ? "right" : "left");
+          } else {
+            navigateCabinetTiles(ay > 0 ? "down" : "up");
           }
         }
       }

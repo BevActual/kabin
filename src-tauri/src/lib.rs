@@ -53,6 +53,7 @@ pub fn run() {
             commands::settings::recommended_managed_runtime,
             commands::settings::install_managed_runtime,
             commands::settings::add_rom_dir,
+            commands::settings::add_rom_dir_custom,
             commands::settings::get_settings,
             commands::settings::set_source_enabled,
             commands::settings::add_media_dir,

@@ -351,6 +351,18 @@ export function addRomDir(
   });
 }
 
+export function addRomDirCustom(
+  path: string,
+  systemId: string,
+  commandTemplate: string,
+) {
+  return invokeOrMock<void>("add_rom_dir_custom", {
+    path,
+    systemId,
+    commandTemplate,
+  });
+}
+
 export function coverUrl(coverPath?: string | null) {
   if (!coverPath) return null;
   if (!isTauri()) return null;

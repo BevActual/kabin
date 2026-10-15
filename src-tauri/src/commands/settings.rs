@@ -117,6 +117,29 @@ pub async fn install_managed_runtime(runtime_id: String) -> Result<String, Strin
 }
 
 #[tauri::command]
+pub fn add_rom_dir_custom(
+    state: tauri::State<'_, AppState>,
+    path: String,
+    system_id: String,
+    command_template: String,
+) -> Result<(), String> {
+    if !command_template.contains("{rom}") {
+        return Err("Custom emulator command must include {rom}".into());
+    }
+    let extensions = crate::emulators::detect::default_extensions(&system_id);
+    let mut config = KabinConfig::load();
+    config.add_rom_dir(
+        &path,
+        &system_id,
+        serde_json::json!(command_template),
+        extensions,
+    );
+    config.save()?;
+    state.invalidate();
+    Ok(())
+}
+
+#[tauri::command]
 pub fn add_rom_dir(
     state: tauri::State<'_, AppState>,
     path: String,

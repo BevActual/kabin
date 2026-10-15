@@ -6,6 +6,7 @@ use super::artwork::{folder_cover, local_cover};
 use super::item::LibraryItem;
 use super::launch::LaunchPlan;
 use super::kinds::{self, MediaKind};
+use super::parse_name::parse_media_name;
 use super::titles::tidy_filename;
 
 const SKIP_DIRS: [&str; 6] = ["covers", "media", "images", "manuals", "videos", ".git"];
@@ -76,9 +77,15 @@ fn file_item(
         return None;
     }
     let cover = local_cover(path).or_else(|| folder_cover(path.parent()?));
+    let file_name = path.file_name()?.to_string_lossy();
+    let parsed = parse_media_name(&file_name, kind.id);
     Some(LibraryItem {
         id,
-        title: tidy_filename(path.file_name()?.to_string_lossy().as_ref()),
+        title: if parsed.title.is_empty() {
+            tidy_filename(&file_name)
+        } else {
+            parsed.title
+        },
         subtitle: kind.label.to_string(),
         kind_id: kind.id.to_string(),
         source: kind.id.to_string(),
@@ -89,6 +96,9 @@ fn file_item(
             path: path.to_path_buf(),
         },
         host_progress: None,
+        series: parsed.series,
+        series_index: parsed.series_index,
+        creators: parsed.creators,
     })
 }
 
@@ -104,9 +114,15 @@ fn album_item(
         return None;
     }
     let cover = folder_cover(folder).or_else(|| local_cover(&tracks[0]));
+    let folder_name = folder.file_name()?.to_string_lossy();
+    let parsed = parse_media_name(&folder_name, kind.id);
     Some(LibraryItem {
         id,
-        title: tidy_filename(folder.file_name()?.to_string_lossy().as_ref()),
+        title: if parsed.title.is_empty() {
+            tidy_filename(&folder_name)
+        } else {
+            parsed.title
+        },
         subtitle: kind.plural.to_string(),
         kind_id: kind.id.to_string(),
         source: kind.id.to_string(),
@@ -117,6 +133,9 @@ fn album_item(
             path: folder.to_path_buf(),
         },
         host_progress: None,
+        series: parsed.series,
+        series_index: parsed.series_index,
+        creators: parsed.creators,
     })
 }
 

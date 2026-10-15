@@ -184,6 +184,9 @@ pub fn scan_rom_dirs(
                 track_count: 1,
                 launch,
                 host_progress: None,
+                series: String::new(),
+                series_index: None,
+                creators: Vec::new(),
             });
         });
     }

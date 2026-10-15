@@ -48,10 +48,6 @@ export function HomeView() {
               <span className="font-mono text-[calc(13px*var(--kabin-type-scale))] text-kabin-primary">
                 {infoQuery.data.configPath}
               </span>
-              . Legacy GTK:{" "}
-              <span className="font-mono text-[calc(13px*var(--kabin-type-scale))]">
-                python3 -m kabin
-              </span>
               .
             </>
           ) : null}

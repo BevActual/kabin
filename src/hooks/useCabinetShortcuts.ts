@@ -1,5 +1,6 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { navigateCabinetTiles } from "../lib/cabinetFocus";
 import { useUiStore } from "../store/ui";
 
 export function useCabinetShortcuts(searchInputRef?: React.RefObject<HTMLInputElement | null>) {
@@ -29,6 +30,22 @@ export function useCabinetShortcuts(searchInputRef?: React.RefObject<HTMLInputEl
       if (e.key === "," && e.ctrlKey) {
         e.preventDefault();
         void navigate({ to: "/settings" });
+        return;
+      }
+      if (e.key === "ArrowLeft" && navigateCabinetTiles("left")) {
+        e.preventDefault();
+        return;
+      }
+      if (e.key === "ArrowRight" && navigateCabinetTiles("right")) {
+        e.preventDefault();
+        return;
+      }
+      if (e.key === "ArrowUp" && navigateCabinetTiles("up")) {
+        e.preventDefault();
+        return;
+      }
+      if (e.key === "ArrowDown" && navigateCabinetTiles("down")) {
+        e.preventDefault();
       }
     };
     window.addEventListener("keydown", onKey);

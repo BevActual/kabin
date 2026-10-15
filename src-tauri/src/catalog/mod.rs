@@ -10,6 +10,7 @@ pub mod item;
 mod kinds;
 pub mod launch;
 mod media_dirs;
+mod parse_name;
 pub mod playback;
 pub mod reader;
 mod roms;

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addMediaDir,
   addRomDir,
+  addRomDirCustom,
   createHostPairingCode,
   discoverNearbyKabinHosts,
   getAppInfo,
@@ -308,7 +309,7 @@ function RemoteHostsPanel({ onChanged }: { onChanged: () => void }) {
         ))}
         <p className="text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
           Paired libraries appear when the Remote hosts source is enabled. Remote
-          game streaming still requires the GTK app.
+          game streaming needs kabin-media-helper on this machine.
         </p>
       </div>
     </SettingsGroup>
@@ -481,6 +482,8 @@ function EmulationCenterPanel({
     queryFn: listSystems,
   });
   const [systemId, setSystemId] = useState("snes");
+  const [useCustomCommand, setUseCustomCommand] = useState(false);
+  const [customCommand, setCustomCommand] = useState("myemu {rom}");
   const queryClient = useQueryClient();
   const emulatorsQuery = useQuery({
     queryKey: ["emulators", systemId],
@@ -514,6 +517,10 @@ function EmulationCenterPanel({
     mutationFn: async () => {
       const path = await pickFolder();
       if (!path) return;
+      if (useCustomCommand) {
+        await addRomDirCustom(path, systemId, customCommand.trim());
+        return;
+      }
       const emu = emulatorsQuery.data?.[0];
       if (!emu) throw new Error("No emulator found for this system");
       await addRomDir(path, systemId, emu.id, emu.executable, emu.runtime);
@@ -602,9 +609,28 @@ function EmulationCenterPanel({
             </button>
           </div>
         )}
+        <label className="flex items-center gap-2 text-[calc(13px*var(--kabin-type-scale))] text-kabin-secondary">
+          <input
+            type="checkbox"
+            checked={useCustomCommand}
+            onChange={(e) => setUseCustomCommand(e.target.checked)}
+            className="h-4 w-4 accent-[var(--kabin-accent)]"
+          />
+          Custom launch command (must include {"{rom}"})
+        </label>
+        {useCustomCommand ? (
+          <input
+            value={customCommand}
+            onChange={(e) => setCustomCommand(e.target.value)}
+            className="w-full rounded-[var(--kabin-radius-control)] border border-kabin-separator bg-kabin-grouped px-3 py-2 font-mono text-[calc(13px*var(--kabin-type-scale))] text-kabin-primary"
+          />
+        ) : null}
         <button
           type="button"
-          disabled={addRom.isPending || !(emulatorsQuery.data?.length ?? 0)}
+          disabled={
+            addRom.isPending ||
+            (!useCustomCommand && !(emulatorsQuery.data?.length ?? 0))
+          }
           onClick={() => addRom.mutate()}
           className="rounded-[var(--kabin-radius-control)] bg-kabin-accent px-3 py-2 text-[calc(14px*var(--kabin-type-scale))] font-medium text-white disabled:opacity-40"
         >

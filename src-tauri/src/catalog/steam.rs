@@ -161,6 +161,9 @@ pub fn scan_steam(
                     appid: appid.to_string(),
                 },
                 host_progress: None,
+                series: String::new(),
+                series_index: None,
+                creators: Vec::new(),
             });
         }
     }

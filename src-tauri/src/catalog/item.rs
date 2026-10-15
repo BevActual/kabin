@@ -15,6 +15,9 @@ pub struct LibraryItem {
     pub track_count: u32,
     pub launch: LaunchPlan,
     pub host_progress: Option<Value>,
+    pub series: String,
+    pub series_index: Option<f64>,
+    pub creators: Vec<String>,
 }
 
 impl LibraryItem {

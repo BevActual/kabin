@@ -179,6 +179,21 @@ fn item_from_remote(
             has_artwork,
         }
     };
+    let series = remote
+        .get("series")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let series_index = remote.get("series_index").and_then(|v| v.as_f64());
+    let creators: Vec<String> = remote
+        .get("creators")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
     Some(LibraryItem {
         id,
         title: title.to_string(),
@@ -190,5 +205,8 @@ fn item_from_remote(
         track_count: track_count.max(1),
         launch,
         host_progress: host_progress,
+        series,
+        series_index,
+        creators,
     })
 }

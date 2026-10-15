@@ -24,9 +24,9 @@ native GStreamer/WebRTC (see below).
 
 ## Optional GTK (`python3 -m kabin`)
 
-Optional GTK remains for users who prefer the legacy shell; Tauri implements
-the same host `/v1/sessions` API and remote game streaming when
-`kabin-media-helper` is built (`./scripts/build-media-helper.sh`).
+The legacy GTK4 shell remains for users who prefer it. Feature parity for
+daily use lives in Tauri, including host `/v1/sessions` and remote game
+streaming when `kabin-media-helper` is built (`./scripts/build-media-helper.sh`).
 
 Managed DuckStation, PCSX2, and PPSSPP AppImages install from **Settings →
 Emulation Center** in Tauri. Daily use: **`npm run tauri dev`**.

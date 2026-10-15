@@ -23,7 +23,7 @@ Kabin’s **Tauri shell** is the primary desktop app. See [`CONVERSION.md`](CONV
 
 | Area | Notes |
 |------|--------|
-| Advanced TV/gamepad polish | Grid-aware shelf focus (basic stick stepping between tiles works) |
+| Legacy shell preference | `python3 -m kabin` for users who prefer the GTK4 UI |
 
 ## Development
 

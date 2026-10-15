@@ -10,7 +10,7 @@ pub fn related_shelf(item: &LibraryItem, items: &[LibraryItem], config: &KabinCo
     const LIMIT: usize = 12;
     let siblings = related_by_series(item, items, LIMIT);
     if !siblings.is_empty() {
-        let series = item.subtitle.trim();
+        let series = item.series.trim();
         let heading = if series.is_empty() {
             "More in this series".into()
         } else {
@@ -18,17 +18,31 @@ pub fn related_shelf(item: &LibraryItem, items: &[LibraryItem], config: &KabinCo
         };
         return RelatedShelf {
             heading,
-            titles: siblings
-                .into_iter()
-                .map(|i| CatalogTitle::from_item_with_config(i, CatalogTitle::progress_for_item(i, config), None, Some(config)))
-                .collect(),
+            titles: map_titles(&siblings, config),
         };
     }
 
-    let others: Vec<&LibraryItem> = items
-        .iter()
-        .filter(|other| other.id != item.id)
-        .collect();
+    let others: Vec<&LibraryItem> = items.iter().filter(|other| other.id != item.id).collect();
+
+    if let Some(lead) = item.creators.first().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        let lead_fold = lead.to_lowercase();
+        let same: Vec<_> = others
+            .iter()
+            .filter(|g| {
+                g.creators
+                    .iter()
+                    .any(|c| c.trim().eq_ignore_ascii_case(&lead_fold))
+            })
+            .take(LIMIT)
+            .copied()
+            .collect();
+        if !same.is_empty() {
+            return RelatedShelf {
+                heading: format!("More by {lead}"),
+                titles: map_titles(&same, config),
+            };
+        }
+    }
 
     if item.source == "roms" && !item.subtitle.is_empty() {
         let same: Vec<_> = others
@@ -116,24 +130,26 @@ fn related_by_series<'a>(
     items: &'a [LibraryItem],
     limit: usize,
 ) -> Vec<&'a LibraryItem> {
-    let needle = series_key(&item.title);
+    let needle = item.series.trim();
     if needle.is_empty() {
         return Vec::new();
     }
+    let needle_fold = needle.to_lowercase();
     let mut matches: Vec<_> = items
         .iter()
-        .filter(|other| other.id != item.id && series_key(&other.title) == needle)
+        .filter(|other| {
+            other.id != item.id
+                && other.series.trim().to_lowercase() == needle_fold
+        })
         .collect();
-    matches.sort_by_key(|g| g.title.to_lowercase());
+    matches.sort_by(|a, b| {
+        let ia = a.series_index.unwrap_or(f64::MAX);
+        let ib = b.series_index.unwrap_or(f64::MAX);
+        ia.partial_cmp(&ib)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+    });
     matches.into_iter().take(limit).collect()
-}
-
-fn series_key(title: &str) -> String {
-    let base = title.split(':').next().unwrap_or(title).trim();
-    if base.is_empty() {
-        return String::new();
-    }
-    base.to_lowercase()
 }
 
 fn kind_label(kind_id: &str) -> &'static str {

@@ -88,7 +88,7 @@ pub fn sync_host(app_state: &AppState, host: &Mutex<HostController>) {
             controller.join = Some(join);
             controller.shutdown = Some(tx);
             controller.error = None;
-            controller.avahi = publish_avahi(&host_name, port, &fp);
+            controller.avahi = publish_avahi(&host_name, port, &fp, crate::media_helper::self_test().unwrap_or(false));
         }
         Err(err) => {
             controller.error = Some(err);
@@ -96,16 +96,25 @@ pub fn sync_host(app_state: &AppState, host: &Mutex<HostController>) {
     }
 }
 
-fn publish_avahi(name: &str, port: u16, fingerprint: &str) -> Option<std::process::Child> {
+fn publish_avahi(
+    name: &str,
+    port: u16,
+    fingerprint: &str,
+    streaming_ready: bool,
+) -> Option<std::process::Child> {
+    let mut args = vec![
+        name.to_string(),
+        "_kabin._tcp".into(),
+        port.to_string(),
+        "protocol=1".into(),
+        "tls=1".into(),
+        format!("fingerprint={fingerprint}"),
+    ];
+    if streaming_ready {
+        args.push("streaming=kabin".into());
+    }
     Command::new("avahi-publish-service")
-        .args([
-            name,
-            "_kabin._tcp",
-            &port.to_string(),
-            "protocol=1",
-            "tls=1",
-            &format!("fingerprint={fingerprint}"),
-        ])
+        .args(args)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

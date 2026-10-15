@@ -143,6 +143,9 @@ pub fn scan_desktop(
                     desktop_file: path.clone(),
                 },
                 host_progress: None,
+                series: String::new(),
+                series_index: None,
+                creators: Vec::new(),
             });
         }
     }
