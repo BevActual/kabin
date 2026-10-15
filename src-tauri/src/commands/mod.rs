@@ -1,5 +1,8 @@
+pub mod settings;
+
 use crate::catalog::{CatalogTitle, HomeShelfDto, LibrarySnapshot};
-use crate::config::{app_info, AppInfo, AppState};
+use crate::config::{app_info, AppInfo, AppState, KabinConfig};
+use crate::launch_exec::{execute, touch_recent};
 
 #[tauri::command]
 pub fn get_app_info() -> AppInfo {
@@ -43,4 +46,17 @@ pub fn get_library_counts(
     state: tauri::State<'_, AppState>,
 ) -> std::collections::HashMap<String, u32> {
     state.snapshot(false).counts
+}
+
+#[tauri::command]
+pub fn launch_title(state: tauri::State<'_, AppState>, title_id: String) -> Result<(), String> {
+    let plan = state
+        .launch_plan(&title_id)
+        .ok_or_else(|| "Title not found or not launchable".to_string())?;
+    execute(&plan)?;
+    let mut config = KabinConfig::load();
+    touch_recent(&mut config, &title_id);
+    config.save()?;
+    state.invalidate();
+    Ok(())
 }

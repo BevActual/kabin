@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use super::artwork::{folder_cover, local_cover};
 use super::item::LibraryItem;
+use super::launch::LaunchPlan;
 use super::kinds::{self, MediaKind};
 use super::titles::tidy_filename;
 
@@ -84,6 +85,9 @@ fn file_item(
         cover_path: cover.map(|p| p.to_string_lossy().into_owned()),
         added_at: safe_mtime(path),
         track_count: 1,
+        launch: LaunchPlan::OpenPath {
+            path: path.to_path_buf(),
+        },
     })
 }
 
@@ -108,6 +112,9 @@ fn album_item(
         cover_path: cover.map(|p| p.to_string_lossy().into_owned()),
         added_at: safe_mtime(folder),
         track_count: tracks.len() as u32,
+        launch: LaunchPlan::OpenPath {
+            path: folder.to_path_buf(),
+        },
     })
 }
 

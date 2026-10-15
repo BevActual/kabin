@@ -6,6 +6,13 @@ import type {
   LibrarySnapshot,
 } from "../types/catalog";
 
+export type SettingsSnapshot = {
+  configPath: string;
+  sources: Record<string, boolean | string | number>;
+  mediaDirs: unknown[];
+  romDirs: unknown[];
+};
+
 const isTauri = () =>
   typeof window !== "undefined" &&
   ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
@@ -71,6 +78,31 @@ export function getLibraryCounts() {
     undefined,
     {},
   );
+}
+
+export function launchTitle(titleId: string) {
+  return invokeOrMock<void>("launch_title", { titleId });
+}
+
+export function getSettings() {
+  return invokeOrMock<SettingsSnapshot>("get_settings", undefined, {
+    configPath: "~/.config/kabin/config.json",
+    sources: {},
+    mediaDirs: [],
+    romDirs: [],
+  });
+}
+
+export function setSourceEnabled(key: string, enabled: boolean) {
+  return invokeOrMock<void>("set_source_enabled", { key, enabled });
+}
+
+export function addMediaDir(path: string, mediaType: string) {
+  return invokeOrMock<void>("add_media_dir", { path, mediaType });
+}
+
+export function pickFolder() {
+  return invokeOrMock<string | null>("pick_folder", undefined, null);
 }
 
 export function coverUrl(coverPath?: string | null) {

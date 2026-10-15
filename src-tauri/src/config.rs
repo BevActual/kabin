@@ -5,7 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use crate::catalog::LibrarySnapshot;
+use crate::catalog::{LaunchPlan, LibrarySnapshot};
 
 const FINISHED_RATIO: f32 = 0.9;
 const RESUME_AFTER: f32 = 5.0;
@@ -161,6 +161,103 @@ impl KabinConfig {
         Some((position / duration).min(1.0))
     }
 
+    pub fn rom_dirs_raw(&self) -> Vec<Value> {
+        self.data
+            .get("rom_dirs")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub fn emulation_settings(&self) -> Option<&Value> {
+        self.data.get("emulation")
+    }
+
+    pub fn sources_map(&self) -> serde_json::Map<String, Value> {
+        let default = serde_json::json!({
+            "steam": true,
+            "desktop": true,
+            "roms": true,
+            "remote": true,
+            "book": true,
+            "comic": true,
+            "music": true,
+            "video": true,
+            "tv": true,
+        });
+        let mut map = default.as_object().cloned().unwrap_or_default();
+        if let Some(custom) = self.data.get("sources").and_then(|v| v.as_object()) {
+            for (key, value) in custom {
+                map.insert(key.clone(), value.clone());
+            }
+        }
+        map
+    }
+
+    pub fn set_source_enabled(&mut self, key: &str, enabled: bool) {
+        let sources = self
+            .data
+            .as_object_mut()
+            .expect("config root")
+            .entry("sources")
+            .or_insert_with(|| json!({}));
+        if let Some(obj) = sources.as_object_mut() {
+            obj.insert(key.to_string(), json!(enabled));
+        }
+    }
+
+    pub fn add_media_dir(&mut self, path: &str, media_type: &str) {
+        let entry = json!({ "path": path, "media_type": media_type });
+        let dirs = self
+            .data
+            .as_object_mut()
+            .expect("config root")
+            .entry("media_dirs")
+            .or_insert_with(|| json!([]));
+        if let Some(arr) = dirs.as_array_mut() {
+            arr.push(entry);
+        }
+    }
+
+    pub fn touch_recent(&mut self, title_id: &str) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
+        let recent = self
+            .data
+            .as_object_mut()
+            .expect("config root")
+            .entry("recent")
+            .or_insert_with(|| json!({}));
+        if let Some(obj) = recent.as_object_mut() {
+            obj.insert(title_id.to_string(), json!(now));
+        }
+    }
+
+    pub fn save(&self) -> Result<(), String> {
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let payload = serde_json::to_string_pretty(&self.data).map_err(|e| e.to_string())?;
+        let pid = std::process::id();
+        let temporary = self.path.with_file_name(format!(
+            ".{}.{}.{}.tmp",
+            self.path.file_name().unwrap().to_string_lossy(),
+            pid,
+            self.path.as_os_str().len()
+        ));
+        std::fs::write(&temporary, payload).map_err(|e| e.to_string())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))
+                .map_err(|e| e.to_string())?;
+        }
+        std::fs::rename(&temporary, &self.path).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub fn library_fingerprint(&self) -> String {
         let neutral = [
             "recent", "play_counts", "play_time", "progress", "window",
@@ -206,6 +303,7 @@ pub struct AppState {
 struct CatalogCache {
     fingerprint: String,
     snapshot: LibrarySnapshot,
+    launch_by_id: HashMap<String, LaunchPlan>,
 }
 
 impl Default for AppState {
@@ -220,12 +318,18 @@ impl Default for AppState {
                     errors: Vec::new(),
                     fingerprint: String::new(),
                 },
+                launch_by_id: HashMap::new(),
             }),
         }
     }
 }
 
 impl AppState {
+    pub fn invalidate(&self) {
+        let mut cache = self.cache.lock().expect("catalog cache poisoned");
+        cache.fingerprint.clear();
+    }
+
     pub fn snapshot(&self, force: bool) -> LibrarySnapshot {
         let config = KabinConfig::load();
         let fingerprint = config.library_fingerprint();
@@ -233,9 +337,15 @@ impl AppState {
         if !force && cache.fingerprint == fingerprint {
             return cache.snapshot.clone();
         }
-        let snapshot = crate::catalog::build_snapshot(&config);
+        let (snapshot, launch_by_id) = crate::catalog::build_snapshot(&config);
         cache.fingerprint = fingerprint;
         cache.snapshot = snapshot.clone();
+        cache.launch_by_id = launch_by_id;
         snapshot
+    }
+
+    pub fn launch_plan(&self, title_id: &str) -> Option<LaunchPlan> {
+        let cache = self.cache.lock().expect("catalog cache poisoned");
+        cache.launch_by_id.get(title_id).cloned()
     }
 }

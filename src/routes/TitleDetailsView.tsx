@@ -1,6 +1,7 @@
 import { Link, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { coverUrl, getTitle } from "../lib/kabin-api";
+import { useMutation } from "@tanstack/react-query";
+import { coverUrl, getTitle, launchTitle } from "../lib/kabin-api";
 
 const route = getRouteApi("/title/$titleId");
 
@@ -12,6 +13,9 @@ export function TitleDetailsView() {
   });
 
   const title = titleQuery.data;
+  const launch = useMutation({
+    mutationFn: () => launchTitle(titleId),
+  });
 
   if (titleQuery.isLoading) {
     return <p className="text-kabin-secondary">Loading…</p>;
@@ -55,10 +59,19 @@ export function TitleDetailsView() {
       <div className="mt-8 flex flex-wrap gap-3">
         <button
           type="button"
-          className="rounded-[var(--kabin-radius-control)] bg-kabin-accent px-5 py-2.5 text-[calc(17px*var(--kabin-type-scale))] font-semibold text-white transition-opacity hover:opacity-90"
+          disabled={launch.isPending}
+          onClick={() => launch.mutate()}
+          className="rounded-[var(--kabin-radius-control)] bg-kabin-accent px-5 py-2.5 text-[calc(17px*var(--kabin-type-scale))] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {primaryAction(title.kind)}
+          {launch.isPending ? "Launching…" : primaryAction(title.kind)}
         </button>
+        {launch.isError ? (
+          <p className="w-full text-[calc(14px*var(--kabin-type-scale))] text-red-400">
+            {launch.error instanceof Error
+              ? launch.error.message
+              : "Launch failed"}
+          </p>
+        ) : null}
         <Link
           to="/"
           className="rounded-[var(--kabin-radius-control)] px-5 py-2.5 text-[calc(17px*var(--kabin-type-scale))] font-medium text-kabin-accent"

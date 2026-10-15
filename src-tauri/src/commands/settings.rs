@@ -1,0 +1,64 @@
+use serde::Serialize;
+use tauri_plugin_dialog::DialogExt;
+
+use crate::config::{AppState, KabinConfig};
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsSnapshot {
+    pub config_path: String,
+    pub sources: serde_json::Map<String, serde_json::Value>,
+    pub media_dirs: Vec<serde_json::Value>,
+    pub rom_dirs: Vec<serde_json::Value>,
+}
+
+#[tauri::command]
+pub fn get_settings() -> SettingsSnapshot {
+    let config = KabinConfig::load();
+    SettingsSnapshot {
+        config_path: config.path.to_string_lossy().into_owned(),
+        sources: config.sources_map(),
+        media_dirs: config
+            .data
+            .get("media_dirs")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default(),
+        rom_dirs: config.rom_dirs_raw(),
+    }
+}
+
+#[tauri::command]
+pub fn set_source_enabled(
+    state: tauri::State<'_, AppState>,
+    key: String,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut config = KabinConfig::load();
+    config.set_source_enabled(&key, enabled);
+    config.save()?;
+    state.invalidate();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn add_media_dir(
+    state: tauri::State<'_, AppState>,
+    path: String,
+    media_type: String,
+) -> Result<(), String> {
+    let mut config = KabinConfig::load();
+    config.add_media_dir(&path, &media_type);
+    config.save()?;
+    state.invalidate();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
+    app.dialog()
+        .file()
+        .set_title("Choose folder")
+        .blocking_pick_folder()
+        .map(|path| path.to_string())
+}

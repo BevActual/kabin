@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use regex::Regex;
 
 use super::item::LibraryItem;
+use super::launch::LaunchPlan;
 
 const EXCLUDED_IDS: [&str; 26] = [
     "steam.desktop",
@@ -138,6 +139,9 @@ pub fn scan_desktop(
                 cover_path: None,
                 added_at: safe_mtime(&path),
                 track_count: 1,
+                launch: LaunchPlan::Desktop {
+                    desktop_file: path.clone(),
+                },
             });
         }
     }

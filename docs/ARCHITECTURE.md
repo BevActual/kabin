@@ -55,17 +55,17 @@ Local discovery (see `src-tauri/src/catalog/`):
 - **Media folders** — same layout rules as `kabin/sources/media_dirs.py`
 - **Steam** — `appmanifest_*.acf` + `libraryfolders.vdf`
 - **Desktop games** — `.desktop` entries with `Categories=Game`
-- **ROMs** — not yet ported (`sources/roms.py` is next)
+- **ROMs** — `rom_dirs` with emulator profiles and `{rom}` templates (`catalog/roms.rs`, `emulators/`)
 
-Config reads use the same path as the Python app: `~/.config/kabin/config.json` (`src-tauri/src/config.rs`). Progress and `recent` drive Continue shelves.
+Config read/write: `~/.config/kabin/config.json` (`config.rs`). Launch updates `recent`. See [`PARITY.md`](PARITY.md) for GTK-only features.
 
 ## Migration phases
 
-1. **Shell** — sidebar, Home shelves, details placeholder, Settings grouped list (current).
-2. **Library** — port scanners from `kabin/sources/*` to Rust; artwork cache reuse.
-3. **Playback & reader** — stream URLs, progress sync, reader routes (PDF/EPUB/CBZ).
-4. **Host** — TLS API, pairing, WebRTC stream (replace Python host + C helper).
-5. **Retire GTK** — remove or archive `kabin/` UI when parity is reached.
+1. **Shell** — done (cabinet UI, Settings, design system).
+2. **Library + launch** — done for local sources (scan + Play/Launch).
+3. **Playback & reader** — not started (still GTK + `kabin-media-helper`).
+4. **Host** — not started (Python TLS/WebRTC).
+5. **Retire GTK** — after phase 3–4; GTK remains for emulation setup UI and host until then.
 
 ## Development
 

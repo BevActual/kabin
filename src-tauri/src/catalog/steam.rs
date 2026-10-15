@@ -4,6 +4,7 @@ use std::process::Command;
 use regex::Regex;
 
 use super::item::LibraryItem;
+use super::launch::LaunchPlan;
 
 fn default_roots() -> Vec<PathBuf> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -155,6 +156,9 @@ pub fn scan_steam(
                 cover_path: None,
                 added_at: safe_mtime(&entry.path()),
                 track_count: 1,
+                launch: LaunchPlan::Steam {
+                    appid: appid.to_string(),
+                },
             });
         }
     }

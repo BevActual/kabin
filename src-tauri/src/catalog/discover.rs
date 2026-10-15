@@ -6,6 +6,7 @@ use super::desktop::scan_desktop;
 use super::home::{self, HomeShelf};
 use super::item::{CatalogTitle, LibraryItem};
 use super::media_dirs::{scan_media_dirs, MediaDirEntry};
+use super::roms::scan_rom_dirs;
 use super::steam::scan_steam;
 use crate::config::KabinConfig;
 
@@ -65,7 +66,11 @@ pub fn discover_local(config: &KabinConfig) -> (Vec<LibraryItem>, Vec<ScanError>
     }
 
     if config.source_enabled("roms") {
-        // ROM scanning launches emulators — port of sources/roms.py is next.
+        items.extend(scan_rom_dirs(
+            &config.rom_dirs_raw(),
+            &hidden,
+            config.emulation_settings(),
+        ));
     }
 
     let folder_kinds: HashSet<String> = ["book", "comic", "music", "video", "tv"]
@@ -110,9 +115,13 @@ fn count_by_kind(items: &[LibraryItem]) -> HashMap<String, u32> {
     counts
 }
 
-pub fn build_snapshot(config: &KabinConfig) -> LibrarySnapshot {
+pub fn build_snapshot(config: &KabinConfig) -> (LibrarySnapshot, std::collections::HashMap<String, super::LaunchPlan>) {
     let fingerprint = config.library_fingerprint();
     let (items, mut errors) = discover_local(config);
+    let launch_by_id = items
+        .iter()
+        .map(|item| (item.id.clone(), item.launch.clone()))
+        .collect();
     let shelves: Vec<HomeShelfDto> = home::build_home_shelves(config, &items)
         .into_iter()
         .map(HomeShelfDto::from)
@@ -134,11 +143,14 @@ pub fn build_snapshot(config: &KabinConfig) -> LibrarySnapshot {
             message: "No sources enabled or folders configured.".into(),
         });
     }
-    LibrarySnapshot {
-        shelves,
-        titles,
-        counts,
-        errors,
-        fingerprint,
-    }
+    (
+        LibrarySnapshot {
+            shelves,
+            titles,
+            counts,
+            errors,
+            fingerprint,
+        },
+        launch_by_id,
+    )
 }

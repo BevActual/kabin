@@ -9,6 +9,7 @@ export type CatalogTitle = {
   progress?: number | null;
   accentHue: number;
   coverPath?: string | null;
+  canLaunch?: boolean;
 };
 
 export type HomeShelf = {

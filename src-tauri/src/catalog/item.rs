@@ -1,4 +1,5 @@
 use super::kinds::{self, MediaKind};
+use super::launch::LaunchPlan;
 use serde::Serialize;
 
 #[derive(Debug, Clone)]
@@ -11,6 +12,7 @@ pub struct LibraryItem {
     pub cover_path: Option<String>,
     pub added_at: f64,
     pub track_count: u32,
+    pub launch: LaunchPlan,
 }
 
 impl LibraryItem {
@@ -34,6 +36,7 @@ pub struct CatalogTitle {
     pub progress: Option<f32>,
     pub accent_hue: u16,
     pub cover_path: Option<String>,
+    pub can_launch: bool,
 }
 
 impl CatalogTitle {
@@ -47,6 +50,7 @@ impl CatalogTitle {
             progress,
             accent_hue: kinds::accent_hue(&item.kind_id),
             cover_path: item.cover_path.clone(),
+            can_launch: true,
         }
     }
 }

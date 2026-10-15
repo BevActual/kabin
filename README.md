@@ -11,19 +11,21 @@ reader. MOBI and AZW3 books still open in your system reader.
 This is not an Omarchy shell plugin. It's a regular desktop app you launch
 like any other, and it isn't tied to the Quickshell bar.
 
-## Tauri shell (in progress)
+## Tauri app (primary)
 
-Kabin is migrating to **Tauri 2 + Rust + React (TypeScript) + Vite**. The
-new cabinet UI uses an Apple-first design system ([`design/`](design/)).
-Architecture and migration phases: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Kabin’s new shell is **Tauri 2 + Rust + React (TypeScript) + Vite** with an
+Apple-first design ([`design/`](design/)). It scans your existing config,
+shows your library, and launches games and media locally.
 
 ```bash
 npm install
 npm run tauri dev    # desktop app (Linux: WebKit GTK prerequisites)
-npm run dev          # web UI only (placeholder catalog outside Tauri)
 ```
 
-The **legacy GTK4** application remains available until feature parity:
+Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Features still in
+GTK only: [`docs/PARITY.md`](docs/PARITY.md).
+
+**Legacy GTK4** (playback, reader, Kabin Host, Emulation Center setup):
 
 ```bash
 python3 -m kabin
