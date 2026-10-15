@@ -124,6 +124,12 @@ pub fn build_playback_session(
     item: &LibraryItem,
     config: &KabinConfig,
 ) -> Option<PlaybackSession> {
+    if matches!(
+        item.launch,
+        super::launch::LaunchPlan::RemoteStream { .. }
+    ) {
+        return build_remote_playback_session(item, config);
+    }
     let tracks_paths = playable_tracks(item, config);
     if tracks_paths.is_empty() {
         return None;
@@ -148,5 +154,49 @@ pub fn build_playback_session(
         tracks,
         initial_track,
         initial_position: progress.0,
+    })
+}
+
+fn build_remote_playback_session(
+    item: &LibraryItem,
+    config: &KabinConfig,
+) -> Option<PlaybackSession> {
+    if !item.can_launch() {
+        return None;
+    }
+    let track_total = item.track_count.max(1);
+    let mut tracks = Vec::new();
+    for index in 0..track_total {
+        let path = crate::remote::ensure_remote_media_file(item, config, index).ok()?;
+        tracks.push(PlaybackTrack {
+            path: path.to_string_lossy().into_owned(),
+            label: if track_total == 1 {
+                item.title.clone()
+            } else {
+                format!("{} · {}", item.title, index + 1)
+            },
+        });
+    }
+    let progress = config.progress_fields(&item.id);
+    let initial_track = progress
+        .2
+        .min(tracks.len().saturating_sub(1) as u32);
+    let initial_position = if progress.2 > 0 || progress.0 > 0.0 {
+        progress.0
+    } else {
+        item.host_progress
+            .as_ref()
+            .and_then(|p| p.get("position"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0)
+    };
+    Some(PlaybackSession {
+        title_id: item.id.clone(),
+        title: item.title.clone(),
+        subtitle: item.subtitle.clone(),
+        kind: item.kind_id.clone(),
+        tracks,
+        initial_track,
+        initial_position,
     })
 }

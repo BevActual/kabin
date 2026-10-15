@@ -159,6 +159,7 @@ pub fn scan_steam(
                 launch: LaunchPlan::Steam {
                     appid: appid.to_string(),
                 },
+                host_progress: None,
             });
         }
     }

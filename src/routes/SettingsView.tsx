@@ -4,9 +4,13 @@ import {
   addMediaDir,
   addRomDir,
   createHostPairingCode,
+  discoverNearbyKabinHosts,
   getAppInfo,
   getHostStatus,
   getSettings,
+  listRemoteHosts,
+  pairRemoteHost,
+  removeRemoteHost,
   listEmulators,
   listSystems,
   pickFolder,
@@ -133,6 +137,13 @@ export function SettingsView() {
 
       <KabinHostPanel />
 
+      <RemoteHostsPanel
+        onChanged={() => {
+          void queryClient.invalidateQueries({ queryKey: ["libraryScan"] });
+          void queryClient.invalidateQueries({ queryKey: ["libraryCounts"] });
+        }}
+      />
+
       <EmulationCenterPanel
         romDirs={settings?.romDirs ?? []}
         onAdded={() => {
@@ -157,6 +168,135 @@ export function SettingsView() {
         </p>
       </SettingsGroup>
     </div>
+  );
+}
+
+function RemoteHostsPanel({ onChanged }: { onChanged: () => void }) {
+  const savedQuery = useQuery({
+    queryKey: ["remoteHosts"],
+    queryFn: listRemoteHosts,
+  });
+  const discover = useMutation({
+    mutationFn: discoverNearbyKabinHosts,
+  });
+  const [pairCode, setPairCode] = useState("");
+  const [pairTarget, setPairTarget] = useState<string | null>(null);
+  const pair = useMutation({
+    mutationFn: ({
+      host,
+      code,
+    }: {
+      host: import("../lib/kabin-api").DiscoveredHost;
+      code: string;
+    }) => pairRemoteHost(host, code),
+    onSuccess: () => {
+      setPairCode("");
+      setPairTarget(null);
+      void savedQuery.refetch();
+      onChanged();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (name: string) => removeRemoteHost(name),
+    onSuccess: () => {
+      void savedQuery.refetch();
+      onChanged();
+    },
+  });
+
+  const nearby = discover.data ?? [];
+
+  return (
+    <SettingsGroup title="Remote hosts">
+      {(savedQuery.data ?? []).map((host) => (
+        <div key={host.name} className="kabin-grouped-row text-[calc(13px*var(--kabin-type-scale))]">
+          <div className="min-w-0 flex-1">
+            <div className="text-kabin-primary">{host.name}</div>
+            <div className="font-mono text-kabin-secondary">
+              {host.address}:{host.port}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => remove.mutate(host.name)}
+            className="text-kabin-accent"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <div className="space-y-3 p-4">
+        <button
+          type="button"
+          disabled={discover.isPending}
+          onClick={() => discover.mutate()}
+          className="rounded-[var(--kabin-radius-control)] border border-kabin-separator px-3 py-2 text-[calc(14px*var(--kabin-type-scale))] text-kabin-primary"
+        >
+          {discover.isPending ? "Searching…" : "Find Kabin hosts on LAN"}
+        </button>
+        {discover.isError ? (
+          <p className="text-[calc(13px*var(--kabin-type-scale))] text-red-400">
+            {discover.error instanceof Error
+              ? discover.error.message
+              : "Discovery failed"}
+          </p>
+        ) : null}
+        {nearby.length === 0 && discover.isSuccess ? (
+          <p className="text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
+            No hosts found. Enable Kabin Host on another computer on this network.
+          </p>
+        ) : null}
+        {nearby.map((host) => (
+          <div
+            key={`${host.address}:${host.port}`}
+            className="rounded-[var(--kabin-radius-control)] border border-kabin-separator p-3"
+          >
+            <div className="font-medium text-kabin-primary">{host.name}</div>
+            <div className="font-mono text-[calc(12px*var(--kabin-type-scale))] text-kabin-secondary">
+              {host.address}:{host.port}
+            </div>
+            {pairTarget === host.name ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <input
+                  value={pairCode}
+                  onChange={(e) => setPairCode(e.target.value)}
+                  placeholder="6-digit code"
+                  className="w-32 rounded-[var(--kabin-radius-control)] border border-kabin-separator bg-kabin-grouped px-2 py-1 font-mono"
+                />
+                <button
+                  type="button"
+                  disabled={pair.isPending}
+                  onClick={() => pair.mutate({ host, code: pairCode })}
+                  className="rounded-[var(--kabin-radius-control)] bg-kabin-accent px-3 py-1 text-white"
+                >
+                  Pair
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setPairTarget(host.name);
+                  setPairCode("");
+                }}
+                className="mt-2 text-kabin-accent"
+              >
+                Pair…
+              </button>
+            )}
+            {pair.isError && pairTarget === host.name ? (
+              <p className="mt-1 text-[calc(12px*var(--kabin-type-scale))] text-red-400">
+                {pair.error instanceof Error ? pair.error.message : "Pairing failed"}
+              </p>
+            ) : null}
+          </div>
+        ))}
+        <p className="text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
+          Paired libraries appear when the Remote hosts source is enabled. Remote
+          game streaming still requires the GTK app.
+        </p>
+      </div>
+    </SettingsGroup>
   );
 }
 

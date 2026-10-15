@@ -88,6 +88,7 @@ fn file_item(
         launch: LaunchPlan::OpenPath {
             path: path.to_path_buf(),
         },
+        host_progress: None,
     })
 }
 
@@ -115,6 +116,7 @@ fn album_item(
         launch: LaunchPlan::OpenPath {
             path: folder.to_path_buf(),
         },
+        host_progress: None,
     })
 }
 

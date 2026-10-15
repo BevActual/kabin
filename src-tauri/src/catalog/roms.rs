@@ -158,6 +158,7 @@ pub fn scan_rom_dirs(
                 added_at: safe_mtime(rom_path),
                 track_count: 1,
                 launch,
+                host_progress: None,
             });
         });
     }

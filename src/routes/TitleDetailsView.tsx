@@ -64,13 +64,18 @@ export function TitleDetailsView() {
       <div className="mt-8 flex flex-wrap gap-3">
         <button
           type="button"
-          disabled={launch.isPending}
+          disabled={
+            launch.isPending ||
+            (title.canLaunch === false &&
+              !playsInKabin(title.kind) &&
+              !readsInKabin(title.kind))
+          }
           onClick={() => {
-            if (playsInKabin(title.kind)) {
+            if (playsInKabin(title.kind) && title.canLaunch !== false) {
               void navigate({ to: "/player/$titleId", params: { titleId } });
               return;
             }
-            if (readsInKabin(title.kind)) {
+            if (readsInKabin(title.kind) && title.canLaunch !== false) {
               void navigate({ to: "/read/$titleId", params: { titleId } });
               return;
             }
@@ -80,7 +85,7 @@ export function TitleDetailsView() {
         >
           {launch.isPending && !playsInKabin(title.kind)
             ? "Launching…"
-            : primaryAction(title.kind)}
+            : primaryAction(title.kind, title.canLaunch === false)}
         </button>
         {launch.isError ? (
           <p className="w-full text-[calc(14px*var(--kabin-type-scale))] text-red-400">
@@ -109,7 +114,10 @@ export function TitleDetailsView() {
   );
 }
 
-function primaryAction(kind: string) {
+function primaryAction(kind: string, blocked?: boolean) {
+  if (blocked) {
+    return "Stream in GTK";
+  }
   switch (kind) {
     case "book":
     case "comic":

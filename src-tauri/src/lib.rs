@@ -4,6 +4,7 @@ mod config;
 mod emulators;
 mod host;
 mod launch_exec;
+mod remote;
 
 use std::sync::Mutex;
 
@@ -48,6 +49,10 @@ pub fn run() {
             commands::host::get_host_status,
             commands::host::set_host_enabled,
             commands::host::create_host_pairing_code,
+            commands::remote::discover_nearby_kabin_hosts,
+            commands::remote::list_remote_hosts,
+            commands::remote::pair_remote_host,
+            commands::remote::remove_remote_host,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

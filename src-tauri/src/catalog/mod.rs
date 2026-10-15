@@ -13,6 +13,7 @@ pub mod systems;
 mod steam;
 mod titles;
 
+pub use kinds::kind_by_id;
 pub use launch::LaunchPlan;
 
 pub use discover::{build_snapshot, HomeShelfDto, LibrarySnapshot};

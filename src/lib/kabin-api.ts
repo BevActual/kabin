@@ -222,6 +222,44 @@ export function setHostEnabled(enabled: boolean) {
   return invokeOrMock<HostStatus>("set_host_enabled", { enabled });
 }
 
+export type DiscoveredHost = {
+  name: string;
+  address: string;
+  port: number;
+  tls: boolean;
+  fingerprint: string;
+};
+
+export type RemoteHostSummary = {
+  name: string;
+  address: string;
+  port: number;
+  tls: boolean;
+  fingerprint: string;
+  paired: boolean;
+};
+
+export type PairRemoteHostResult = {
+  name: string;
+  itemCount: number;
+};
+
+export function discoverNearbyKabinHosts() {
+  return invokeOrMock<DiscoveredHost[]>("discover_nearby_kabin_hosts", undefined, []);
+}
+
+export function listRemoteHosts() {
+  return invokeOrMock<RemoteHostSummary[]>("list_remote_hosts", undefined, []);
+}
+
+export function pairRemoteHost(host: DiscoveredHost, code: string) {
+  return invokeOrMock<PairRemoteHostResult>("pair_remote_host", { host, code });
+}
+
+export function removeRemoteHost(name: string) {
+  return invokeOrMock<void>("remove_remote_host", { name });
+}
+
 export function createHostPairingCode(lifetimeSecs?: number) {
   return invokeOrMock<string>("create_host_pairing_code", {
     lifetimeSecs,

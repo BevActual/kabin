@@ -123,7 +123,20 @@ pub fn build_snapshot(
     std::collections::HashMap<String, super::item::LibraryItem>,
 ) {
     let fingerprint = config.library_fingerprint();
-    let (items, mut errors) = discover_local(config);
+    let (mut items, mut errors) = discover_local(config);
+    if config.source_enabled("remote") {
+        let (remote_items, statuses) = crate::remote::discover_remote(config);
+        for (name, status) in statuses {
+            if status.state != "online" {
+                errors.push(ScanError {
+                    source: format!("remote:{name}"),
+                    message: status.message,
+                });
+            }
+        }
+        items.extend(remote_items);
+        items.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
+    }
     let launch_by_id = items
         .iter()
         .map(|item| (item.id.clone(), item.launch.clone()))
@@ -141,7 +154,7 @@ pub fn build_snapshot(
         .map(|item| {
             CatalogTitle::from_item(
                 item,
-                config.progress_ratio(&item.id, item.track_count),
+                CatalogTitle::progress_for_item(item, config),
                 None,
             )
         })

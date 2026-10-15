@@ -100,9 +100,20 @@ pub fn build_reader_session(item: &LibraryItem, config: &KabinConfig) -> Option<
     if item.kind_id != "book" && item.kind_id != "comic" {
         return None;
     }
-    let paths = playable_tracks(item, config);
-    let file = paths.first()?;
-    if !path_allowed(config, file) {
+    let file = if matches!(
+        item.launch,
+        super::launch::LaunchPlan::RemoteStream { .. }
+    ) {
+        crate::remote::ensure_remote_media_file(item, config, 0).ok()?
+    } else {
+        let paths = playable_tracks(item, config);
+        paths.first()?.clone()
+    };
+    if !matches!(
+        item.launch,
+        super::launch::LaunchPlan::RemoteStream { .. }
+    ) && !path_allowed(config, &file)
+    {
         return None;
     }
     let suffix: String = file
@@ -112,7 +123,7 @@ pub fn build_reader_session(item: &LibraryItem, config: &KabinConfig) -> Option<
     let backend = backend_for_suffix(&suffix)?;
     let (initial_page, page_count, file_path, pages) = match backend {
         "cbz" => {
-            let pages = extract_cbz(file, &item.id).ok()?;
+            let pages = extract_cbz(&file, &item.id).ok()?;
             let count = pages.len() as u32;
             let (pos, dur, _) = config.progress_fields(&item.id);
             let page = if dur > 0.0 {

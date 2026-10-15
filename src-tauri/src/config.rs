@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -14,6 +14,29 @@ use crate::catalog::{LaunchPlan, LibrarySnapshot};
 
 const FINISHED_RATIO: f32 = 0.9;
 const RESUME_AFTER: f32 = 5.0;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteHostEntry {
+    pub name: String,
+    pub address: String,
+    pub port: u16,
+    pub tls: bool,
+    pub fingerprint: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteHostSummary {
+    pub name: String,
+    pub address: String,
+    pub port: u16,
+    pub tls: bool,
+    pub fingerprint: String,
+    pub paired: bool,
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -424,6 +447,85 @@ impl KabinConfig {
                 })
             })
             .unwrap_or(false)
+    }
+
+    pub fn remote_hosts(&self) -> Vec<RemoteHostEntry> {
+        self.network()
+            .get("remote_hosts")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|entry| {
+                        Some(RemoteHostEntry {
+                            name: entry.get("name")?.as_str()?.to_string(),
+                            address: entry.get("address")?.as_str()?.to_string(),
+                            port: entry.get("port")?.as_u64()? as u16,
+                            tls: entry.get("tls").and_then(|v| v.as_bool()).unwrap_or(true),
+                            fingerprint: entry
+                                .get("fingerprint")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string(),
+                            token: entry
+                                .get("token")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn remote_host_summaries(&self) -> Vec<RemoteHostSummary> {
+        self.remote_hosts()
+            .into_iter()
+            .map(|host| RemoteHostSummary {
+                name: host.name,
+                address: host.address,
+                port: host.port,
+                tls: host.tls,
+                fingerprint: host.fingerprint,
+                paired: true,
+            })
+            .collect()
+    }
+
+    pub fn remote_host_by_name(&self, name: &str) -> Option<RemoteHostEntry> {
+        self.remote_hosts()
+            .into_iter()
+            .find(|host| host.name == name)
+    }
+
+    pub fn save_remote_host(&mut self, host: RemoteHostEntry, token: String) -> Result<(), String> {
+        let network = self.network_mut();
+        let hosts = network
+            .entry("remote_hosts".to_string())
+            .or_insert_with(|| json!([]));
+        let Some(arr) = hosts.as_array_mut() else {
+            return Err("remote_hosts must be an array".into());
+        };
+        arr.retain(|entry| entry.get("name").and_then(|v| v.as_str()) != Some(host.name.as_str()));
+        arr.push(json!({
+            "name": host.name,
+            "address": host.address,
+            "port": host.port,
+            "token": token,
+            "tls": host.tls,
+            "fingerprint": host.fingerprint,
+        }));
+        self.save()
+    }
+
+    pub fn remove_remote_host(&mut self, name: &str) -> Result<(), String> {
+        let network = self.network_mut();
+        let hosts = network
+            .entry("remote_hosts".to_string())
+            .or_insert_with(|| json!([]));
+        if let Some(arr) = hosts.as_array_mut() {
+            arr.retain(|entry| entry.get("name").and_then(|v| v.as_str()) != Some(name));
+        }
+        self.save()
     }
 
     pub fn add_paired_device(&mut self, name: &str) -> String {

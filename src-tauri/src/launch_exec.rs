@@ -27,6 +27,15 @@ pub fn execute(plan: &LaunchPlan) -> Result<(), String> {
                 .spawn()
                 .map_err(|e| format!("Could not open file: {e}"))?;
         }
+        LaunchPlan::RemoteGame { .. } => {
+            return Err(
+                "Remote game streaming is not available in the Tauri app yet. Use python3 -m kabin."
+                    .into(),
+            );
+        }
+        LaunchPlan::RemoteStream { .. } => {
+            return Err("Open this title in the player or reader.".into());
+        }
     }
     Ok(())
 }

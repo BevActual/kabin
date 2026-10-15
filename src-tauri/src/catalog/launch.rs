@@ -8,6 +8,17 @@ pub enum LaunchPlan {
         argv: Vec<String>,
     },
     OpenPath { path: PathBuf },
+    RemoteGame {
+        host_name: String,
+        remote_id: String,
+        playable: bool,
+    },
+    RemoteStream {
+        host_name: String,
+        remote_id: String,
+        playable: bool,
+        size: u64,
+    },
 }
 
 impl LaunchPlan {

@@ -142,6 +142,7 @@ pub fn scan_desktop(
                 launch: LaunchPlan::Desktop {
                     desktop_file: path.clone(),
                 },
+                host_progress: None,
             });
         }
     }

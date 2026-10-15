@@ -1,5 +1,6 @@
 pub mod host;
 pub mod playback;
+pub mod remote;
 pub mod reader;
 pub mod settings;
 

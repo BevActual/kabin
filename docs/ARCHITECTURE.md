@@ -64,7 +64,7 @@ Config read/write: `~/.config/kabin/config.json` (`config.rs`). Launch updates `
 1. **Shell** — done (cabinet UI, Settings, design system).
 2. **Library + launch** — done for local sources (scan + Play/Launch).
 3. **Playback & reader** — music/video/TV player + PDF/EPUB/CBZ/TXT reader in Tauri; FB2/CBR/MOBI and GStreamer helper still GTK.
-4. **Host** — not started (Python TLS/WebRTC); see [`PARITY.md`](PARITY.md).
+4. **Host + remote** — TLS host + paired remote catalogs in Rust; WebRTC streaming still GTK; see [`PARITY.md`](PARITY.md).
 5. **Retire GTK** — when host + managed emulators land; GTK optional for advanced setup.
 
 ## Development

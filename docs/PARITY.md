@@ -16,13 +16,14 @@ Kabin’s **Tauri shell** is the primary app for daily use on the desktop. GTK r
 | Shortcuts | `/` and Ctrl+F search, Esc back, Ctrl+, Settings |
 | Cover art | Local sidecar / folder art |
 | **Kabin Host (partial)** | TLS API on port 42424: `/v1/info`, `/v1/pair`, `/v1/library`, media stream + progress; mDNS when `avahi-publish-service` is available (Settings) |
+| **Remote library client** | LAN discovery + pairing (Settings), merged catalog when **Remote hosts** source is on; in-app play/read for host media via cached stream download |
 
 ## Deferred (GTK or future Rust work)
 
 | Area | Notes |
 |------|--------|
 | **Kabin Host — streaming** | WebRTC game sessions (`/v1/sessions/*`) and `kabin-media-helper` — still GTK `kabin/network.py`. |
-| **Remote library client** | Browse paired hosts from Tauri (`remote_hosts` discovery) — not wired in the React shell yet. |
+| **Remote game launch** | Paired host games appear in the library but streaming play stays GTK-only. |
 | **Artwork fetch** | SteamGridDB, Open Library queues — GTK `artwork.py`. |
 | **Reader gaps** | FB2, CBR/CBT/CB7, MOBI/AZW3 (GTK or system reader). |
 | **Managed emulators** | Download verified runtimes — GTK `managed.py`. |
