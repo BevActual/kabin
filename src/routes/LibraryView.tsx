@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { MediaTile } from "../components/MediaTile";
@@ -5,6 +6,15 @@ import { getLibraryTitles } from "../lib/kabin-api";
 import { useUiStore } from "../store/ui";
 
 const route = getRouteApi("/library/$kind");
+
+const libraryLabels: Record<string, string> = {
+  game: "Games",
+  music: "Music",
+  video: "Movies",
+  book: "Books",
+  comic: "Comics",
+  favorites: "Favorites",
+};
 
 function libraryTileScale(count: number) {
   if (count <= 1) return 1.7;
@@ -33,14 +43,28 @@ export function LibraryView() {
   const titles = titlesQuery.data ?? [];
 
   if (titles.length === 0) {
+    if (kind === "favorites") {
+      return (
+        <div className="max-w-lg">
+          <p className="text-[calc(17px*var(--kabin-type-scale))] text-kabin-secondary">
+            No favorites yet.
+          </p>
+          <p className="mt-2 text-[calc(15px*var(--kabin-type-scale))] text-kabin-tertiary">
+            Open any title and tap the heart to save it here.
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="max-w-lg">
         <p className="text-[calc(17px*var(--kabin-type-scale))] text-kabin-secondary">
-          No titles in this library yet.
+          No titles in {libraryLabels[kind] ?? "this library"} yet.
         </p>
         <p className="mt-2 text-[calc(15px*var(--kabin-type-scale))] text-kabin-tertiary">
-          Add folders in Settings, or enable Steam scanning, then refresh from
-          Home.
+          <Link to="/settings" className="text-kabin-accent">
+            Open Settings
+          </Link>{" "}
+          to add folders or enable Steam, then refresh from Home.
         </p>
       </div>
     );

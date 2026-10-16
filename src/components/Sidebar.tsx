@@ -4,6 +4,7 @@ import {
   BookOpen,
   Film,
   Gamepad2,
+  Heart,
   Home,
   Library,
   Music2,
@@ -39,6 +40,16 @@ export function Sidebar() {
           label="Home"
           icon={Home}
           active={pathname === "/"}
+        />
+        <SidebarLink
+          to="/library/$kind"
+          params={{ kind: "favorites" }}
+          label="Favorites"
+          icon={Heart}
+          badge={
+            counts.favorites ? String(counts.favorites) : undefined
+          }
+          active={pathname === "/library/favorites"}
         />
         <div className="mt-4 mb-2 px-3 text-[calc(12px*var(--kabin-type-scale))] font-medium text-kabin-tertiary">
           Libraries

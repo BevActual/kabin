@@ -412,6 +412,43 @@ impl KabinConfig {
             .unwrap_or(0)
     }
 
+    pub fn is_favorite(&self, title_id: &str) -> bool {
+        self.data
+            .get("favorites")
+            .and_then(|v| v.as_array())
+            .is_some_and(|arr| arr.iter().any(|v| v.as_str() == Some(title_id)))
+    }
+
+    pub fn toggle_favorite(&mut self, title_id: &str) -> bool {
+        let favorites = self
+            .data
+            .as_object_mut()
+            .expect("config root")
+            .entry("favorites")
+            .or_insert_with(|| json!([]));
+        let Some(arr) = favorites.as_array_mut() else {
+            return false;
+        };
+        if let Some(index) = arr.iter().position(|v| v.as_str() == Some(title_id)) {
+            arr.remove(index);
+            return false;
+        }
+        arr.push(json!(title_id));
+        true
+    }
+
+    pub fn favorite_ids(&self) -> Vec<String> {
+        self.data
+            .get("favorites")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     pub fn record_play_time(&mut self, game_id: &str, seconds: u64) {
         if seconds == 0 {
             return;

@@ -1,6 +1,6 @@
 import { Link, getRouteApi, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Heart } from "lucide-react";
 import {
   coverUrl,
   getRelatedTitles,
@@ -10,6 +10,7 @@ import {
   remoteGameStreamStatus,
   startRemoteGameStream,
   stopRemoteGameStream,
+  toggleFavorite,
 } from "../lib/kabin-api";
 import { MediaTile } from "../components/MediaTile";
 
@@ -18,6 +19,7 @@ const route = getRouteApi("/title/$titleId");
 export function TitleDetailsView() {
   const { titleId } = route.useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const titleQuery = useQuery({
     queryKey: ["title", titleId],
     queryFn: () => getTitleDetails(titleId),
@@ -39,6 +41,16 @@ export function TitleDetailsView() {
   const details = titleQuery.data;
   const title = details?.title;
   const metaLines = details?.metaLines ?? [];
+  const isFavorite = details?.isFavorite ?? false;
+  const favorite = useMutation({
+    mutationFn: () => toggleFavorite(titleId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["title", titleId] });
+      void queryClient.invalidateQueries({ queryKey: ["libraryScan"] });
+      void queryClient.invalidateQueries({ queryKey: ["libraryCounts"] });
+      void queryClient.invalidateQueries({ queryKey: ["library", "favorites"] });
+    },
+  });
   const launch = useMutation({
     mutationFn: () => launchTitle(titleId),
   });
@@ -101,9 +113,29 @@ export function TitleDetailsView() {
           <img src={art} alt="" className="h-full w-full object-cover" />
         ) : null}
       </div>
-      <h2 className="text-[calc(34px*var(--kabin-type-scale))] font-semibold tracking-tight">
-        {title.title}
-      </h2>
+      <div className="flex items-start gap-3">
+        <h2 className="min-w-0 flex-1 text-[calc(34px*var(--kabin-type-scale))] font-semibold tracking-tight">
+          {title.title}
+        </h2>
+        <button
+          type="button"
+          disabled={favorite.isPending}
+          onClick={() => favorite.mutate()}
+          aria-label={isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+          aria-pressed={isFavorite}
+          className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${
+            isFavorite
+              ? "bg-kabin-accent/20 text-kabin-accent"
+              : "text-kabin-secondary hover:bg-kabin-grouped hover:text-kabin-primary"
+          }`}
+        >
+          <Heart
+            size={22}
+            strokeWidth={1.5}
+            className={isFavorite ? "fill-current" : undefined}
+          />
+        </button>
+      </div>
       <p className="mt-1 text-[calc(17px*var(--kabin-type-scale))] text-kabin-secondary">
         {title.subtitle}
       </p>

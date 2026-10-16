@@ -63,6 +63,8 @@ pub struct CatalogTitle {
     pub play_count: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub play_time_label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_favorite: Option<bool>,
 }
 
 impl CatalogTitle {
@@ -100,6 +102,7 @@ impl CatalogTitle {
             can_launch: item.can_launch(),
             play_count,
             play_time_label,
+            is_favorite: config.map(|cfg| cfg.is_favorite(&item.id)).filter(|f| *f),
         }
     }
 

@@ -76,3 +76,45 @@ body {
 .kabin-grouped-row:last-child {
   border-bottom: none;
 }
+
+.kabin-page-enter {
+  animation: kabin-page-enter var(--kabin-motion-screen) both;
+}
+
+@keyframes kabin-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.kabin-toast {
+  animation: kabin-toast-in var(--kabin-motion-fast) both;
+}
+
+@keyframes kabin-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.kabin-continue-hero {
+  border: 1px solid var(--kabin-separator);
+  box-shadow: var(--kabin-shadow-tile);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kabin-page-enter,
+  .kabin-toast {
+    animation: none;
+  }
+}

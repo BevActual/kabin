@@ -42,6 +42,7 @@ pub fn run() {
             commands::get_title,
             commands::get_title_details,
             commands::search_library,
+            commands::toggle_favorite,
             commands::get_library_counts,
             commands::launch_title,
             commands::playback::get_playback_session,

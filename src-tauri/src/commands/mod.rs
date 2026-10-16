@@ -30,6 +30,17 @@ pub fn get_library_titles(
     state: tauri::State<'_, AppState>,
     kind: String,
 ) -> Vec<CatalogTitle> {
+    let config = KabinConfig::load();
+    if kind == "favorites" {
+        let favorite_ids: std::collections::HashSet<_> =
+            config.favorite_ids().into_iter().collect();
+        return state
+            .snapshot(false)
+            .titles
+            .into_iter()
+            .filter(|title| favorite_ids.contains(&title.id))
+            .collect();
+    }
     state
         .snapshot(false)
         .titles
@@ -59,6 +70,7 @@ pub struct RelatedShelfDto {
 pub struct TitleDetailsDto {
     pub title: CatalogTitle,
     pub meta_lines: Vec<String>,
+    pub is_favorite: bool,
 }
 
 #[tauri::command]
@@ -76,8 +88,21 @@ pub fn get_title_details(
     );
     Some(TitleDetailsDto {
         meta_lines: crate::catalog::detail_meta::detail_lines(&item),
+        is_favorite: config.is_favorite(&title_id),
         title,
     })
+}
+
+#[tauri::command]
+pub fn toggle_favorite(
+    state: tauri::State<'_, AppState>,
+    title_id: String,
+) -> Result<bool, String> {
+    let mut config = KabinConfig::load();
+    let is_favorite = config.toggle_favorite(&title_id);
+    config.save()?;
+    state.invalidate();
+    Ok(is_favorite)
 }
 
 #[tauri::command]
@@ -125,7 +150,18 @@ pub fn get_related_titles(
 pub fn get_library_counts(
     state: tauri::State<'_, AppState>,
 ) -> std::collections::HashMap<String, u32> {
-    state.snapshot(false).counts
+    let snapshot = state.snapshot(false);
+    let mut counts = snapshot.counts;
+    let config = KabinConfig::load();
+    let favorite_ids: std::collections::HashSet<_> =
+        config.favorite_ids().into_iter().collect();
+    let favorites = snapshot
+        .titles
+        .iter()
+        .filter(|title| favorite_ids.contains(&title.id))
+        .count() as u32;
+    counts.insert("favorites".into(), favorites);
+    counts
 }
 
 #[tauri::command]

@@ -110,7 +110,12 @@ export function getTitle(titleId: string) {
 export type TitleDetails = {
   title: CatalogTitle;
   metaLines: string[];
+  isFavorite: boolean;
 };
+
+export function toggleFavorite(titleId: string) {
+  return invokeOrMock<boolean>("toggle_favorite", { titleId }, false);
+}
 
 export function getTitleDetails(titleId: string) {
   return invokeOrMock<TitleDetails | null>(

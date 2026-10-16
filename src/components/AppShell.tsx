@@ -5,6 +5,7 @@ import { useRef } from "react";
 import { useCabinetShortcuts } from "../hooks/useCabinetShortcuts";
 import { useGamepadCabinet } from "../hooks/useGamepadCabinet";
 import { useLaunchSessionEvents } from "../hooks/useLaunchSessionEvents";
+import { useToastAutoDismiss } from "../hooks/useToastAutoDismiss";
 import { useUiStore } from "../store/ui";
 import { SearchView } from "../routes/SearchView";
 import { Sidebar } from "./Sidebar";
@@ -22,8 +23,12 @@ export function AppShell({ children }: Props) {
   useCabinetShortcuts(searchRef);
   useGamepadCabinet(searchRef);
   useLaunchSessionEvents();
+  useToastAutoDismiss();
   const toast = useUiStore((s) => s.toast);
   const setToast = useUiStore((s) => s.setToast);
+
+  const immersive =
+    pathname.startsWith("/player/") || pathname.startsWith("/read/");
 
   const pageTitle =
     pathname === "/"
@@ -34,9 +39,43 @@ export function AppShell({ children }: Props) {
           ? "Details"
           : pathname.startsWith("/player/")
             ? "Now Playing"
-            : pathname === "/settings"
-            ? "Settings"
-            : "Kabin";
+            : pathname.startsWith("/read/")
+              ? "Reader"
+              : pathname === "/settings"
+                ? "Settings"
+                : "Kabin";
+
+  const toastBanner = toast ? (
+    <div
+      role="status"
+      className="kabin-toast fixed bottom-6 left-1/2 z-50 max-w-lg -translate-x-1/2 rounded-[var(--kabin-radius-sheet)] border border-kabin-separator bg-kabin-elevated px-4 py-3 text-[calc(14px*var(--kabin-type-scale))] text-kabin-primary shadow-[var(--kabin-shadow-tile-focus)]"
+    >
+      <div className="flex items-start gap-3">
+        <p className="flex-1">{toast}</p>
+        <button
+          type="button"
+          className="text-kabin-secondary hover:text-kabin-primary"
+          onClick={() => setToast(null)}
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  if (immersive) {
+    return (
+      <div
+        className="flex h-full min-h-0 bg-kabin-base text-kabin-primary"
+        data-theme={theme}
+      >
+        <main className="kabin-page-enter min-h-0 flex-1 overflow-auto px-4 pb-8 sm:px-6">
+          {children}
+        </main>
+        {toastBanner}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -72,26 +111,13 @@ export function AppShell({ children }: Props) {
             <Settings size={20} strokeWidth={1.5} />
           </Link>
         </header>
-        <main className="min-h-0 flex-1 overflow-auto px-6 pb-8">
+        <main
+          key={pathname}
+          className="kabin-page-enter min-h-0 flex-1 overflow-auto px-6 pb-8"
+        >
           {searchQuery.trim() ? <SearchView /> : children}
         </main>
-        {toast ? (
-          <div
-            role="status"
-            className="fixed bottom-6 left-1/2 z-50 max-w-lg -translate-x-1/2 rounded-[var(--kabin-radius-sheet)] border border-kabin-separator bg-kabin-elevated px-4 py-3 text-[calc(14px*var(--kabin-type-scale))] text-kabin-primary shadow-[var(--kabin-shadow-tile-focus)]"
-          >
-            <div className="flex items-start gap-3">
-              <p className="flex-1">{toast}</p>
-              <button
-                type="button"
-                className="text-kabin-secondary hover:text-kabin-primary"
-                onClick={() => setToast(null)}
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        ) : null}
+        {toastBanner}
       </div>
     </div>
   );
@@ -104,6 +130,7 @@ function libraryLabel(kind: string) {
     video: "Movies",
     book: "Books",
     comic: "Comics",
+    favorites: "Favorites",
   };
   return labels[kind] ?? "Library";
 }

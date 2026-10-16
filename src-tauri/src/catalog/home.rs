@@ -45,6 +45,35 @@ pub fn build_home_shelves(config: &KabinConfig, items: &[LibraryItem]) -> Vec<Ho
     let recent_ids = config.recent_ordered();
     let by_id: HashMap<_, _> = items.iter().map(|item| (item.id.clone(), item)).collect();
     let mut shelves = Vec::new();
+
+    let favorite_ids: HashSet<_> = config.favorite_ids().into_iter().collect();
+    if !favorite_ids.is_empty() {
+        let mut favorites: Vec<_> = items
+            .iter()
+            .filter(|item| favorite_ids.contains(&item.id))
+            .collect();
+        favorites.sort_by_key(|item| item.sort_key());
+        let titles: Vec<CatalogTitle> = favorites
+            .into_iter()
+            .take(SHELF_LIMIT)
+            .map(|item| {
+                CatalogTitle::from_item_with_config(
+                    item,
+                    CatalogTitle::progress_for_item(item, config),
+                    None,
+                    Some(config),
+                )
+            })
+            .collect();
+        if !titles.is_empty() {
+            shelves.push(HomeShelf {
+                id: "favorites".into(),
+                label: "Favorites".into(),
+                titles,
+            });
+        }
+    }
+
     let mut continue_ids = HashSet::new();
 
     for kind_id in kind_order(items, &recent_ids) {
