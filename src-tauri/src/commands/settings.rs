@@ -56,6 +56,30 @@ pub fn set_source_enabled(
 }
 
 #[tauri::command]
+pub fn remove_media_dir(
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<(), String> {
+    let mut config = KabinConfig::load();
+    config.remove_dir_entry("media_dirs", &path);
+    config.save()?;
+    state.invalidate();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn remove_rom_dir(
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<(), String> {
+    let mut config = KabinConfig::load();
+    config.remove_dir_entry("rom_dirs", &path);
+    config.save()?;
+    state.invalidate();
+    Ok(())
+}
+
+#[tauri::command]
 pub fn add_media_dir(
     state: tauri::State<'_, AppState>,
     path: String,

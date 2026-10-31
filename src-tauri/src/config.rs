@@ -12,6 +12,22 @@ use subtle::ConstantTimeEq;
 
 use crate::catalog::{LaunchPlan, LibrarySnapshot};
 
+fn paths_match(stored: &str, requested: &str) -> bool {
+    fn normalize(value: &str) -> &str {
+        value.trim().trim_end_matches(['/', '\\'])
+    }
+    let stored = normalize(stored);
+    let requested = normalize(requested);
+    #[cfg(windows)]
+    {
+        stored.eq_ignore_ascii_case(requested)
+    }
+    #[cfg(not(windows))]
+    {
+        stored == requested
+    }
+}
+
 const FINISHED_RATIO: f32 = 0.9;
 const RESUME_AFTER: f32 = 5.0;
 
@@ -355,6 +371,25 @@ impl KabinConfig {
         if let Some(arr) = dirs.as_array_mut() {
             arr.push(entry);
         }
+    }
+
+    pub fn remove_dir_entry(&mut self, key: &str, path: &str) -> bool {
+        let Some(arr) = self
+            .data
+            .as_object_mut()
+            .and_then(|root| root.get_mut(key))
+            .and_then(|value| value.as_array_mut())
+        else {
+            return false;
+        };
+        let before = arr.len();
+        arr.retain(|entry| {
+            entry
+                .get("path")
+                .and_then(|v| v.as_str())
+                .is_none_or(|stored| !paths_match(stored, path))
+        });
+        arr.len() != before
     }
 
     pub fn add_media_dir(&mut self, path: &str, media_type: &str) {
@@ -772,16 +807,54 @@ fn default_network() -> Value {
 }
 
 fn default_host_name() -> String {
-    std::env::var("HOSTNAME")
-        .ok()
-        .filter(|s| !s.is_empty())
-        .or_else(|| {
-            fs::read_to_string("/etc/hostname")
-                .ok()
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-        })
-        .unwrap_or_else(|| "Kabin".into())
+    if let Ok(name) = std::env::var("HOSTNAME") {
+        if !name.is_empty() {
+            return name;
+        }
+    }
+    #[cfg(windows)]
+    if let Ok(name) = std::env::var("COMPUTERNAME") {
+        if !name.is_empty() {
+            return name;
+        }
+    }
+    #[cfg(not(windows))]
+    if let Ok(text) = fs::read_to_string("/etc/hostname") {
+        let name = text.trim();
+        if !name.is_empty() {
+            return name.to_string();
+        }
+    }
+    "Kabin".into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{paths_match, KabinConfig};
+    use serde_json::json;
+    use std::path::PathBuf;
+
+    #[test]
+    fn removes_a_folder_and_keeps_the_rest() {
+        let mut config = KabinConfig {
+            path: PathBuf::from("unused"),
+            data: json!({
+                "media_dirs": [
+                    {"path": "/books", "media_type": "book"},
+                    {"path": "/music/", "media_type": "music"}
+                ],
+                "rom_dirs": [
+                    {"path": "/roms/ps1", "system": "ps1"}
+                ]
+            }),
+        };
+        assert!(config.remove_dir_entry("media_dirs", "/music"));
+        assert!(!config.remove_dir_entry("media_dirs", "/missing"));
+        assert_eq!(config.media_dirs().len(), 1);
+        assert!(config.remove_dir_entry("rom_dirs", "/roms/ps1"));
+        assert!(config.rom_dirs_raw().is_empty());
+        assert!(paths_match("/books/", "/books"));
+    }
 }
 
 fn new_network_token() -> String {

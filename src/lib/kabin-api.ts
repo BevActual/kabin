@@ -230,6 +230,14 @@ export function addMediaDir(path: string, mediaType: string) {
   return invokeOrMock<void>("add_media_dir", { path, mediaType });
 }
 
+export function removeMediaDir(path: string) {
+  return invokeOrMock<void>("remove_media_dir", { path });
+}
+
+export function removeRomDir(path: string) {
+  return invokeOrMock<void>("remove_rom_dir", { path });
+}
+
 export function pickFolder() {
   return invokeOrMock<string | null>("pick_folder", undefined, null);
 }

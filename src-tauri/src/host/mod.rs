@@ -17,6 +17,7 @@ pub struct HostController {
     join: Option<JoinHandle<()>>,
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
     avahi: Option<std::process::Child>,
+    lan: Option<crate::remote::LanAdvertiser>,
     pub fingerprint: String,
     pub error: Option<String>,
     pairing: Arc<Mutex<pairing::PairingState>>,
@@ -28,6 +29,7 @@ impl Default for HostController {
             join: None,
             shutdown: None,
             avahi: None,
+            lan: None,
             fingerprint: String::new(),
             error: None,
             pairing: Arc::new(Mutex::new(pairing::PairingState::default())),
@@ -88,7 +90,16 @@ pub fn sync_host(app_state: &AppState, host: &Mutex<HostController>) {
             controller.join = Some(join);
             controller.shutdown = Some(tx);
             controller.error = None;
-            controller.avahi = publish_avahi(&host_name, port, &fp, crate::media_helper::self_test().unwrap_or(false));
+            let streaming = crate::media_helper::self_test().unwrap_or(false);
+            controller.lan = crate::remote::LanAdvertiser::start(
+                &host_name,
+                port,
+                &fp,
+                streaming,
+            );
+            if controller.lan.is_none() {
+                controller.avahi = publish_avahi(&host_name, port, &fp, streaming);
+            }
         }
         Err(err) => {
             controller.error = Some(err);
@@ -129,6 +140,7 @@ impl HostController {
         if let Some(handle) = self.join.take() {
             let _ = handle.join();
         }
+        self.lan.take();
         if let Some(mut child) = self.avahi.take() {
             let _ = child.kill();
         }

@@ -18,6 +18,8 @@ import {
   listSystems,
   pickFolder,
   recommendedManagedRuntime,
+  removeMediaDir,
+  removeRomDir,
   setEmulationPreset,
   setHostEnabled,
   setSourceEnabled,
@@ -64,6 +66,15 @@ export function SettingsView() {
   const toggleSource = useMutation({
     mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) =>
       setSourceEnabled(key, enabled),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["settings"] });
+      void queryClient.invalidateQueries({ queryKey: ["libraryScan"] });
+      void queryClient.invalidateQueries({ queryKey: ["libraryCounts"] });
+    },
+  });
+
+  const removeFolder = useMutation({
+    mutationFn: (path: string) => removeMediaDir(path),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["settings"] });
       void queryClient.invalidateQueries({ queryKey: ["libraryScan"] });
@@ -121,16 +132,29 @@ export function SettingsView() {
       </SettingsGroup>
 
       <SettingsGroup title="Media folders">
-        {(settings?.mediaDirs ?? []).map((entry, index) => (
-          <div key={index} className="kabin-grouped-row text-[calc(13px*var(--kabin-type-scale))]">
-            <span className="text-kabin-secondary">
-              {(entry as { mediaType?: string }).mediaType ?? "media"}
-            </span>
-            <span className="max-w-[240px] truncate font-mono text-kabin-primary">
-              {(entry as { path?: string }).path ?? ""}
-            </span>
-          </div>
-        ))}
+        {(settings?.mediaDirs ?? []).map((entry, index) => {
+          const path = (entry as { path?: string }).path ?? "";
+          const kind = (entry as { mediaType?: string }).mediaType ?? "media";
+          return (
+            <div
+              key={`${path}-${index}`}
+              className="kabin-grouped-row text-[calc(13px*var(--kabin-type-scale))]"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-kabin-secondary">{kind}</p>
+                <p className="truncate font-mono text-kabin-primary">{path}</p>
+              </div>
+              <button
+                type="button"
+                disabled={!path || removeFolder.isPending}
+                onClick={() => removeFolder.mutate(path)}
+                className="text-[calc(15px*var(--kabin-type-scale))] text-kabin-accent"
+              >
+                Remove
+              </button>
+            </div>
+          );
+        })}
         {MEDIA_KINDS.map(({ id, label }) => (
           <button
             key={id}
@@ -464,7 +488,7 @@ function PlayDefaultsPanel({
           Controllers:{" "}
           {controllers.length > 0
             ? controllers.join(", ")
-            : "None detected on /dev/input/by-id"}
+            : "None detected"}
         </p>
       </div>
     </SettingsGroup>
@@ -531,20 +555,38 @@ function EmulationCenterPanel({
     onSuccess: onAdded,
   });
 
+  const removeRom = useMutation({
+    mutationFn: (path: string) => removeRomDir(path),
+    onSuccess: onAdded,
+  });
+
   const systems = systemsQuery.data ?? [];
 
   return (
     <SettingsGroup title="Emulation Center">
-      {(romDirs ?? []).map((entry, index) => (
-        <div key={index} className="kabin-grouped-row text-[calc(13px*var(--kabin-type-scale))]">
-          <span className="text-kabin-secondary">
-            {(entry as { system?: string }).system ?? "roms"}
-          </span>
-          <span className="max-w-[240px] truncate font-mono text-kabin-primary">
-            {(entry as { path?: string }).path ?? ""}
-          </span>
-        </div>
-      ))}
+      {(romDirs ?? []).map((entry, index) => {
+        const path = (entry as { path?: string }).path ?? "";
+        const system = (entry as { system?: string }).system ?? "roms";
+        return (
+          <div
+            key={`${path}-${index}`}
+            className="kabin-grouped-row text-[calc(13px*var(--kabin-type-scale))]"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-kabin-secondary">{system}</p>
+              <p className="truncate font-mono text-kabin-primary">{path}</p>
+            </div>
+            <button
+              type="button"
+              disabled={!path || removeRom.isPending}
+              onClick={() => removeRom.mutate(path)}
+              className="text-[calc(15px*var(--kabin-type-scale))] text-kabin-accent"
+            >
+              Remove
+            </button>
+          </div>
+        );
+      })}
       <div className="space-y-3 p-4">
         <label className="block text-[calc(14px*var(--kabin-type-scale))] text-kabin-secondary">
           System

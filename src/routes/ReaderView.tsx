@@ -148,7 +148,7 @@ export function ReaderView() {
         </Link>
       </header>
 
-      <div className="min-h-[60vh] rounded-[var(--kabin-radius-sheet)] bg-kabin-elevated p-4">
+      <div className="relative min-h-[70vh] overflow-hidden rounded-[var(--kabin-radius-sheet)] bg-[#f4f1ea] p-4 text-neutral-900 shadow-[var(--kabin-shadow-tile)]">
         {session.backend === "pdf" && fileSrc ? (
           <Document
             file={fileSrc}
@@ -189,9 +189,23 @@ export function ReaderView() {
         ) : null}
 
         {session.backend === "external" ? (
-          <p className="text-kabin-secondary">
-            Opening in your default reader…
-          </p>
+          <p className="text-neutral-600">Opening in your default reader…</p>
+        ) : null}
+        {session.backend !== "txt" && session.backend !== "epub" ? (
+          <>
+            <button
+              type="button"
+              aria-label="Previous page"
+              onClick={() => go(-1)}
+              className="absolute inset-y-0 left-0 w-1/4 bg-gradient-to-r from-black/10 to-transparent opacity-0 transition-opacity hover:opacity-100"
+            />
+            <button
+              type="button"
+              aria-label="Next page"
+              onClick={() => go(1)}
+              className="absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-black/10 to-transparent opacity-0 transition-opacity hover:opacity-100"
+            />
+          </>
         ) : null}
       </div>
 
@@ -238,7 +252,7 @@ function TxtReader({
   return (
     <div
       ref={ref}
-      className="max-h-[70vh] overflow-y-auto whitespace-pre-wrap font-serif text-[calc(17px*var(--kabin-type-scale))] leading-relaxed"
+      className="max-h-[70vh] overflow-y-auto whitespace-pre-wrap font-serif text-[calc(18px*var(--kabin-type-scale))] leading-relaxed text-neutral-900"
       onScroll={() => {
         if (!ref.current) return;
         void saveReaderProgress(titleId, Math.floor(ref.current.scrollTop), 1);

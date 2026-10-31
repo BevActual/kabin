@@ -11,7 +11,7 @@ pub use cache::suffix_for_remote_id;
 pub use catalog::discover_remote;
 pub use progress::{push_playback_to_host, push_reader_to_targets, sync_progress_from_remote};
 pub use client::{fetch_remote_library, fetch_remote_stream, pair_with_host};
-pub use discover::{discover_nearby_hosts, DiscoveredHost};
+pub use discover::{discover_nearby_hosts, DiscoveredHost, LanAdvertiser};
 
 use std::path::PathBuf;
 

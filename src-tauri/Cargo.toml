@@ -36,6 +36,7 @@ base64 = "0.22"
 roxmltree = "0.20"
 ureq = "2.10"
 hyper-util = { version = "0.1", features = ["tokio", "server-auto"] }
+mdns-sd = { version = "0.21.6", default-features = false }
 
 [profile.release]
 codegen-units = 1

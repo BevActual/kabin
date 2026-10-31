@@ -61,6 +61,8 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::set_source_enabled,
             commands::settings::add_media_dir,
+            commands::settings::remove_media_dir,
+            commands::settings::remove_rom_dir,
             commands::settings::pick_folder,
             commands::settings::set_system_bios_path,
             commands::open::open_external_path,
