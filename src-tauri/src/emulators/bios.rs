@@ -40,10 +40,7 @@ pub fn prepare_bios_env(emulator_id: &str, bios_path: &Path) -> Option<Vec<(Stri
         let Ok(resolved) = source.canonicalize() else {
             continue;
         };
-        #[cfg(unix)]
-        {
-            let _ = std::os::unix::fs::symlink(resolved, &target);
-        }
+        crate::platform::link_or_copy(&resolved, &target);
     }
     None
 }

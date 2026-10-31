@@ -14,25 +14,11 @@ pub fn native_helper_path() -> Option<PathBuf> {
             .join("..")
             .join("build")
             .join("kabin-media-helper");
-        if built.is_file() {
-            use std::os::unix::fs::PermissionsExt;
-            if built.metadata().ok()?.permissions().mode() & 0o111 != 0 {
-                return Some(built);
-            }
+        if crate::platform::is_executable(&built) {
+            return Some(built);
         }
     }
-    which_helper("kabin-media-helper")
-}
-
-fn which_helper(name: &str) -> Option<PathBuf> {
-    Command::new("which")
-        .arg(name)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| PathBuf::from(s.trim()))
-        .filter(|p| !p.as_os_str().is_empty())
+    crate::platform::find_on_path(&["kabin-media-helper", "kabin-media-helper.exe"])
 }
 
 pub fn self_test() -> Result<bool, String> {

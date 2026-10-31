@@ -115,6 +115,8 @@ export function SettingsView() {
         ))}
         <p className="px-4 pb-3 text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
           Toggles are saved to your config and apply on the next library refresh.
+          Installed apps are desktop games on Linux and Start Menu game shortcuts
+          on Windows. Steam games stay under Steam.
         </p>
       </SettingsGroup>
 

@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use regex::Regex;
 
@@ -7,27 +6,14 @@ use super::item::LibraryItem;
 use super::artwork::steam_cached_cover;
 use super::launch::LaunchPlan;
 
-fn default_roots() -> Vec<PathBuf> {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    vec![
-        home.join(".local/share/Steam"),
-        home.join(".steam/steam"),
-        home.join(".steam/root"),
-    ]
-}
-
 pub fn find_steam_root(override_path: Option<&str>) -> Option<PathBuf> {
     if let Some(raw) = override_path {
-        let path = if raw.starts_with('~') {
-            dirs::home_dir().map(|home| home.join(raw.trim_start_matches('~').trim_start_matches('/')))?
-        } else {
-            PathBuf::from(raw)
-        };
-        if path.is_dir() {
+        let path = crate::platform::expand_user_path(raw);
+        if path.join("steamapps").is_dir() || path.is_dir() {
             return Some(path);
         }
     }
-    default_roots()
+    crate::platform::steam_install_roots()
         .into_iter()
         .find(|candidate| candidate.join("steamapps").is_dir())
 }
@@ -39,7 +25,7 @@ pub fn parse_vdf(text: &str) -> serde_json::Value {
         .filter_map(|cap| {
             cap.get(2)
                 .map(|m| m.as_str().to_string())
-                .or_else(|| cap.get(1).map(|m| m.as_str().replace("\\\"", "\"")))
+                .or_else(|| cap.get(1).map(|m| unescape_vdf(m.as_str())))
         })
         .collect();
     let mut pos = 0;
@@ -66,6 +52,21 @@ pub fn parse_vdf(text: &str) -> serde_json::Value {
     }
 
     parse_object(&tokens, &mut pos)
+}
+
+fn unescape_vdf(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut chars = raw.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(next) = chars.next() {
+                out.push(next);
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 fn library_paths(steam_root: &Path) -> Vec<PathBuf> {
@@ -172,9 +173,7 @@ pub fn scan_steam(
 
 #[allow(dead_code)]
 pub fn launch_steam(appid: &str) {
-    let _ = Command::new("steam")
-        .arg(format!("steam://rungameid/{appid}"))
-        .spawn();
+    let _ = crate::platform::spawn_steam_game(appid);
 }
 
 #[cfg(test)]
@@ -193,5 +192,23 @@ mod tests {
         let value = parse_vdf(text);
         let state = value.get("AppState").expect("state");
         assert_eq!(state.get("appid").and_then(|v| v.as_str()), Some("570"));
+    }
+
+    #[test]
+    fn unescapes_windows_library_path() {
+        let text = r#"
+"libraryfolders"
+{
+    "0"
+    {
+        "path" "D:\\Games\\Steam"
+    }
+}
+"#;
+        let value = parse_vdf(text);
+        assert_eq!(
+            value["libraryfolders"]["0"]["path"].as_str(),
+            Some(r"D:\Games\Steam")
+        );
     }
 }

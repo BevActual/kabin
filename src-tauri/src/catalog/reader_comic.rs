@@ -3,12 +3,28 @@ use std::process::Command;
 
 use super::reader::reader_cache_root;
 
-pub fn bsdtar_available() -> bool {
-    Command::new("bsdtar")
+fn archive_tool() -> Option<&'static str> {
+    if command_ok("bsdtar") {
+        return Some("bsdtar");
+    }
+    // Windows ships libarchive as tar.exe, which can read rar/7z comics.
+    #[cfg(windows)]
+    if command_ok("tar") {
+        return Some("tar");
+    }
+    None
+}
+
+fn command_ok(name: &str) -> bool {
+    Command::new(name)
         .arg("--version")
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
+}
+
+pub fn bsdtar_available() -> bool {
+    archive_tool().is_some()
 }
 
 fn bsdtar_pattern(member: &str) -> String {
@@ -25,9 +41,9 @@ fn is_comic_image(name: &str) -> bool {
 }
 
 pub fn extract_bsdtar_comic(archive: &Path, title_id: &str) -> Result<Vec<PathBuf>, String> {
-    if !bsdtar_available() {
+    let Some(tool) = archive_tool() else {
         return Err("bsdtar is required for CBR/CBT/CB7 comics".into());
-    }
+    };
     let out = reader_cache_root(title_id);
     let manifest = out.join(".manifest");
     if manifest.is_file() {
@@ -42,7 +58,7 @@ pub fn extract_bsdtar_comic(archive: &Path, title_id: &str) -> Result<Vec<PathBu
             return Ok(paths);
         }
     }
-    let listing = Command::new("bsdtar")
+    let listing = Command::new(tool)
         .args(["-tf", &archive.to_string_lossy()])
         .output()
         .map_err(|e| e.to_string())?;
@@ -61,7 +77,7 @@ pub fn extract_bsdtar_comic(archive: &Path, title_id: &str) -> Result<Vec<PathBu
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     let mut paths = Vec::new();
     for (index, name) in names.iter().enumerate() {
-        let output = Command::new("bsdtar")
+        let output = Command::new(tool)
             .args([
                 "-xOf",
                 &archive.to_string_lossy(),

@@ -1,6 +1,7 @@
 mod catalog;
 mod commands;
 mod config;
+mod platform;
 mod emulators;
 mod host;
 mod launch_exec;

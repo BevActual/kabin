@@ -52,15 +52,26 @@ pub fn runtime_by_id(id: &str) -> Option<&'static RuntimeSpec> {
     RUNTIMES.iter().find(|r| r.id == id)
 }
 
+pub fn managed_downloads_supported() -> bool {
+    // Official managed builds are Linux AppImages. Windows uses installed emulators.
+    cfg!(not(windows))
+}
+
 pub fn recommended_runtime(system_id: &str) -> Option<&'static RuntimeSpec> {
+    if !managed_downloads_supported() {
+        return None;
+    }
     RUNTIMES.iter().find(|r| r.systems.contains(&system_id))
 }
 
 pub fn runtime_root() -> PathBuf {
-    let base = std::env::var("XDG_DATA_HOME")
-        .ok()
-        .map(PathBuf::from)
-        .or_else(dirs::data_dir)
+    #[cfg(unix)]
+    if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+        if !xdg.is_empty() {
+            return PathBuf::from(xdg).join("kabin").join("emulators");
+        }
+    }
+    let base = dirs::data_dir()
         .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".local/share"));
     base.join("kabin").join("emulators")
 }
@@ -79,12 +90,8 @@ pub fn installed_executable(runtime_id: &str) -> Option<PathBuf> {
 
 pub fn installed_executable_at(runtime_id: &str, root: &Path) -> Option<PathBuf> {
     let executable = root.join(runtime_id).join(runtime_id);
-    if executable.is_file() {
-        use std::os::unix::fs::PermissionsExt;
-        let mode = executable.metadata().ok()?.permissions().mode();
-        if mode & 0o111 != 0 {
-            return Some(executable);
-        }
+    if crate::platform::is_executable(&executable) {
+        return Some(executable);
     }
     None
 }
@@ -230,9 +237,7 @@ pub fn install_verified_payload(
     let temporary = directory.join(format!(".{}.download", spec.id));
 
     fs::write(&temporary, payload).map_err(|e| e.to_string())?;
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(&temporary, fs::Permissions::from_mode(0o755))
-        .map_err(|e| e.to_string())?;
+    crate::platform::make_user_executable(&temporary)?;
     fs::rename(&temporary, &destination).map_err(|e| e.to_string())?;
 
     let metadata = serde_json::json!({
@@ -256,6 +261,10 @@ mod tests {
 
     #[test]
     fn recommends_duckstation_for_ps1() {
+        if !managed_downloads_supported() {
+            assert!(recommended_runtime("ps1").is_none());
+            return;
+        }
         assert_eq!(recommended_runtime("ps1").unwrap().id, "duckstation");
     }
 

@@ -21,6 +21,7 @@ pub struct EmulatorChoiceDto {
     pub executable: String,
 }
 
+#[cfg(not(windows))]
 const NATIVE: &[(&str, &str, &str, &str)] = &[
     ("nes", "fceux", "FCEUX", "fceux"),
     ("nes", "mesen", "Mesen", "mesen"),
@@ -43,6 +44,7 @@ const NATIVE: &[(&str, &str, &str, &str)] = &[
     ("arcade", "mame", "MAME", "mame"),
 ];
 
+#[cfg(unix)]
 const FLATPAK_IDS: &[(&str, &str, &str)] = &[
     ("ps2", "pcsx2", "net.pcsx2.PCSX2"),
     ("psp", "ppsspp", "org.ppsspp.PPSSPP"),
@@ -50,6 +52,7 @@ const FLATPAK_IDS: &[(&str, &str, &str)] = &[
     ("wii", "dolphin", "org.DolphinEmu.dolphin-emu"),
 ];
 
+#[cfg(unix)]
 fn flatpak_installed(app_id: &str) -> bool {
     let home = dirs::home_dir().unwrap_or_else(PathBuf::new);
     [home.join(".local/share/flatpak/app"), PathBuf::from("/var/lib/flatpak/app")]
@@ -57,6 +60,7 @@ fn flatpak_installed(app_id: &str) -> bool {
         .any(|root| root.join(app_id).exists())
 }
 
+#[cfg(unix)]
 fn flatpak_label(emulator_id: &str) -> &str {
     match emulator_id {
         "dolphin" => "Dolphin",
@@ -97,16 +101,24 @@ pub fn list_systems() -> Vec<SystemInfo> {
         .collect()
 }
 
-fn which(name: &str) -> Option<String> {
-    std::process::Command::new("which")
-        .arg(name)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-}
+#[cfg(windows)]
+const WINDOWS_EXES: &[(&str, &str, &str, &[&str])] = &[
+    ("nes", "fceux", "FCEUX", &["fceux.exe"]),
+    ("nes", "mesen", "Mesen", &["Mesen.exe"]),
+    ("snes", "snes9x", "Snes9x", &["snes9x.exe", "snes9x-x64.exe"]),
+    ("snes", "mesen", "Mesen", &["Mesen.exe"]),
+    ("n64", "rmg", "RMG", &["RMG.exe"]),
+    ("gb", "mgba", "mGBA", &["mgba.exe"]),
+    ("gbc", "mgba", "mGBA", &["mgba.exe"]),
+    ("gba", "mgba", "mGBA", &["mgba.exe"]),
+    ("genesis", "blastem", "BlastEm", &["blastem.exe"]),
+    ("ps1", "duckstation", "DuckStation", &["duckstation-qt.exe", "duckstation.exe"]),
+    ("ps2", "pcsx2", "PCSX2", &["pcsx2-qt.exe", "pcsx2.exe"]),
+    ("psp", "ppsspp", "PPSSPP", &["PPSSPPWindows64.exe", "PPSSPPWindows.exe"]),
+    ("gamecube", "dolphin", "Dolphin", &["Dolphin.exe"]),
+    ("wii", "dolphin", "Dolphin", &["Dolphin.exe"]),
+    ("arcade", "mame", "MAME", &["mame.exe"]),
+];
 
 pub fn detect_emulators(system_id: &str) -> Vec<EmulatorChoiceDto> {
     let Some(_system) = get_system(system_id) else {
@@ -114,6 +126,7 @@ pub fn detect_emulators(system_id: &str) -> Vec<EmulatorChoiceDto> {
     };
     let mut choices = Vec::new();
     let mut seen = std::collections::HashSet::new();
+    #[cfg(not(windows))]
     for (sid, eid, name, exe) in NATIVE {
         if *sid != system_id {
             continue;
@@ -122,16 +135,36 @@ pub fn detect_emulators(system_id: &str) -> Vec<EmulatorChoiceDto> {
         if seen.contains(*eid) {
             continue;
         }
-        if let Some(path) = which(exe) {
+        if let Some(path) = crate::platform::find_on_path(&[*exe]) {
             seen.insert(eid.to_string());
             choices.push(EmulatorChoiceDto {
                 id: (*eid).to_string(),
                 name: (*name).to_string(),
                 runtime: "native".into(),
-                executable: path,
+                executable: path.to_string_lossy().into_owned(),
             });
         }
     }
+    #[cfg(windows)]
+    for (sid, eid, name, exes) in WINDOWS_EXES {
+        if *sid != system_id {
+            continue;
+        }
+        push_managed(&mut choices, &mut seen, eid, name);
+        if seen.contains(*eid) {
+            continue;
+        }
+        if let Some(path) = crate::platform::find_on_path(exes) {
+            seen.insert(eid.to_string());
+            choices.push(EmulatorChoiceDto {
+                id: (*eid).to_string(),
+                name: (*name).to_string(),
+                runtime: "native".into(),
+                executable: path.to_string_lossy().into_owned(),
+            });
+        }
+    }
+    #[cfg(unix)]
     for (sid, eid, app_id) in FLATPAK_IDS {
         if *sid != system_id || seen.contains(*eid) {
             continue;

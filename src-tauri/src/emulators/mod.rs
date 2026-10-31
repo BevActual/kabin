@@ -149,7 +149,7 @@ pub fn custom_command(template: &str, rom_path: &Path) -> Result<Vec<String>, St
     if !template.contains("{rom}") {
         return Err("Custom emulator command must include {rom}".into());
     }
-    let parts = shell_words::split(template).map_err(|e| e.to_string())?;
+    let parts = crate::platform::split_command(template)?;
     Ok(parts
         .into_iter()
         .map(|part| part.replace("{rom}", &rom_path.to_string_lossy()))

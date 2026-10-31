@@ -1,6 +1,25 @@
-use std::process::{Child, Command};
+use std::path::Path;
+use std::process::Child;
+#[cfg(not(windows))]
+use std::process::Command;
 
 use crate::catalog::launch::LaunchPlan;
+
+fn launch_desktop(path: &Path) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        crate::platform::open_path(&path.to_string_lossy())
+    }
+    #[cfg(not(windows))]
+    {
+        Command::new("gio")
+            .arg("launch")
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("Could not launch desktop entry: {e}"))?;
+        Ok(())
+    }
+}
 pub enum LaunchExecution {
     Detached,
     Tracked(Child),
@@ -9,18 +28,11 @@ pub enum LaunchExecution {
 pub fn execute(plan: &LaunchPlan) -> Result<LaunchExecution, String> {
     match plan {
         LaunchPlan::Steam { appid } => {
-            Command::new("steam")
-                .arg(format!("steam://rungameid/{appid}"))
-                .spawn()
-                .map_err(|e| format!("Could not start Steam: {e}"))?;
+            crate::platform::spawn_steam_game(appid)?;
             return Ok(LaunchExecution::Detached);
         }
         LaunchPlan::Desktop { desktop_file } => {
-            Command::new("gio")
-                .arg("launch")
-                .arg(desktop_file)
-                .spawn()
-                .map_err(|e| format!("Could not launch desktop entry: {e}"))?;
+            launch_desktop(desktop_file)?;
             return Ok(LaunchExecution::Detached);
         }
         LaunchPlan::Command {
@@ -35,10 +47,7 @@ pub fn execute(plan: &LaunchPlan) -> Result<LaunchExecution, String> {
             return Ok(LaunchExecution::Tracked(child));
         }
         LaunchPlan::OpenPath { path } => {
-            Command::new("xdg-open")
-                .arg(path)
-                .spawn()
-                .map_err(|e| format!("Could not open file: {e}"))?;
+            crate::platform::open_path(&path.to_string_lossy())?;
             return Ok(LaunchExecution::Detached);
         }
         LaunchPlan::RemoteGame { .. } => {
