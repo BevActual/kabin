@@ -1,4 +1,5 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { browserSampleSnapshot } from "./browser-preview";
 import type {
   AppInfo,
   CatalogTitle,
@@ -52,6 +53,17 @@ const isTauri = () =>
   typeof window !== "undefined" &&
   ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
 
+function previewTitles(kind?: string) {
+  const titles = browserSampleSnapshot()?.titles ?? [];
+  if (!kind) return titles;
+  if (kind === "favorites") return titles.filter((title) => title.isFavorite);
+  return titles.filter((title) => title.kind === kind);
+}
+
+function previewTitle(titleId: string) {
+  return previewTitles().find((title) => title.id === titleId) ?? null;
+}
+
 const emptySnapshot: LibrarySnapshot = {
   shelves: [],
   titles: [],
@@ -87,7 +99,7 @@ export function scanLibrary(force = false) {
   return invokeOrMock<LibrarySnapshot>(
     "scan_library",
     { force },
-    emptySnapshot,
+    browserSampleSnapshot() ?? emptySnapshot,
   );
 }
 
@@ -96,14 +108,18 @@ export function getHomeShelves() {
 }
 
 export function getLibraryTitles(kind: string) {
-  return invokeOrMock<CatalogTitle[]>("get_library_titles", { kind }, []);
+  return invokeOrMock<CatalogTitle[]>(
+    "get_library_titles",
+    { kind },
+    previewTitles(kind),
+  );
 }
 
 export function getTitle(titleId: string) {
   return invokeOrMock<CatalogTitle | null>(
     "get_title",
     { titleId },
-    null,
+    previewTitle(titleId),
   );
 }
 
@@ -114,14 +130,22 @@ export type TitleDetails = {
 };
 
 export function toggleFavorite(titleId: string) {
+  const title = previewTitle(titleId);
+  if (title && !isTauri()) {
+    title.isFavorite = !title.isFavorite;
+    return Promise.resolve(!!title.isFavorite);
+  }
   return invokeOrMock<boolean>("toggle_favorite", { titleId }, false);
 }
 
 export function getTitleDetails(titleId: string) {
+  const title = previewTitle(titleId);
   return invokeOrMock<TitleDetails | null>(
     "get_title_details",
     { titleId },
-    null,
+    title
+      ? { title, metaLines: [], isFavorite: !!title.isFavorite }
+      : null,
   );
 }
 

@@ -33,7 +33,13 @@ export function ContinueHero({ title }: Props) {
           </>
         ) : null}
         <div
-          className="relative aspect-[2/3] w-36 shrink-0 overflow-hidden rounded-[var(--kabin-radius-tile)] shadow-[var(--kabin-shadow-tile-focus)] sm:w-44"
+          className={`relative shrink-0 overflow-hidden rounded-[var(--kabin-radius-tile)] shadow-[var(--kabin-shadow-tile-focus)] ${
+            title.aspect === "widescreen"
+              ? "aspect-video w-56 sm:w-72"
+              : title.aspect === "square"
+                ? "aspect-square w-40 sm:w-48"
+                : "aspect-[2/3] w-36 sm:w-44"
+          }`}
           style={
             art
               ? undefined

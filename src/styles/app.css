@@ -213,13 +213,15 @@ input[type="search"]::-webkit-search-decoration {
 }
 
 .kabin-category-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
 .kabin-category-card {
   display: flex;
+  flex: 1 1 200px;
+  max-width: 280px;
   align-items: center;
   gap: 12px;
   border: 1px solid var(--kabin-separator);
@@ -252,6 +254,25 @@ input[type="search"]::-webkit-search-decoration {
   border-radius: 10px;
   background: color-mix(in srgb, var(--kabin-mode) 18%, transparent);
   color: var(--kabin-mode);
+}
+
+.kabin-quicklook-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, black 64%, transparent);
+}
+
+.kabin-quicklook {
+  position: relative;
+  border: 1px solid var(--kabin-separator);
+  border-radius: var(--kabin-radius-chrome);
+  background: var(--kabin-bg-elevated);
+  box-shadow: var(--kabin-shadow-tile-focus);
 }
 
 .kabin-scroll-under-chrome {

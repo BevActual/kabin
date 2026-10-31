@@ -8,10 +8,31 @@ export function useCabinetShortcuts(searchInputRef?: React.RefObject<HTMLInputEl
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const setSearchQuery = useUiStore((s) => s.setSearchQuery);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const previewTitleId = useUiStore((s) => s.previewTitleId);
+  const setPreviewTitleId = useUiStore((s) => s.setPreviewTitleId);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      if (previewTitleId && (e.key === "Escape" || e.code === "Space")) {
+        e.preventDefault();
+        const returnId = previewTitleId;
+        setPreviewTitleId(null);
+        document
+          .querySelector<HTMLElement>(`[data-title-id="${CSS.escape(returnId)}"]`)
+          ?.focus();
+        return;
+      }
+      if (previewTitleId) return;
+      if (e.code === "Space") {
+        const tile = document.activeElement?.closest("[data-cabinet-tile]");
+        const titleId = tile instanceof HTMLElement ? tile.dataset.titleId : undefined;
+        if (titleId) {
+          e.preventDefault();
+          setPreviewTitleId(titleId);
+        }
         return;
       }
       if (e.key === "Escape") {
@@ -56,5 +77,13 @@ export function useCabinetShortcuts(searchInputRef?: React.RefObject<HTMLInputEl
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navigate, pathname, searchInputRef, setSearchQuery, toggleSidebar]);
+  }, [
+    navigate,
+    pathname,
+    previewTitleId,
+    searchInputRef,
+    setPreviewTitleId,
+    setSearchQuery,
+    toggleSidebar,
+  ]);
 }

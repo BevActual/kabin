@@ -74,6 +74,7 @@ type UiState = {
   contentMode: ContentModeId;
   searchQuery: string;
   toast: string | null;
+  previewTitleId: string | null;
   setTheme: (theme: ThemeMode) => void;
   setLibrarySort: (sort: LibrarySort) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -81,6 +82,7 @@ type UiState = {
   setContentMode: (mode: ContentModeId) => void;
   setSearchQuery: (q: string) => void;
   setToast: (toast: string | null) => void;
+  setPreviewTitleId: (titleId: string | null) => void;
 };
 
 export const useUiStore = create<UiState>((set) => ({
@@ -90,6 +92,7 @@ export const useUiStore = create<UiState>((set) => ({
   contentMode: readContentMode(),
   searchQuery: "",
   toast: null,
+  previewTitleId: null,
   setTheme: (theme) => {
     try {
       localStorage.setItem(THEME_KEY, theme);
@@ -123,4 +126,5 @@ export const useUiStore = create<UiState>((set) => ({
   },
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setToast: (toast) => set({ toast }),
+  setPreviewTitleId: (previewTitleId) => set({ previewTitleId }),
 }));

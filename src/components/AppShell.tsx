@@ -15,6 +15,7 @@ import {
 } from "../lib/modes";
 import { useUiStore } from "../store/ui";
 import { SearchView } from "../routes/SearchView";
+import { QuickLook } from "./QuickLook";
 import { Sidebar } from "./Sidebar";
 
 type Props = {
@@ -29,6 +30,7 @@ export function AppShell({ children }: Props) {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const contentMode = useUiStore((s) => s.contentMode);
   const setContentMode = useUiStore((s) => s.setContentMode);
+  const setPreviewTitleId = useUiStore((s) => s.setPreviewTitleId);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const mode = getContentMode(modeIdFromPath(pathname) ?? contentMode);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -43,7 +45,8 @@ export function AppShell({ children }: Props) {
   }, [theme]);
   useEffect(() => {
     setChromeElevated(false);
-  }, [pathname]);
+    setPreviewTitleId(null);
+  }, [pathname, setPreviewTitleId]);
   useEffect(() => {
     const id = modeIdFromPath(pathname);
     if (id) setContentMode(id);
@@ -129,13 +132,16 @@ export function AppShell({ children }: Props) {
               <PanelLeft size={20} strokeWidth={1.5} />
             </button>
             <span
-              className={`min-w-0 flex-1 truncate text-[calc(17px*var(--kabin-type-scale))] font-semibold tracking-tight transition-opacity duration-200 ${
-                chromeElevated ? "opacity-100" : "opacity-0"
+              className={`truncate text-[calc(17px*var(--kabin-type-scale))] font-semibold tracking-tight transition-opacity duration-200 ${
+                chromeElevated
+                  ? "min-w-0 flex-1 opacity-100"
+                  : "w-0 flex-none overflow-hidden opacity-0"
               }`}
               aria-hidden={!chromeElevated}
             >
               {pageTitle}
             </span>
+            <div className="ml-auto flex min-w-0 items-center gap-2">
             {activeDownloads > 0 ? (
               <Link
                 to="/downloads"
@@ -146,7 +152,7 @@ export function AppShell({ children }: Props) {
                 {activeDownloads}
               </Link>
             ) : null}
-            <label className="relative min-w-[7.5rem] max-w-64 flex-1">
+            <label className="relative w-64 max-w-full min-w-[7.5rem]">
               <Search
                 className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-kabin-secondary"
                 size={16}
@@ -183,6 +189,7 @@ export function AppShell({ children }: Props) {
             >
               <Settings size={20} strokeWidth={1.5} />
             </Link>
+            </div>
           </div>
         </header>
         <main
@@ -195,9 +202,12 @@ export function AppShell({ children }: Props) {
           }}
           className="kabin-page-enter kabin-scroll-under-chrome h-full min-h-0 overflow-auto px-6 pb-10"
         >
-          <h1 className="kabin-large-title">{pageTitle}</h1>
+          {pathname.startsWith("/title/") && !searchQuery.trim() ? null : (
+            <h1 className="kabin-large-title">{pageTitle}</h1>
+          )}
           {searchQuery.trim() ? <SearchView /> : children}
         </main>
+        <QuickLook />
         {toastBanner}
       </div>
     </div>

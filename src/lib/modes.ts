@@ -186,6 +186,10 @@ const kindLabel: Record<string, string> = {
   pdf: "PDFs",
 };
 
+export function labelForKind(kind: string) {
+  return kindLabel[kind] ?? "Title";
+}
+
 function shelfKind(id: string): string | null {
   if (id.startsWith("continue-")) return id.slice("continue-".length);
   if (id.startsWith("added-")) return id.slice("added-".length);

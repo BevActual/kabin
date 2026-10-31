@@ -34,6 +34,7 @@ export function MediaTile({ title }: Props) {
       params={{ titleId: title.id }}
       className={`group block shrink-0 focus:outline-none ${widthClass[title.aspect]}`}
       data-cabinet-tile=""
+      data-title-id={title.id}
       tabIndex={0}
     >
       <div>

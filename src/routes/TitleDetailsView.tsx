@@ -15,6 +15,7 @@ import {
 } from "../lib/kabin-api";
 import { MediaTile } from "../components/MediaTile";
 import { getContentMode, modeForKind } from "../lib/modes";
+import { resumeActionLabel } from "../lib/resumeRoute";
 import { useUiStore } from "../store/ui";
 
 const route = getRouteApi("/title/$titleId");
@@ -131,7 +132,13 @@ export function TitleDetailsView() {
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-[color-mix(in_srgb,var(--kabin-bg-base)_35%,transparent)] to-[var(--kabin-bg-base)]" />
         <div className="relative mx-auto flex max-w-4xl flex-col gap-6 px-6 pt-6 pb-2 sm:flex-row sm:items-end">
           <div
-            className="aspect-[2/3] w-40 shrink-0 overflow-hidden rounded-[var(--kabin-radius-sheet)] shadow-[var(--kabin-shadow-tile-focus)] sm:w-52"
+            className={`shrink-0 overflow-hidden rounded-[var(--kabin-radius-sheet)] shadow-[var(--kabin-shadow-tile-focus)] ${
+              title.aspect === "widescreen"
+                ? "aspect-video w-full max-w-sm"
+                : title.aspect === "square"
+                  ? "aspect-square w-44 sm:w-52"
+                  : "aspect-[2/3] w-40 sm:w-52"
+            }`}
             style={
               art
                 ? undefined
@@ -146,9 +153,9 @@ export function TitleDetailsView() {
           </div>
           <div className="min-w-0 flex-1 pb-1">
             <div className="flex items-start gap-3">
-              <h2 className="min-w-0 flex-1 text-[calc(34px*var(--kabin-type-scale))] font-semibold tracking-tight">
+              <h1 className="min-w-0 flex-1 text-[calc(34px*var(--kabin-type-scale))] font-semibold tracking-tight">
                 {title.title}
-              </h2>
+              </h1>
               <button
                 type="button"
                 disabled={favorite.isPending}
@@ -279,19 +286,6 @@ export function TitleDetailsView() {
 }
 
 function primaryAction(kind: string, blocked?: boolean) {
-  if (blocked) {
-    return "Unavailable";
-  }
-  switch (kind) {
-    case "book":
-    case "comic":
-      return "Read";
-    case "music":
-      return "Listen";
-    case "video":
-    case "tv":
-      return "Watch";
-    default:
-      return "Play";
-  }
+  if (blocked) return "Unavailable";
+  return resumeActionLabel(kind);
 }
