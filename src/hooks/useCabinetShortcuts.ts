@@ -1,6 +1,7 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { navigateCabinetTiles } from "../lib/cabinetFocus";
+import { useTransportStore } from "../store/transport";
 import { useUiStore } from "../store/ui";
 
 export function useCabinetShortcuts(searchInputRef?: React.RefObject<HTMLInputElement | null>) {
@@ -32,6 +33,14 @@ export function useCabinetShortcuts(searchInputRef?: React.RefObject<HTMLInputEl
         if (titleId) {
           e.preventDefault();
           setPreviewTitleId(titleId);
+          return;
+        }
+        const interactive =
+          e.target instanceof HTMLElement &&
+          e.target.closest("button, a, input, textarea, select");
+        if (!interactive && useTransportStore.getState().audio) {
+          e.preventDefault();
+          useTransportStore.getState().toggleAudio();
         }
         return;
       }

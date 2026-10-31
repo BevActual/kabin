@@ -15,8 +15,11 @@ import {
 } from "../lib/modes";
 import { useUiStore } from "../store/ui";
 import { SearchView } from "../routes/SearchView";
+import { AudioEngine } from "./AudioEngine";
 import { QuickLook } from "./QuickLook";
 import { Sidebar } from "./Sidebar";
+import { TransportBar } from "./TransportBar";
+import { useTransportStore } from "../store/transport";
 
 type Props = {
   children: ReactNode;
@@ -70,6 +73,7 @@ export function AppShell({ children }: Props) {
 
   const immersive =
     pathname.startsWith("/player/") || pathname.startsWith("/read/");
+  const transportVisible = useTransportStore((s) => !!(s.audio || s.reading));
 
   const pageTitle = titleForPath(pathname, searchQuery, mode);
 
@@ -91,21 +95,20 @@ export function AppShell({ children }: Props) {
     </div>
   ) : null;
 
-  if (immersive) {
-    return (
-      <div
-        className="flex h-full min-h-0 bg-kabin-base text-kabin-primary"
-        data-theme={theme}
-      >
+  return (
+    <>
+      <AudioEngine />
+      {immersive ? (
+    <div
+      className="flex h-full min-h-0 bg-kabin-base text-kabin-primary"
+      data-theme={theme}
+    >
         <main className="kabin-page-enter min-h-0 flex-1 overflow-auto px-4 pb-8 sm:px-6">
           {children}
         </main>
         {toastBanner}
       </div>
-    );
-  }
-
-  return (
+      ) : (
     <div
       className="kabin-shell relative h-full min-h-0 bg-kabin-base text-kabin-primary"
       data-theme={theme}
@@ -200,7 +203,9 @@ export function AppShell({ children }: Props) {
               current === elevated ? current : elevated,
             );
           }}
-          className="kabin-page-enter kabin-scroll-under-chrome h-full min-h-0 overflow-auto px-6 pb-10"
+          className={`kabin-page-enter kabin-scroll-under-chrome h-full min-h-0 overflow-auto px-6 ${
+            transportVisible ? "pb-28" : "pb-10"
+          }`}
         >
           {pathname.startsWith("/title/") && !searchQuery.trim() ? null : (
             <h1 className="kabin-large-title">{pageTitle}</h1>
@@ -208,9 +213,12 @@ export function AppShell({ children }: Props) {
           {searchQuery.trim() ? <SearchView /> : children}
         </main>
         <QuickLook />
+        <TransportBar />
         {toastBanner}
       </div>
     </div>
+      )}
+    </>
   );
 }
 

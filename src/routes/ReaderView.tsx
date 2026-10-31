@@ -9,9 +9,11 @@ import ePub from "epubjs";
 import {
   coverUrl,
   getReaderSession,
+  getTitle,
   openExternalPath,
   saveReaderProgress,
 } from "../lib/kabin-api";
+import { useTransportStore } from "../store/transport";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -26,6 +28,11 @@ export function ReaderView() {
     queryKey: ["reader", titleId],
     queryFn: () => getReaderSession(titleId),
   });
+  const titleQuery = useQuery({
+    queryKey: ["title-preview", titleId],
+    queryFn: () => getTitle(titleId),
+  });
+  const rememberReading = useTransportStore((s) => s.rememberReading);
 
   const session = sessionQuery.data;
   const [page, setPage] = useState(0);
@@ -33,12 +40,48 @@ export function ReaderView() {
   const epubRef = useRef<ReturnType<typeof ePub> | null>(null);
   const saveTimer = useRef<number | null>(null);
 
+  const readingReady = useRef(false);
+
   useEffect(() => {
-    if (session) {
-      setPage(session.initialPage);
-      setNumPages(session.pageCount || 1);
-    }
-  }, [session]);
+    if (!session) return;
+    const live = useTransportStore.getState().reading;
+    const restored = live?.titleId === titleId;
+    const start = restored ? live.page : session.initialPage;
+    const total = restored ? live.pageCount || session.pageCount || 1 : session.pageCount || 1;
+    readingReady.current = false;
+    setPage(start);
+    setNumPages(total);
+    const timer = window.setTimeout(() => {
+      readingReady.current = true;
+      const meta = titleQuery.data;
+      rememberReading({
+        titleId,
+        title: session.title,
+        subtitle: meta?.subtitle ?? "",
+        kind: meta?.kind ?? "book",
+        accentHue: meta?.accentHue ?? 38,
+        coverPath: meta?.coverPath,
+        page: start,
+        pageCount: total,
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [session, titleId]);
+
+  useEffect(() => {
+    if (!session || !readingReady.current) return;
+    const meta = titleQuery.data;
+    rememberReading({
+      titleId,
+      title: session.title,
+      subtitle: meta?.subtitle ?? "",
+      kind: meta?.kind ?? "book",
+      accentHue: meta?.accentHue ?? 38,
+      coverPath: meta?.coverPath,
+      page,
+      pageCount: numPages,
+    });
+  }, [numPages, page, rememberReading, session, titleId, titleQuery.data]);
 
   useEffect(() => {
     if (session?.backend === "external" && session.filePath) {

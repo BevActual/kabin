@@ -64,6 +64,39 @@ function previewTitle(titleId: string) {
   return previewTitles().find((title) => title.id === titleId) ?? null;
 }
 
+function previewPlayback(titleId: string): PlaybackSession | null {
+  const title = previewTitle(titleId);
+  if (!title) return null;
+  if (title.kind !== "music" && title.kind !== "audiobook") return null;
+  return {
+    titleId,
+    title: title.title,
+    subtitle: title.subtitle,
+    kind: title.kind,
+    tracks: [{ path: `preview:${titleId}`, label: title.title }],
+    initialTrack: 0,
+    initialPosition: 2,
+  };
+}
+
+function previewReader(titleId: string): ReaderSession | null {
+  const title = previewTitle(titleId);
+  if (!title) return null;
+  if (title.kind !== "book" && title.kind !== "comic" && title.kind !== "pdf") return null;
+  const pages = [
+    `<p style="font:20px Georgia,serif;line-height:1.6">${title.title}</p><p style="font:18px Georgia,serif;line-height:1.6">A sample page, so you can leave the reader and come back to your place.</p>`,
+    `<p style="font:18px Georgia,serif;line-height:1.6">Second page of ${title.title}.</p>`,
+  ];
+  return {
+    titleId,
+    title: title.title,
+    backend: "fb2",
+    pages,
+    initialPage: 0,
+    pageCount: pages.length,
+  };
+}
+
 const emptySnapshot: LibrarySnapshot = {
   shelves: [],
   titles: [],
@@ -198,7 +231,7 @@ export function getPlaybackSession(titleId: string) {
   return invokeOrMock<PlaybackSession | null>(
     "get_playback_session",
     { titleId },
-    null,
+    previewPlayback(titleId),
   );
 }
 
@@ -280,7 +313,7 @@ export function getReaderSession(titleId: string) {
   return invokeOrMock<ReaderSession | null>(
     "get_reader_session",
     { titleId },
-    null,
+    previewReader(titleId),
   );
 }
 
