@@ -124,9 +124,11 @@ export function HomeView() {
 function pickContinueHero(shelves: HomeShelf[]): CatalogTitle | null {
   let best: CatalogTitle | null = null;
   let bestProgress = 0;
+  let first: CatalogTitle | null = null;
   for (const shelf of shelves) {
     if (!shelf.id.startsWith("continue-")) continue;
     for (const title of shelf.titles) {
+      first ??= title;
       const progress = title.progress ?? 0;
       if (progress > bestProgress) {
         bestProgress = progress;
@@ -134,7 +136,7 @@ function pickContinueHero(shelves: HomeShelf[]): CatalogTitle | null {
       }
     }
   }
-  return best;
+  return best ?? first;
 }
 
 function StatusMessage({ children }: { children: ReactNode }) {

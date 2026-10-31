@@ -41,12 +41,17 @@ function seeAllTarget(shelf: HomeShelf) {
   if (!title) return null;
   const mode = modeForKind(title.kind).id;
   if (shelf.id === "favorites" || shelf.id.startsWith("continue-")) {
+    const played = shelf.id.startsWith("continue-") && title.kind === "game";
     return {
       mode,
-      section: shelf.id === "favorites" ? "favorites" : "progress",
+      section: shelf.id === "favorites" ? "favorites" : played ? "played" : "progress",
     };
   }
+  if (shelf.id.startsWith("added-") && title.kind === "game") {
+    return { mode: "games", section: "added" };
+  }
   if (shelf.id.startsWith("added-") || shelf.id === "library") {
+    if (shelf.id === "library" && title.kind === "game") return null;
     return legacyLibraryTarget(title.kind, mode);
   }
   return null;

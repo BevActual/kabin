@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   BookOpen,
   CirclePlay,
   Clapperboard,
@@ -10,13 +11,16 @@ import {
   Gamepad2,
   Headphones,
   Heart,
+  History,
   Home,
+  Joystick,
   Library,
   Music2,
   Tv,
   type LucideIcon,
 } from "lucide-react";
 import type { CatalogTitle, HomeShelf } from "../types/catalog";
+import { gameHomeSubtitle, type GameSource } from "./games";
 import { collapseShows } from "./shows";
 
 export type ContentModeId = "video" | "books" | "music" | "games";
@@ -26,6 +30,7 @@ export type ModeSection = {
   label: string;
   icon: LucideIcon;
   kinds?: string[];
+  gameSource?: GameSource;
   emptyHint?: string;
 };
 
@@ -164,19 +169,46 @@ export const contentModes: ContentMode[] = [
     hue: 32,
     icon: Gamepad2,
     emptyHint:
-      "No games yet. Open Settings to enable Steam or installed apps, then refresh.",
+      "No games yet. Open Settings to enable Steam, installed apps, or console ROMs, then refresh.",
     sections: [
       { id: "home", label: "Home", icon: Home },
-      { id: "library", label: "All Games", icon: Library },
+      {
+        id: "steam",
+        label: "Steam",
+        icon: Gamepad2,
+        gameSource: "steam",
+        emptyHint: "No Steam games yet. Open Settings to enable Steam, then refresh.",
+      },
+      {
+        id: "installed",
+        label: "Installed",
+        icon: AppWindow,
+        gameSource: "installed",
+        emptyHint:
+          "No installed games yet. Open Settings to enable installed apps, then refresh.",
+      },
+      {
+        id: "consoles",
+        label: "Consoles",
+        icon: Joystick,
+        gameSource: "console",
+        emptyHint:
+          "No console games yet. Open Settings to add a ROM folder, then refresh.",
+      },
       {
         id: "added",
         label: "Recently added",
         icon: Clock,
         emptyHint:
-          "Nothing added yet. Open Settings to enable Steam or installed apps, then refresh.",
+          "Nothing added yet. Open Settings to enable Steam, installed apps, or console ROMs, then refresh.",
+      },
+      {
+        id: "played",
+        label: "Recently played",
+        icon: History,
+        emptyHint: "Nothing played yet. Games you launch show up here.",
       },
       { id: "favorites", label: "Favorites", icon: Heart },
-      { id: "progress", label: "In progress", icon: CirclePlay },
     ],
   },
 ];
@@ -217,7 +249,12 @@ export function sectionForMode(mode: ContentMode, sectionId: string): ModeSectio
 }
 
 export function sectionGroup(section: ModeSection): "library" | "personal" {
-  if (section.id === "home" || section.id === "library" || section.kinds?.length) {
+  if (
+    section.id === "home" ||
+    section.id === "library" ||
+    section.kinds?.length ||
+    section.gameSource
+  ) {
     return "library";
   }
   return "personal";
@@ -265,6 +302,7 @@ export function shelvesForMode(shelves: HomeShelf[], mode: ContentMode): HomeShe
 }
 
 export function homeSubtitle(mode: ContentMode, titles: CatalogTitle[]) {
+  if (mode.id === "games") return gameHomeSubtitle(titles);
   const categories = mode.sections.filter((section) => section.kinds?.length);
   if (categories.length === 0) {
     if (titles.length === 0) {
@@ -306,7 +344,7 @@ export function legacyLibraryTarget(
 ): { mode: ContentModeId; section: string } {
   switch (kind) {
     case "game":
-      return { mode: "games", section: "library" };
+      return { mode: "games", section: "home" };
     case "music":
       return { mode: "music", section: "library" };
     case "video":

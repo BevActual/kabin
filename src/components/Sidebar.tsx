@@ -11,6 +11,7 @@ import {
   modeIdFromPath,
   sectionGroup,
 } from "../lib/modes";
+import { gamesInSection } from "../lib/games";
 import { collapseShows, isUnwatched } from "../lib/shows";
 import {
   downloadSections,
@@ -383,6 +384,9 @@ function sectionCount(
     ? titles.filter((title) => kinds.includes(title.kind))
     : titles;
   if (id === "favorites") return scoped.filter((title) => title.isFavorite).length;
+  if (id === "steam" || id === "installed" || id === "consoles" || id === "played") {
+    return gamesInSection(scoped, id).length;
+  }
   const presented = collapseShows(scoped);
   if (id === "unwatched") return presented.filter(isUnwatched).length;
   if (id === "progress") return presented.filter(isInProgress).length;
@@ -419,7 +423,7 @@ function SidebarLink({
       to={to}
       params={params}
       hash={hash}
-      activeOptions={hash ? { includeHash: true, exact: true } : undefined}
+      activeOptions={hash ? { includeHash: true, exact: true } : { exact: true }}
       title={ariaLabel ?? label}
       aria-label={ariaLabel ?? (badge ? `${label}, ${badge}` : label)}
       aria-current={active ? "page" : undefined}

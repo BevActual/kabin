@@ -8,6 +8,7 @@ import {
   sectionForMode,
 } from "../lib/modes";
 import { MediaTile } from "../components/MediaTile";
+import { consoleGroups, gamesInSection } from "../lib/games";
 import { libraryEntries } from "../lib/shows";
 import { SegmentedControl } from "../components/SegmentedControl";
 import type { CatalogTitle } from "../types/catalog";
@@ -60,16 +61,19 @@ export function ModeSectionView() {
     titles = titles.filter((title) => allowed.includes(title.kind));
   }
   titles = libraryEntries(titles, section.id);
-  const sorted = sortTitles(titles, section.id === "added" ? "added" : librarySort);
+  titles = gamesInSection(titles, section.id);
+  const sortMode = section.id === "added" ? "added" : section.id === "played" ? "recent" : librarySort;
+  const sorted = sortTitles(titles, sortMode);
+  const systems = section.id === "consoles" ? consoleGroups(sorted) : [];
 
   return (
     <div>
       {sorted.length > 0 ? (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <p className="text-[calc(13px*var(--kabin-type-scale))] text-kabin-tertiary">
-            {countLabel(section.id, sorted.length)}
+            {countLabel(mode.id, section.id, sorted.length)}
           </p>
-          {section.id === "added" ? null : (
+          {section.id === "added" || section.id === "played" ? null : (
           <SegmentedControl
             label="Sort library"
             value={librarySort}
@@ -90,6 +94,26 @@ export function ModeSectionView() {
           sectionId={section.id}
           hint={section.emptyHint ?? mode.emptyHint}
         />
+      ) : systems.length > 1 ? (
+        <div className="space-y-10">
+          {systems.map((system) => (
+            <section key={system.name}>
+              <div className="mb-4 flex items-baseline justify-between gap-4">
+                <h2 className="text-[calc(22px*var(--kabin-type-scale))] font-semibold tracking-tight">
+                  {system.name}
+                </h2>
+                <p className="text-[calc(13px*var(--kabin-type-scale))] text-kabin-tertiary">
+                  {system.titles.length === 1 ? "1 game" : `${system.titles.length} games`}
+                </p>
+              </div>
+              <div className="kabin-library-grid">
+                {system.titles.map((title) => (
+                  <MediaTile key={title.id} title={title} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       ) : (
         <div className="kabin-library-grid">
           {sorted.map((title) => (
@@ -155,8 +179,9 @@ function EmptySection({
   );
 }
 
-function countLabel(sectionId: string, count: number) {
+function countLabel(modeId: string, sectionId: string, count: number) {
   if (sectionId === "tv") return count === 1 ? "1 show" : `${count} shows`;
+  if (modeId === "games") return count === 1 ? "1 game" : `${count} games`;
   return count === 1 ? "1 title" : `${count} titles`;
 }
 

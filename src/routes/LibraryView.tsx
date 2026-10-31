@@ -12,6 +12,14 @@ export function LibraryView() {
 
   useEffect(() => {
     const target = legacyLibraryTarget(kind, contentMode);
+    if (target.section === "home") {
+      void navigate({
+        to: "/browse/$mode",
+        params: { mode: target.mode },
+        replace: true,
+      });
+      return;
+    }
     void navigate({
       to: "/browse/$mode/$section",
       params: target,
