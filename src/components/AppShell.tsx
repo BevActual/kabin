@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Download, PanelLeft, Search, Settings, X } from "lucide-react";
+import { Download, PanelLeft } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useCabinetShortcuts } from "../hooks/useCabinetShortcuts";
@@ -116,11 +116,11 @@ export function AppShell({ children }: Props) {
       data-sidebar={sidebarCollapsed ? "collapsed" : "expanded"}
       style={{ "--kabin-mode-hue": String(mode.hue) } as CSSProperties}
     >
-      <Sidebar collapsed={sidebarCollapsed} />
+      <Sidebar collapsed={sidebarCollapsed} searchRef={searchRef} />
       <div className="kabin-content-pane min-w-0">
-        <header className="pointer-events-none absolute inset-x-0 top-0 z-20 px-6 pt-3">
+        <header className="pointer-events-none absolute top-3 left-6 z-20">
           <div
-            className={`pointer-events-auto flex items-center gap-3 px-3 py-2 ${
+            className={`pointer-events-auto inline-flex max-w-full items-center gap-0.5 py-1 pr-1 pl-1 ${
               chromeElevated ? "kabin-glass kabin-glass-strong" : "kabin-glass"
             }`}
           >
@@ -134,65 +134,21 @@ export function AppShell({ children }: Props) {
             >
               <PanelLeft size={20} strokeWidth={1.5} />
             </button>
-            <span
-              className={`truncate text-[calc(17px*var(--kabin-type-scale))] font-semibold tracking-tight transition-opacity duration-200 ${
-                chromeElevated
-                  ? "min-w-0 flex-1 opacity-100"
-                  : "w-0 flex-none overflow-hidden opacity-0"
-              }`}
-              aria-hidden={!chromeElevated}
-            >
-              {pageTitle}
-            </span>
-            <div className="ml-auto flex min-w-0 items-center gap-2">
+            {chromeElevated ? (
+              <span className="kabin-page-enter max-w-52 truncate pr-2 text-[calc(15px*var(--kabin-type-scale))] font-semibold tracking-tight">
+                {pageTitle}
+              </span>
+            ) : null}
             {activeDownloads > 0 ? (
               <Link
                 to="/downloads"
-                className="kabin-activity-capsule shrink-0 text-[calc(13px*var(--kabin-type-scale))]"
+                className="kabin-activity-capsule mr-1 shrink-0 text-[calc(13px*var(--kabin-type-scale))]"
                 aria-label={`${activeDownloads} active downloads`}
               >
                 <Download size={15} strokeWidth={1.75} />
                 {activeDownloads}
               </Link>
             ) : null}
-            <label className="relative w-64 max-w-full min-w-[7.5rem]">
-              <Search
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-kabin-secondary"
-                size={16}
-                strokeWidth={1.5}
-              />
-              <input
-                ref={searchRef}
-                type="search"
-                placeholder={`Search ${mode.label}`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="kabin-search w-full py-1.5 pr-8 pl-9 text-[calc(14px*var(--kabin-type-scale))] text-kabin-primary placeholder:text-kabin-tertiary focus:shadow-[var(--kabin-focus-ring)] focus:outline-none"
-              />
-              {searchQuery ? (
-                <button
-                  type="button"
-                  aria-label="Clear search"
-                  onClick={() => setSearchQuery("")}
-                  className="absolute top-1/2 right-2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-kabin-secondary hover:bg-kabin-grouped hover:text-kabin-primary"
-                >
-                  <X size={14} strokeWidth={1.75} />
-                </button>
-              ) : null}
-            </label>
-            <Link
-              to="/settings"
-              className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${
-                pathname === "/settings"
-                  ? "kabin-sidebar-active text-kabin-accent"
-                  : "text-kabin-secondary hover:bg-[color-mix(in_srgb,var(--kabin-label-primary)_8%,transparent)] hover:text-kabin-primary"
-              }`}
-              aria-label="Settings"
-              aria-current={pathname === "/settings" ? "page" : undefined}
-            >
-              <Settings size={20} strokeWidth={1.5} />
-            </Link>
-            </div>
           </div>
         </header>
         <main
@@ -204,7 +160,7 @@ export function AppShell({ children }: Props) {
             );
           }}
           className={`kabin-page-enter kabin-scroll-under-chrome h-full min-h-0 overflow-auto px-6 ${
-            transportVisible ? "pb-28" : "pb-10"
+            transportVisible ? "pb-24" : "pb-10"
           }`}
         >
           {pathname.startsWith("/title/") && !searchQuery.trim() ? null : (

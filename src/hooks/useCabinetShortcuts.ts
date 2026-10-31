@@ -55,7 +55,8 @@ export function useCabinetShortcuts(searchInputRef?: React.RefObject<HTMLInputEl
       }
       if (e.key === "/" || (e.key === "f" && e.ctrlKey)) {
         e.preventDefault();
-        searchInputRef?.current?.focus();
+        useUiStore.getState().setSidebarCollapsed(false);
+        window.setTimeout(() => searchInputRef?.current?.focus(), 0);
         return;
       }
       if (e.key === "," && (e.ctrlKey || e.metaKey)) {

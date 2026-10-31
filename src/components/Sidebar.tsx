@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Download } from "lucide-react";
-import type { CSSProperties } from "react";
+import { Download, Search, Settings, X } from "lucide-react";
+import type { CSSProperties, RefObject } from "react";
 import { getDownloadStatus, scanLibrary } from "../lib/kabin-api";
 import type { CatalogTitle } from "../types/catalog";
 import {
@@ -14,11 +14,15 @@ import { useUiStore } from "../store/ui";
 
 type Props = {
   collapsed: boolean;
+  searchRef: RefObject<HTMLInputElement | null>;
 };
 
-export function Sidebar({ collapsed }: Props) {
+export function Sidebar({ collapsed, searchRef }: Props) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const storedMode = useUiStore((s) => s.contentMode);
+  const searchQuery = useUiStore((s) => s.searchQuery);
+  const setSearchQuery = useUiStore((s) => s.setSearchQuery);
+  const setSidebarCollapsed = useUiStore((s) => s.setSidebarCollapsed);
   const mode = getContentMode(modeIdFromPath(pathname) ?? storedMode);
   const scanQuery = useQuery({
     queryKey: ["libraryScan"],
@@ -51,6 +55,45 @@ export function Sidebar({ collapsed }: Props) {
             {mode.label}
           </div>
         </div>
+      )}
+      {collapsed ? (
+        <button
+          type="button"
+          aria-label={`Search ${mode.label}`}
+          onClick={() => {
+            setSidebarCollapsed(false);
+            window.setTimeout(() => searchRef.current?.focus(), 0);
+          }}
+          className="mx-auto mb-2 inline-flex h-9 w-9 items-center justify-center rounded-full text-kabin-secondary hover:bg-[color-mix(in_srgb,var(--kabin-label-primary)_8%,transparent)] hover:text-kabin-primary"
+        >
+          <Search size={18} strokeWidth={1.5} />
+        </button>
+      ) : (
+        <label className="relative mx-3 mb-3 block">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-kabin-secondary"
+            size={16}
+            strokeWidth={1.5}
+          />
+          <input
+            ref={searchRef}
+            type="search"
+            placeholder={`Search ${mode.label}`}
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="kabin-search w-full py-1.5 pr-8 pl-9 text-[calc(14px*var(--kabin-type-scale))] text-kabin-primary placeholder:text-kabin-tertiary focus:shadow-[var(--kabin-focus-ring)] focus:outline-none"
+          />
+          {searchQuery ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setSearchQuery("")}
+              className="absolute top-1/2 right-2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-kabin-secondary hover:bg-kabin-grouped hover:text-kabin-primary"
+            >
+              <X size={14} strokeWidth={1.75} />
+            </button>
+          ) : null}
+        </label>
       )}
       <div
         role="tablist"
@@ -129,6 +172,13 @@ export function Sidebar({ collapsed }: Props) {
           badge={activeDownloads ? String(activeDownloads) : undefined}
           badgeAccent
         />
+        <SidebarLink
+          to="/settings"
+          label="Settings"
+          icon={Settings}
+          collapsed={collapsed}
+          active={pathname === "/settings"}
+        />
       </div>
     </aside>
   );
@@ -149,7 +199,7 @@ function sectionCount(
 }
 
 type SidebarLinkProps = {
-  to: "/browse/$mode" | "/browse/$mode/$section" | "/downloads";
+  to: "/browse/$mode" | "/browse/$mode/$section" | "/downloads" | "/settings";
   label: string;
   icon: typeof Download;
   active: boolean;

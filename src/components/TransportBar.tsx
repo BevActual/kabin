@@ -32,17 +32,14 @@ export function TransportBar() {
 
   return (
     <div className="kabin-transport" data-transport={audio ? "audio" : "reading"}>
-      <div className="kabin-glass relative flex items-center gap-3 px-3 py-2">
-        <div className="absolute inset-x-4 top-0 h-0.5 overflow-hidden rounded-full">
-          <div className="h-full bg-kabin-accent" style={{ width: `${progress}%` }} />
-        </div>
+      <div className="kabin-glass kabin-transport-pill relative flex items-center gap-2 py-1.5 pr-1.5 pl-1.5">
         <Link
           to={audio ? "/player/$titleId" : "/read/$titleId"}
           params={{ titleId: session.titleId }}
-          className="flex min-w-0 flex-1 items-center gap-3"
+          className="flex min-w-0 flex-1 items-center gap-2.5"
         >
           <span
-            className="h-11 w-11 shrink-0 overflow-hidden rounded-[10px]"
+            className="h-9 w-9 shrink-0 overflow-hidden rounded-full"
             style={
               art
                 ? undefined
@@ -53,12 +50,12 @@ export function TransportBar() {
           >
             {art ? <img src={art} alt="" className="h-full w-full object-cover" /> : null}
           </span>
-          <span className="min-w-0">
-            <span className="block truncate text-[calc(15px*var(--kabin-type-scale))] font-semibold">
+          <span className="min-w-0 pr-1 pb-1">
+            <span className="block truncate text-[calc(14px*var(--kabin-type-scale))] font-semibold">
               {session.title}
             </span>
-            <span className="block truncate text-[calc(13px*var(--kabin-type-scale))] text-kabin-secondary">
-              {session.subtitle ? `${session.subtitle} · ${detail}` : detail}
+            <span className="block truncate text-[calc(12px*var(--kabin-type-scale))] text-kabin-secondary">
+              {detail}
             </span>
           </span>
         </Link>
@@ -67,12 +64,12 @@ export function TransportBar() {
             type="button"
             onClick={toggleAudio}
             aria-label={playing ? "Pause" : "Play"}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-kabin-accent text-white"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-kabin-accent text-white"
           >
             {playing ? (
-              <Pause size={16} strokeWidth={1.75} className="fill-current" />
+              <Pause size={15} strokeWidth={1.75} className="fill-current" />
             ) : (
-              <Play size={16} strokeWidth={1.75} className="fill-current" />
+              <Play size={15} strokeWidth={1.75} className="fill-current" />
             )}
           </button>
         ) : null}
@@ -82,8 +79,11 @@ export function TransportBar() {
           aria-label={audio ? "Stop playing" : "Close book"}
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-kabin-secondary hover:bg-[color-mix(in_srgb,var(--kabin-label-primary)_8%,transparent)] hover:text-kabin-primary"
         >
-          <X size={16} strokeWidth={1.75} />
+          <X size={15} strokeWidth={1.75} />
         </button>
+        <span className="kabin-transport-progress" aria-hidden="true">
+          <span style={{ width: `${progress}%` }} />
+        </span>
       </div>
     </div>
   );
