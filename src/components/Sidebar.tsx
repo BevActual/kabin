@@ -13,6 +13,7 @@ import {
 } from "../lib/modes";
 import { gamesInSection } from "../lib/games";
 import { musicCount, type MusicShelf } from "../lib/music";
+import { seriesTiles } from "../lib/series";
 import { collapseShows, isUnwatched } from "../lib/shows";
 import {
   downloadSections,
@@ -383,6 +384,7 @@ function sectionCount(
 ) {
   if (id === "home" || id === "added") return 0;
   if (shelf) return musicCount(titles, shelf);
+  if (id === "series") return seriesTiles(titles).length;
   const scoped = kinds
     ? titles.filter((title) => kinds.includes(title.kind))
     : titles;

@@ -15,6 +15,7 @@ import {
   normalizeContentMode,
   shelvesForMode,
 } from "../lib/modes";
+import { collapseSeries } from "../lib/series";
 import { collapseShows } from "../lib/shows";
 
 const route = getRouteApi("/browse/$mode");
@@ -73,7 +74,7 @@ export function HomeView() {
     shelves.length > 0
       ? shelves
       : modeTitles.length > 0
-        ? [{ id: "library", label: "Library", titles: collapseShows(modeTitles).slice(0, 18) }]
+        ? [{ id: "library", label: "Library", titles: collapseSeries(collapseShows(modeTitles)).slice(0, 18) }]
         : [];
   const hero = pickContinueHero(shelves);
 

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { MediaTile } from "../components/MediaTile";
 import { searchLibrary } from "../lib/kabin-api";
 import { getContentMode } from "../lib/modes";
+import { presentSeries } from "../lib/series";
 import { presentSearch } from "../lib/shows";
 import { useUiStore } from "../store/ui";
 
@@ -22,8 +23,11 @@ export function SearchView() {
     return <p className="text-kabin-secondary">Searching…</p>;
   }
 
-  const results = presentSearch(
-    (resultsQuery.data ?? []).filter((title) => mode.kinds.includes(title.kind)),
+  const results = presentSeries(
+    presentSearch(
+      (resultsQuery.data ?? []).filter((title) => mode.kinds.includes(title.kind)),
+      query,
+    ),
     query,
   );
 

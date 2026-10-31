@@ -18,10 +18,12 @@ import { MediaTile } from "../components/MediaTile";
 import { getContentMode, modeForKind } from "../lib/modes";
 import { resumeActionLabel } from "../lib/resumeRoute";
 import { isAlbum, isArtistId } from "../lib/music";
+import { isSeriesId, nextVolume, seriesIdFor, seriesKey } from "../lib/series";
 import { isShowId, nextEpisode, seriesLabel, showIdFor, showKey } from "../lib/shows";
 import { useUiStore } from "../store/ui";
 import { AlbumDetails } from "./AlbumDetails";
 import { ArtistDetails } from "./ArtistDetails";
+import { SeriesDetails } from "./SeriesDetails";
 import { ShowDetails } from "./ShowDetails";
 
 const route = getRouteApi("/title/$titleId");
@@ -30,22 +32,38 @@ export function TitleDetailsView() {
   const { titleId } = route.useParams();
   const show = isShowId(titleId);
   const artist = isArtistId(titleId);
+  const seriesPage = isSeriesId(titleId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const titleQuery = useQuery({
     queryKey: ["title", titleId],
     queryFn: () => getTitleDetails(titleId),
-    enabled: !show && !artist,
+    enabled: !show && !artist && !seriesPage,
   });
   const relatedQuery = useQuery({
     queryKey: ["related", titleId],
     queryFn: () => getRelatedTitles(titleId),
-    enabled: !show && !artist,
+    enabled: !show && !artist && !seriesPage,
   });
   const episodesQuery = useQuery({
     queryKey: ["library", "tv"],
     queryFn: () => getLibraryTitles("tv"),
-    enabled: !show && titleQuery.data?.title.kind === "tv",
+    enabled: !show && !seriesPage && titleQuery.data?.title.kind === "tv",
+  });
+  const volumeKind = titleQuery.data?.title.kind;
+  const volumesQuery = useQuery({
+    queryKey: ["library", volumeKind ?? "book"],
+    queryFn: () => getLibraryTitles(volumeKind ?? "book"),
+    enabled:
+      !show &&
+      !artist &&
+      !seriesPage &&
+      !!volumeKind &&
+      !!titleQuery.data?.title.series?.trim() &&
+      (volumeKind === "book" ||
+        volumeKind === "audiobook" ||
+        volumeKind === "comic" ||
+        volumeKind === "pdf"),
   });
   const streamAvailableQuery = useQuery({
     queryKey: ["remoteStreamAvailable"],
@@ -70,9 +88,13 @@ export function TitleDetailsView() {
       setContentMode("music");
       return;
     }
+    if (seriesPage) {
+      setContentMode("books");
+      return;
+    }
     if (!title) return;
     setContentMode(modeForKind(title.kind).id);
-  }, [show, artist, title, setContentMode]);
+  }, [show, artist, seriesPage, title, setContentMode]);
   const metaLines = details?.metaLines ?? [];
   const isFavorite = details?.isFavorite ?? false;
   const favorite = useMutation({
@@ -113,6 +135,10 @@ export function TitleDetailsView() {
     return <ArtistDetails artistId={titleId} />;
   }
 
+  if (seriesPage) {
+    return <SeriesDetails seriesId={titleId} />;
+  }
+
   if (titleQuery.isLoading) {
     return <p className="text-kabin-secondary">Loading…</p>;
   }
@@ -139,12 +165,18 @@ export function TitleDetailsView() {
   const art = coverUrl(title.coverPath);
   const episodeKey = showKey(title);
   const showPageId = showIdFor(title);
+  const volumeMates = seriesKey(title)
+    ? (volumesQuery.data ?? []).filter((item) => seriesKey(item) === seriesKey(title))
+    : [];
+  const bookSeriesId = volumeMates.length >= 2 ? seriesIdFor(title) : null;
   const upcoming = episodeKey
     ? nextEpisode(
         (episodesQuery.data ?? []).filter((item) => showKey(item) === episodeKey),
         title.id,
       )
-    : null;
+    : bookSeriesId
+      ? nextVolume(volumeMates, title.id)
+      : null;
   const isRemoteGame = title.canLaunch === false && title.kind === "game";
   const canStreamRemote =
     isRemoteGame && (streamAvailableQuery.data ?? false);
@@ -203,8 +235,16 @@ export function TitleDetailsView() {
               >
                 {seriesLabel(title)}
               </Link>
+            ) : bookSeriesId ? (
+              <Link
+                to="/title/$titleId"
+                params={{ titleId: bookSeriesId }}
+                className="text-[calc(13px*var(--kabin-type-scale))] font-semibold tracking-wide text-kabin-secondary uppercase hover:text-kabin-primary"
+              >
+                {title.series}
+              </Link>
             ) : null}
-            <div className={`flex items-start gap-3 ${showPageId ? "mt-1" : ""}`}>
+            <div className={`flex items-start gap-3 ${showPageId || bookSeriesId ? "mt-1" : ""}`}>
               <h1 className="min-w-0 flex-1 text-[calc(34px*var(--kabin-type-scale))] font-semibold tracking-tight">
                 {title.title}
               </h1>
@@ -342,7 +382,7 @@ export function TitleDetailsView() {
           </Link>
         </section>
       ) : null}
-      {episodeKey ? null : related && related.titles.length > 0 ? (
+      {episodeKey || bookSeriesId ? null : related && related.titles.length > 0 ? (
         <section className="mx-auto mt-4 max-w-4xl px-6">
           <h3 className="mb-4 text-[calc(22px*var(--kabin-type-scale))] font-semibold">
             {related.heading || "Up next"}

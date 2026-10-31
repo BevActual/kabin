@@ -165,6 +165,20 @@ fn display_subtitle(kind: &MediaKind, parsed: &super::parse_name::ParsedName) ->
         }
         return "Song".to_string();
     }
+    if matches!(kind.id, "book" | "comic" | "audiobook" | "pdf") {
+        if let Some(index) = parsed.series_index {
+            if index > 0.0 && index < 1000.0 {
+                let n = index as i64;
+                if (index - n as f64).abs() < 0.001 {
+                    return format!("Vol. {n}");
+                }
+            }
+        }
+        let series = parsed.series.trim();
+        if !series.is_empty() {
+            return series.to_string();
+        }
+    }
     kind.label.to_string()
 }
 

@@ -1,6 +1,7 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { browserSampleSnapshot, previewAlbumTracks } from "./browser-preview";
 import { artistFromLibrary, isAlbum, isArtistId } from "./music";
+import { isSeriesId, seriesFromLibrary } from "./series";
 import { episodesForShow, isShowId, showTile } from "./shows";
 import type {
   AppInfo,
@@ -164,6 +165,12 @@ export async function getTitle(titleId: string) {
   if (isArtistId(titleId)) {
     const titles = await getLibraryTitles("music");
     return artistFromLibrary(titles, titleId);
+  }
+  if (isSeriesId(titleId)) {
+    const kind = titleId.slice("series:".length).split(":")[0];
+    if (!kind) return null;
+    const titles = await getLibraryTitles(kind);
+    return seriesFromLibrary(titles, titleId);
   }
   return invokeOrMock<CatalogTitle | null>(
     "get_title",

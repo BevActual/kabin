@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { gameSource } from "../lib/games";
 import { musicCount } from "../lib/music";
+import { seriesTiles } from "../lib/series";
 import type { ContentMode } from "../lib/modes";
 import { collapseShows } from "../lib/shows";
 import type { CatalogTitle } from "../types/catalog";
@@ -19,15 +20,23 @@ export function LibraryCategories({ mode, titles }: Props) {
   return (
     <div className="kabin-category-row mb-8">
       {categories.map((section) => {
-        const count = section.musicShelf
-          ? musicCount(titles, section.musicShelf)
-          : section.gameSource
-            ? titles.filter((title) => gameSource(title) === section.gameSource).length
-            : collapseShows(titles.filter((title) => section.kinds?.includes(title.kind))).length;
+        const count =
+          section.id === "series"
+            ? seriesTiles(titles).length
+            : section.musicShelf
+              ? musicCount(titles, section.musicShelf)
+              : section.gameSource
+                ? titles.filter((title) => gameSource(title) === section.gameSource).length
+                : collapseShows(titles.filter((title) => section.kinds?.includes(title.kind)))
+                    .length;
         const detail =
           count === 0
             ? "None yet"
-            : section.musicShelf === "albums"
+            : section.id === "series"
+              ? count === 1
+                ? "1 series"
+                : `${count} series`
+              : section.musicShelf === "albums"
               ? count === 1
                 ? "1 album"
                 : `${count} albums`
@@ -39,7 +48,23 @@ export function LibraryCategories({ mode, titles }: Props) {
                   ? count === 1
                     ? "1 song"
                     : `${count} songs`
-                  : section.id === "tv"
+              : section.id === "books"
+                ? count === 1
+                  ? "1 book"
+                  : `${count} books`
+                : section.id === "audiobooks"
+                  ? count === 1
+                    ? "1 audiobook"
+                    : `${count} audiobooks`
+                  : section.id === "comics"
+                    ? count === 1
+                      ? "1 comic"
+                      : `${count} comics`
+                    : section.id === "pdfs"
+                      ? count === 1
+                        ? "1 PDF"
+                        : `${count} PDFs`
+                      : section.id === "tv"
                     ? count === 1
                       ? "1 show"
                       : `${count} shows`

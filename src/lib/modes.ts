@@ -15,6 +15,7 @@ import {
   History,
   Home,
   Joystick,
+  Library,
   ListMusic,
   Mic,
   Music2,
@@ -24,6 +25,7 @@ import {
 import type { CatalogTitle, HomeShelf } from "../types/catalog";
 import { gameHomeSubtitle, type GameSource } from "./games";
 import { musicHomeSubtitle, type MusicShelf } from "./music";
+import { booksHomeSubtitle, collapseSeries } from "./series";
 import { collapseShows } from "./shows";
 
 export type ContentModeId = "video" | "books" | "music" | "games";
@@ -129,6 +131,13 @@ export const contentModes: ContentMode[] = [
         icon: FileText,
         kinds: ["pdf"],
         emptyHint: "No PDFs yet. Open Settings to add a books folder, then refresh.",
+      },
+      {
+        id: "series",
+        label: "Series",
+        icon: Library,
+        kinds: ["book", "audiobook", "comic", "pdf"],
+        emptyHint: "No series yet. Volumes named like “Saga, Vol. 2” show up here.",
       },
       {
         id: "added",
@@ -314,7 +323,9 @@ export function shelvesForMode(shelves: HomeShelf[], mode: ContentMode): HomeShe
     }
     const kind = shelfKind(shelf.id);
     if (!kind || !mode.kinds.includes(kind)) return [];
-    const titles = shelf.id.startsWith("added-") ? collapseShows(shelf.titles) : shelf.titles;
+    const titles = shelf.id.startsWith("added-")
+      ? collapseSeries(collapseShows(shelf.titles))
+      : shelf.titles;
     const primary = kind === mode.kinds[0];
     const suffix = primary ? "" : ` · ${kindLabel[kind] ?? kind}`;
     const label = shelf.id.startsWith("continue-")
@@ -329,6 +340,7 @@ export function shelvesForMode(shelves: HomeShelf[], mode: ContentMode): HomeShe
 export function homeSubtitle(mode: ContentMode, titles: CatalogTitle[]) {
   if (mode.id === "games") return gameHomeSubtitle(titles);
   if (mode.id === "music") return musicHomeSubtitle(titles);
+  if (mode.id === "books") return booksHomeSubtitle(titles);
   const categories = mode.sections.filter((section) => section.kinds?.length);
   if (categories.length === 0) {
     if (titles.length === 0) return mode.label;
@@ -351,6 +363,7 @@ export function homeSubtitle(mode: ContentMode, titles: CatalogTitle[]) {
 
 function countPhrase(count: number, label: string) {
   if (label === "TV") return count === 1 ? "1 show" : `${count} shows`;
+  if (label === "Series") return count === 1 ? "1 series" : `${count} series`;
   if (count === 1 && label.endsWith("s")) return `1 ${label.slice(0, -1)}`;
   return `${count} ${label}`;
 }
