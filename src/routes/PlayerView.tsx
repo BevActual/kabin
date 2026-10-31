@@ -1,10 +1,11 @@
 import { Link, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Pause, Play, SkipBack, SkipForward, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { coverUrl, getPlaybackSession, getTitle, savePlaybackProgress } from "../lib/kabin-api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { coverUrl, getLibraryTitles, getPlaybackSession, getTitle, savePlaybackProgress } from "../lib/kabin-api";
 import { mediaSrc } from "../lib/media-src";
 import type { PlaybackSession } from "../lib/kabin-api";
+import { nextEpisode, showKey } from "../lib/shows";
 import { formatClock, useTransportStore } from "../store/transport";
 
 const route = getRouteApi("/player/$titleId");
@@ -152,9 +153,30 @@ function VideoStage({
   const mediaRef = useRef<HTMLVideoElement | null>(null);
   const [trackIndex, setTrackIndex] = useState(session.initialTrack);
   const [playing, setPlaying] = useState(true);
+  const [finished, setFinished] = useState(false);
   const [currentTime, setCurrentTime] = useState(session.initialPosition);
   const [duration, setDuration] = useState(0);
   const saveTimer = useRef<number | null>(null);
+  const tvQuery = useQuery({
+    queryKey: ["library", "tv"],
+    queryFn: () => getLibraryTitles("tv"),
+    enabled: session.kind === "tv",
+  });
+  const upcoming = useMemo(() => {
+    if (session.kind !== "tv") return null;
+    const titles = tvQuery.data ?? [];
+    const current = titles.find((item) => item.id === titleId);
+    const key = current ? showKey(current) : null;
+    if (!key) return null;
+    return nextEpisode(
+      titles.filter((item) => showKey(item) === key),
+      titleId,
+    );
+  }, [session.kind, titleId, tvQuery.data]);
+
+  useEffect(() => {
+    setFinished(false);
+  }, [titleId, trackIndex]);
 
   useEffect(() => {
     stopAudio();
@@ -230,7 +252,7 @@ function VideoStage({
           Close
         </Link>
       </div>
-      <div className="overflow-hidden rounded-[var(--kabin-radius-sheet)] bg-black shadow-[var(--kabin-shadow-tile-focus)]">
+      <div className="relative overflow-hidden rounded-[var(--kabin-radius-sheet)] bg-black shadow-[var(--kabin-shadow-tile-focus)]">
         <video
           ref={mediaRef}
           key={track?.path}
@@ -238,9 +260,32 @@ function VideoStage({
           className="aspect-video w-full bg-black"
           playsInline
           autoPlay
-          onPlay={() => setPlaying(true)}
+          onPlay={() => {
+            setPlaying(true);
+            setFinished(false);
+          }}
           onPause={() => setPlaying(false)}
+          onEnded={() => {
+            if (trackIndex >= session.tracks.length - 1) setFinished(true);
+          }}
         />
+        {finished && upcoming ? (
+          <Link
+            to="/player/$titleId"
+            params={{ titleId: upcoming.id }}
+            className="kabin-glass absolute right-4 bottom-4 flex max-w-xs flex-col px-4 py-3 text-left"
+          >
+            <span className="text-[calc(11px*var(--kabin-type-scale))] font-semibold tracking-wide text-kabin-secondary uppercase">
+              Up next
+            </span>
+            <span className="mt-1 text-[calc(15px*var(--kabin-type-scale))] font-semibold">
+              {upcoming.title}
+            </span>
+            <span className="text-[calc(13px*var(--kabin-type-scale))] text-kabin-secondary">
+              {upcoming.subtitle}
+            </span>
+          </Link>
+        ) : null}
       </div>
       <TransportControls
         currentTime={currentTime}

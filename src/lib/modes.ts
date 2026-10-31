@@ -216,6 +216,13 @@ export function sectionForMode(mode: ContentMode, sectionId: string): ModeSectio
   return section;
 }
 
+export function sectionGroup(section: ModeSection): "library" | "personal" {
+  if (section.id === "home" || section.id === "library" || section.kinds?.length) {
+    return "library";
+  }
+  return "personal";
+}
+
 const kindLabel: Record<string, string> = {
   tv: "TV",
   video: "Movies",

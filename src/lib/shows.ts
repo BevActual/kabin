@@ -99,6 +99,42 @@ export function showTile(episodes: CatalogTitle[]): CatalogTitle {
   };
 }
 
+export function showIdFor(title: CatalogTitle) {
+  const key = showKey(title);
+  if (!key) return null;
+  return `${SHOW_PREFIX}${encodeURIComponent(key)}`;
+}
+
+export function nextEpisode(episodes: CatalogTitle[], currentId: string) {
+  const ordered = sortEpisodes(episodes);
+  const index = ordered.findIndex((episode) => episode.id === currentId);
+  const after = index >= 0 ? ordered.slice(index + 1) : ordered;
+  return after.find((episode) => (episode.progress ?? 0) < 0.98) ?? null;
+}
+
+export function presentSearch(titles: CatalogTitle[], query: string) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return titles;
+  const grouped = new Set<string>();
+  for (const title of titles) {
+    const key = showKey(title);
+    if (key && seriesLabel(title).toLowerCase().includes(needle)) grouped.add(key);
+  }
+  const seen = new Set<string>();
+  const out: CatalogTitle[] = [];
+  for (const title of titles) {
+    const key = showKey(title);
+    if (key && grouped.has(key)) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(showTile(titles.filter((item) => showKey(item) === key)));
+      continue;
+    }
+    out.push(title);
+  }
+  return out;
+}
+
 export function resumeEpisode(episodes: CatalogTitle[]) {
   const ordered = sortEpisodes(episodes);
   return (

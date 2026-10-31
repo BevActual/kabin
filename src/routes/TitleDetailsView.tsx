@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { Heart } from "lucide-react";
 import {
   coverUrl,
+  getLibraryTitles,
   getRelatedTitles,
   getTitleDetails,
   launchTitle,
@@ -16,7 +17,7 @@ import {
 import { MediaTile } from "../components/MediaTile";
 import { getContentMode, modeForKind } from "../lib/modes";
 import { resumeActionLabel } from "../lib/resumeRoute";
-import { isShowId } from "../lib/shows";
+import { isShowId, nextEpisode, seriesLabel, showIdFor, showKey } from "../lib/shows";
 import { useUiStore } from "../store/ui";
 import { ShowDetails } from "./ShowDetails";
 
@@ -37,6 +38,11 @@ export function TitleDetailsView() {
     queryFn: () => getRelatedTitles(titleId),
     enabled: !show,
   });
+  const episodesQuery = useQuery({
+    queryKey: ["library", "tv"],
+    queryFn: () => getLibraryTitles("tv"),
+    enabled: !show && titleQuery.data?.title.kind === "tv",
+  });
   const streamAvailableQuery = useQuery({
     queryKey: ["remoteStreamAvailable"],
     queryFn: remoteGameStreamAvailable,
@@ -52,9 +58,13 @@ export function TitleDetailsView() {
   const contentMode = useUiStore((s) => s.contentMode);
   const setContentMode = useUiStore((s) => s.setContentMode);
   useEffect(() => {
+    if (show) {
+      setContentMode("video");
+      return;
+    }
     if (!title) return;
     setContentMode(modeForKind(title.kind).id);
-  }, [title, setContentMode]);
+  }, [show, title, setContentMode]);
   const metaLines = details?.metaLines ?? [];
   const isFavorite = details?.isFavorite ?? false;
   const favorite = useMutation({
@@ -111,6 +121,14 @@ export function TitleDetailsView() {
   }
 
   const art = coverUrl(title.coverPath);
+  const episodeKey = showKey(title);
+  const showPageId = showIdFor(title);
+  const upcoming = episodeKey
+    ? nextEpisode(
+        (episodesQuery.data ?? []).filter((item) => showKey(item) === episodeKey),
+        title.id,
+      )
+    : null;
   const isRemoteGame = title.canLaunch === false && title.kind === "game";
   const canStreamRemote =
     isRemoteGame && (streamAvailableQuery.data ?? false);
@@ -161,7 +179,16 @@ export function TitleDetailsView() {
             ) : null}
           </div>
           <div className="min-w-0 flex-1 pb-1">
-            <div className="flex items-start gap-3">
+            {showPageId ? (
+              <Link
+                to="/title/$titleId"
+                params={{ titleId: showPageId }}
+                className="text-[calc(13px*var(--kabin-type-scale))] font-semibold tracking-wide text-kabin-secondary uppercase hover:text-kabin-primary"
+              >
+                {seriesLabel(title)}
+              </Link>
+            ) : null}
+            <div className={`flex items-start gap-3 ${showPageId ? "mt-1" : ""}`}>
               <h1 className="min-w-0 flex-1 text-[calc(34px*var(--kabin-type-scale))] font-semibold tracking-tight">
                 {title.title}
               </h1>
@@ -257,7 +284,7 @@ export function TitleDetailsView() {
           >
             {launch.isPending && !playsInKabin(title.kind)
               ? "Launching…"
-              : primaryAction(title.kind, title.canLaunch === false)}
+              : primaryAction(title.kind, title.canLaunch === false, title.progress)}
           </button>
         )}
         {launch.isError ? (
@@ -278,7 +305,28 @@ export function TitleDetailsView() {
           </div>
         </div>
       </section>
-      {related && related.titles.length > 0 ? (
+      {upcoming ? (
+        <section className="mx-auto mt-2 max-w-4xl px-6">
+          <Link
+            to="/title/$titleId"
+            params={{ titleId: upcoming.id }}
+            className="kabin-grouped kabin-grouped-row max-w-xl hover:bg-[color-mix(in_srgb,var(--kabin-label-primary)_5%,transparent)]"
+          >
+            <span className="w-16 shrink-0 text-[calc(13px*var(--kabin-type-scale))] text-kabin-tertiary tabular-nums">
+              {upcoming.subtitle}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[calc(11px*var(--kabin-type-scale))] font-semibold tracking-wide text-kabin-secondary uppercase">
+                Up next
+              </span>
+              <span className="block truncate text-[calc(15px*var(--kabin-type-scale))] font-medium">
+                {upcoming.title}
+              </span>
+            </span>
+          </Link>
+        </section>
+      ) : null}
+      {episodeKey ? null : related && related.titles.length > 0 ? (
         <section className="mx-auto mt-4 max-w-4xl px-6">
           <h3 className="mb-4 text-[calc(22px*var(--kabin-type-scale))] font-semibold">
             {related.heading || "Up next"}
@@ -294,7 +342,9 @@ export function TitleDetailsView() {
   );
 }
 
-function primaryAction(kind: string, blocked?: boolean) {
+function primaryAction(kind: string, blocked?: boolean, progress?: number | null) {
   if (blocked) return "Unavailable";
+  const value = progress ?? 0;
+  if (value > 0.02 && value < 0.98) return "Continue";
   return resumeActionLabel(kind);
 }

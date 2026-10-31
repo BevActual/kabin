@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, Download, PanelLeft, Search, Settings, X } from "lucide-react";
-import type { CSSProperties, ReactNode, RefObject } from "react";
+import { Fragment, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { getDownloadStatus, scanLibrary } from "../lib/kabin-api";
 import type { CatalogTitle } from "../types/catalog";
 import {
@@ -9,6 +9,7 @@ import {
   getContentMode,
   isInProgress,
   modeIdFromPath,
+  sectionGroup,
 } from "../lib/modes";
 import { collapseShows, isUnwatched } from "../lib/shows";
 import {
@@ -174,7 +175,10 @@ function LibraryPane({
           collapsed ? "px-2" : "px-2.5"
         }`}
       >
-        {mode.sections.map((section) => {
+        {mode.sections.map((section, index) => {
+          const previous = mode.sections[index - 1];
+          const split =
+            previous != null && sectionGroup(previous) !== sectionGroup(section);
           const active =
             section.id === "home"
               ? pathname === `/browse/${mode.id}`
@@ -182,20 +186,22 @@ function LibraryPane({
           const count = sectionCount(section.id, section.kinds, titles);
           const shown = count > 0 ? String(count) : undefined;
           return (
-            <SidebarLink
-              key={section.id}
-              to={section.id === "home" ? "/browse/$mode" : "/browse/$mode/$section"}
-              params={
-                section.id === "home"
-                  ? { mode: mode.id }
-                  : { mode: mode.id, section: section.id }
-              }
-              label={section.label}
-              icon={section.icon}
-              collapsed={collapsed}
-              active={active}
-              badge={shown}
-            />
+            <Fragment key={section.id}>
+              {split ? <SidebarSplit collapsed={collapsed} /> : null}
+              <SidebarLink
+                to={section.id === "home" ? "/browse/$mode" : "/browse/$mode/$section"}
+                params={
+                  section.id === "home"
+                    ? { mode: mode.id }
+                    : { mode: mode.id, section: section.id }
+                }
+                label={section.label}
+                icon={section.icon}
+                collapsed={collapsed}
+                active={active}
+                badge={shown}
+              />
+            </Fragment>
           );
         })}
       </nav>
@@ -316,6 +322,18 @@ function sectionBadge(
     return String(wantedCount);
   }
   return undefined;
+}
+
+function SidebarSplit({ collapsed }: { collapsed: boolean }) {
+  return (
+    <div
+      className={
+        collapsed
+          ? "mx-auto my-2 h-px w-6 bg-kabin-separator"
+          : "mx-3 my-2 h-px bg-kabin-separator"
+      }
+    />
+  );
 }
 
 function SidebarFooter({

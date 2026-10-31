@@ -189,6 +189,18 @@ export function getTitleDetails(titleId: string) {
 }
 
 export function searchLibrary(query: string, limit?: number) {
+  if (!isTauri()) {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return Promise.resolve([]);
+    const hits = previewTitles().filter((title) =>
+      [title.title, title.subtitle, title.series, title.kind, title.id]
+        .filter((part): part is string => !!part)
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
+    );
+    return Promise.resolve(hits.slice(0, limit ?? 48));
+  }
   return invokeOrMock<CatalogTitle[]>(
     "search_library",
     { query, limit },
