@@ -328,18 +328,21 @@ input[type="search"]::-webkit-search-decoration {
 }
 
 .kabin-scroll-under-chrome {
-  padding-top: 4.75rem;
+  padding-top: 1.75rem;
+}
+
+.kabin-scroll-under-chrome[data-chrome="elevated"] {
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    transparent 0.75rem,
-    #000 4.75rem
+    transparent 0.65rem,
+    #000 3.25rem
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    transparent 0.75rem,
-    #000 4.75rem
+    transparent 0.65rem,
+    #000 3.25rem
   );
 }
 

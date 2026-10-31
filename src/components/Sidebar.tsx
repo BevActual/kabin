@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Download, Search, Settings, X } from "lucide-react";
+import { Download, PanelLeft, Search, Settings, X } from "lucide-react";
 import type { CSSProperties, RefObject } from "react";
 import { getDownloadStatus, scanLibrary } from "../lib/kabin-api";
 import type { CatalogTitle } from "../types/catalog";
@@ -43,17 +43,24 @@ export function Sidebar({ collapsed, searchRef }: Props) {
 
   return (
     <aside className="kabin-glass kabin-floating-sidebar flex flex-col overflow-hidden py-3">
-      {collapsed ? null : (
-        <div className="px-4 pt-1 pb-3">
-          <div className="text-[calc(11px*var(--kabin-type-scale))] font-medium tracking-wide text-kabin-tertiary">
-            Kabin
+      {collapsed ? (
+        <div className="mb-1 flex justify-center">
+          <SidebarToggle collapsed />
+        </div>
+      ) : (
+        <div className="flex items-center gap-1 px-3 pt-0.5 pb-3">
+          <div className="min-w-0 flex-1 pl-1">
+            <div className="text-[calc(11px*var(--kabin-type-scale))] font-medium tracking-wide text-kabin-tertiary">
+              Kabin
+            </div>
+            <div
+              key={mode.id}
+              className="kabin-page-enter text-[calc(22px*var(--kabin-type-scale))] font-semibold tracking-tight text-[var(--kabin-mode)]"
+            >
+              {mode.label}
+            </div>
           </div>
-          <div
-            key={mode.id}
-            className="kabin-page-enter text-[calc(22px*var(--kabin-type-scale))] font-semibold tracking-tight text-[var(--kabin-mode)]"
-          >
-            {mode.label}
-          </div>
+          <SidebarToggle collapsed={false} />
         </div>
       )}
       {collapsed ? (
@@ -181,6 +188,24 @@ export function Sidebar({ collapsed, searchRef }: Props) {
         />
       </div>
     </aside>
+  );
+}
+
+function SidebarToggle({ collapsed }: { collapsed: boolean }) {
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const label = collapsed ? "Show sidebar" : "Hide sidebar";
+  return (
+    <button
+      type="button"
+      onClick={toggleSidebar}
+      aria-label={label}
+      title={label}
+      aria-pressed={!collapsed}
+      aria-keyshortcuts="Control+\\"
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-kabin-secondary transition-colors hover:bg-[color-mix(in_srgb,var(--kabin-label-primary)_8%,transparent)] hover:text-kabin-primary"
+    >
+      <PanelLeft size={18} strokeWidth={1.5} />
+    </button>
   );
 }
 

@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Download, PanelLeft } from "lucide-react";
+import { Download } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useCabinetShortcuts } from "../hooks/useCabinetShortcuts";
@@ -30,7 +30,6 @@ export function AppShell({ children }: Props) {
   const searchQuery = useUiStore((s) => s.searchQuery);
   const setSearchQuery = useUiStore((s) => s.setSearchQuery);
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
-  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const contentMode = useUiStore((s) => s.contentMode);
   const setContentMode = useUiStore((s) => s.setContentMode);
   const setPreviewTitleId = useUiStore((s) => s.setPreviewTitleId);
@@ -118,41 +117,30 @@ export function AppShell({ children }: Props) {
     >
       <Sidebar collapsed={sidebarCollapsed} searchRef={searchRef} />
       <div className="kabin-content-pane min-w-0">
-        <header className="pointer-events-none absolute top-3 left-6 z-20">
-          <div
-            className={`pointer-events-auto inline-flex max-w-full items-center gap-0.5 py-1 pr-1 pl-1 ${
-              chromeElevated ? "kabin-glass kabin-glass-strong" : "kabin-glass"
-            }`}
-          >
-            <button
-              type="button"
-              onClick={toggleSidebar}
-              aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
-              aria-pressed={!sidebarCollapsed}
-              aria-keyshortcuts="Control+\\"
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-kabin-secondary transition-colors hover:bg-[color-mix(in_srgb,var(--kabin-label-primary)_8%,transparent)] hover:text-kabin-primary"
-            >
-              <PanelLeft size={20} strokeWidth={1.5} />
-            </button>
-            {chromeElevated ? (
-              <span className="kabin-page-enter max-w-52 truncate pr-2 text-[calc(15px*var(--kabin-type-scale))] font-semibold tracking-tight">
+        {chromeElevated ? (
+          <header className="pointer-events-none absolute top-3 left-6 z-20">
+            <div className="kabin-glass kabin-glass-strong pointer-events-auto inline-flex max-w-[16rem] items-center px-3 py-1.5">
+              <span className="kabin-page-enter truncate text-[calc(15px*var(--kabin-type-scale))] font-semibold tracking-tight">
                 {pageTitle}
               </span>
-            ) : null}
-            {activeDownloads > 0 ? (
-              <Link
-                to="/downloads"
-                className="kabin-activity-capsule mr-1 shrink-0 text-[calc(13px*var(--kabin-type-scale))]"
-                aria-label={`${activeDownloads} active downloads`}
-              >
-                <Download size={15} strokeWidth={1.75} />
-                {activeDownloads}
-              </Link>
-            ) : null}
+            </div>
+          </header>
+        ) : null}
+        {activeDownloads > 0 ? (
+          <div className="pointer-events-none absolute top-3 right-6 z-20">
+            <Link
+              to="/downloads"
+              className="kabin-activity-capsule pointer-events-auto text-[calc(13px*var(--kabin-type-scale))]"
+              aria-label={`${activeDownloads} active downloads`}
+            >
+              <Download size={15} strokeWidth={1.75} />
+              {activeDownloads}
+            </Link>
           </div>
-        </header>
+        ) : null}
         <main
           key={pathname}
+          data-chrome={chromeElevated ? "elevated" : "rest"}
           onScroll={(event) => {
             const elevated = event.currentTarget.scrollTop > 36;
             setChromeElevated((current) =>
