@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { SegmentedControl } from "../components/SegmentedControl";
@@ -12,6 +13,7 @@ import {
   type DownloadJob,
   type ReleaseHit,
 } from "../lib/kabin-api";
+import { downloadSections, sectionFromHash } from "../lib/panes";
 
 function formatBytes(bytes: number) {
   if (!bytes) return "";
@@ -35,6 +37,8 @@ function statusLabel(job: DownloadJob) {
 }
 
 export function DownloadsView() {
+  const hash = useRouterState({ select: (s) => s.location.hash });
+  const section = sectionFromHash(downloadSections, hash).id;
   const queryClient = useQueryClient();
   const status = useQuery({
     queryKey: ["downloads"],
@@ -117,17 +121,15 @@ export function DownloadsView() {
   });
 
   return (
-    <div className="mx-auto max-w-3xl space-y-10">
+    <div className="max-w-3xl space-y-10">
       {message ? (
         <p className="text-[calc(14px*var(--kabin-type-scale))] text-kabin-accent">
           {message}
         </p>
       ) : null}
 
+      {section === "activity" ? (
       <section>
-        <h2 className="mb-4 text-[calc(22px*var(--kabin-type-scale))] font-semibold tracking-tight">
-          Activity
-        </h2>
         <div className="kabin-grouped">
           <form
             className="flex items-center gap-3 border-b border-kabin-separator px-4 py-2"
@@ -221,11 +223,8 @@ export function DownloadsView() {
           )}
         </div>
       </section>
-
+      ) : (
       <section className="space-y-4">
-        <h2 className="text-[calc(22px*var(--kabin-type-scale))] font-semibold tracking-tight">
-          Wanted
-        </h2>
         <form
           className="space-y-3"
           onSubmit={(event) => {
@@ -336,6 +335,7 @@ export function DownloadsView() {
           )}
         </div>
       </section>
+      )}
     </div>
   );
 }

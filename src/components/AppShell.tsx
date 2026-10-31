@@ -13,6 +13,13 @@ import {
   modeIdFromPath,
   sectionForMode,
 } from "../lib/modes";
+import {
+  downloadSections,
+  paneFromPath,
+  paneHue,
+  sectionFromHash,
+  settingsSections,
+} from "../lib/panes";
 import { useUiStore } from "../store/ui";
 import { SearchView } from "../routes/SearchView";
 import { AudioEngine } from "./AudioEngine";
@@ -34,7 +41,11 @@ export function AppShell({ children }: Props) {
   const setContentMode = useUiStore((s) => s.setContentMode);
   const setPreviewTitleId = useUiStore((s) => s.setPreviewTitleId);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const hash = useRouterState({ select: (s) => s.location.hash });
+  const pane = paneFromPath(pathname);
   const mode = getContentMode(modeIdFromPath(pathname) ?? contentMode);
+  const shellHue = paneHue(pane) ?? mode.hue;
+  const searching = pane === "library" && searchQuery.trim().length > 0;
   const searchRef = useRef<HTMLInputElement>(null);
   const previousMode = useRef(mode.id);
   const [chromeElevated, setChromeElevated] = useState(false);
@@ -48,7 +59,7 @@ export function AppShell({ children }: Props) {
   useEffect(() => {
     setChromeElevated(false);
     setPreviewTitleId(null);
-  }, [pathname, setPreviewTitleId]);
+  }, [pathname, hash, setPreviewTitleId]);
   useEffect(() => {
     const id = modeIdFromPath(pathname);
     if (id) setContentMode(id);
@@ -74,7 +85,7 @@ export function AppShell({ children }: Props) {
     pathname.startsWith("/player/") || pathname.startsWith("/read/");
   const transportVisible = useTransportStore((s) => !!(s.audio || s.reading));
 
-  const pageTitle = titleForPath(pathname, searchQuery, mode);
+  const pageTitle = titleForPath(pathname, hash, searching, mode);
 
   const toastBanner = toast ? (
     <div
@@ -112,8 +123,9 @@ export function AppShell({ children }: Props) {
       className="kabin-shell relative h-full min-h-0 bg-kabin-base text-kabin-primary"
       data-theme={theme}
       data-mode={mode.id}
+      data-pane={pane}
       data-sidebar={sidebarCollapsed ? "collapsed" : "expanded"}
-      style={{ "--kabin-mode-hue": String(mode.hue) } as CSSProperties}
+      style={{ "--kabin-mode-hue": String(shellHue) } as CSSProperties}
     >
       <Sidebar collapsed={sidebarCollapsed} searchRef={searchRef} />
       <div className="kabin-content-pane min-w-0">
@@ -139,7 +151,7 @@ export function AppShell({ children }: Props) {
           </div>
         ) : null}
         <main
-          key={pathname}
+          key={pane === "library" ? pathname : `${pathname}:${pageTitle}`}
           data-chrome={chromeElevated ? "elevated" : "rest"}
           onScroll={(event) => {
             const elevated = event.currentTarget.scrollTop > 36;
@@ -151,10 +163,10 @@ export function AppShell({ children }: Props) {
             transportVisible ? "pb-24" : "pb-10"
           }`}
         >
-          {pathname.startsWith("/title/") && !searchQuery.trim() ? null : (
+          {pathname.startsWith("/title/") && !searching ? null : (
             <h1 className="kabin-large-title">{pageTitle}</h1>
           )}
-          {searchQuery.trim() ? <SearchView /> : children}
+          {searching ? <SearchView /> : children}
         </main>
         <QuickLook />
         <TransportBar />
@@ -168,10 +180,14 @@ export function AppShell({ children }: Props) {
 
 function titleForPath(
   pathname: string,
-  searchQuery: string,
+  hash: string,
+  searching: boolean,
   mode: ReturnType<typeof getContentMode>,
 ) {
-  if (searchQuery.trim()) return "Search";
+  const pane = paneFromPath(pathname);
+  if (searching) return "Search";
+  if (pane === "downloads") return sectionFromHash(downloadSections, hash).label;
+  if (pane === "settings") return sectionFromHash(settingsSections, hash).label;
   if (pathname === `/browse/${mode.id}`) return mode.label;
   const sectionId = pathname.match(/^\/browse\/[^/]+\/([^/]+)/)?.[1];
   if (sectionId) {
@@ -180,7 +196,5 @@ function titleForPath(
   if (pathname.startsWith("/title/")) return "Details";
   if (pathname.startsWith("/player/")) return "Now Playing";
   if (pathname.startsWith("/read/")) return "Reader";
-  if (pathname === "/downloads") return "Downloads";
-  if (pathname === "/settings") return "Settings";
   return mode.label;
 }

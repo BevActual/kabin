@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addMediaDir,
@@ -33,6 +34,7 @@ import { DownloadsSettings } from "../components/DownloadsSettings";
 import { SegmentedControl } from "../components/SegmentedControl";
 import { Switch } from "../components/Switch";
 import { folderTypeLabel } from "../lib/modes";
+import { sectionFromHash, settingsSections } from "../lib/panes";
 import { useUiStore, type ThemeMode } from "../store/ui";
 
 const SOURCE_GROUPS: { title: string; rows: { key: string; label: string }[] }[] = [
@@ -81,6 +83,8 @@ const MEDIA_KINDS = [
 ];
 
 export function SettingsView() {
+  const hash = useRouterState({ select: (s) => s.location.hash });
+  const section = sectionFromHash(settingsSections, hash).id;
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
   const queryClient = useQueryClient();
@@ -125,8 +129,9 @@ export function SettingsView() {
   const sources = settings?.sources ?? {};
 
   return (
-    <div className="mx-auto max-w-xl space-y-8">
-      <SettingsGroup title="Appearance">
+    <div className="max-w-2xl space-y-8">
+      {section === "appearance" ? (
+      <SettingsGroup>
         <SettingsRow label="Theme">
           <SegmentedControl
             label="Theme"
@@ -139,8 +144,10 @@ export function SettingsView() {
           />
         </SettingsRow>
       </SettingsGroup>
+      ) : null}
 
-      {SOURCE_GROUPS.map((group) => (
+      {section === "libraries"
+        ? SOURCE_GROUPS.map((group) => (
         <SettingsGroup key={group.title} title={group.title}>
           {group.rows.map(({ key, label }) => (
             <SettingsRow key={key} label={label}>
@@ -171,8 +178,10 @@ export function SettingsView() {
             </p>
           ) : null}
         </SettingsGroup>
-      ))}
+      ))
+        : null}
 
+      {section === "folders" ? (
       <SettingsGroup title="Media folders">
         {(settings?.mediaDirs ?? []).map((entry, index) => {
           const path = (entry as { path?: string }).path ?? "";
@@ -207,14 +216,17 @@ export function SettingsView() {
             onClick={() => addFolder.mutate(id)}
             className="kabin-grouped-row w-full text-left text-[calc(15px*var(--kabin-type-scale))] text-kabin-primary hover:bg-kabin-grouped"
           >
-            <span>Add {label} folder</span>
+            <span>Add {label}</span>
             <ChevronRight size={16} strokeWidth={1.5} className="text-kabin-tertiary" />
           </button>
         ))}
       </SettingsGroup>
+      ) : null}
 
-      <DownloadsSettings />
+      {section === "downloads" ? <DownloadsSettings /> : null}
 
+      {section === "sharing" ? (
+      <>
       <KabinHostPanel />
 
       <RemoteHostsPanel
@@ -223,7 +235,10 @@ export function SettingsView() {
           void queryClient.invalidateQueries({ queryKey: ["libraryCounts"] });
         }}
       />
+      </>
+      ) : null}
 
+      {section === "play" ? (
       <PlayDefaultsPanel
         emulation={settings?.emulation}
         controllers={settings?.connectedControllers ?? []}
@@ -232,7 +247,9 @@ export function SettingsView() {
           void queryClient.invalidateQueries({ queryKey: ["libraryScan"] });
         }}
       />
+      ) : null}
 
+      {section === "emulation" ? (
       <EmulationCenterPanel
         romDirs={settings?.romDirs ?? []}
         biosPaths={settings?.biosPaths ?? {}}
@@ -241,8 +258,10 @@ export function SettingsView() {
           void queryClient.invalidateQueries({ queryKey: ["libraryScan"] });
         }}
       />
+      ) : null}
 
-      <SettingsGroup title="About">
+      {section === "about" ? (
+      <SettingsGroup>
         <SettingsRow label="Version">
           <span className="text-kabin-secondary">
             {infoQuery.data?.version ?? "…"}
@@ -257,6 +276,7 @@ export function SettingsView() {
           See <span className="font-mono">docs/PARITY.md</span> for GTK-only features.
         </p>
       </SettingsGroup>
+      ) : null}
     </div>
   );
 }
@@ -742,14 +762,16 @@ function SettingsGroup({
   title,
   children,
 }: {
-  title: string;
+  title?: string;
   children: ReactNode;
 }) {
   return (
     <section>
-      <h2 className="mb-2 px-1 text-[calc(13px*var(--kabin-type-scale))] font-medium text-kabin-secondary uppercase">
-        {title}
-      </h2>
+      {title ? (
+        <h2 className="mb-2 px-1 text-[calc(13px*var(--kabin-type-scale))] font-medium text-kabin-secondary uppercase">
+          {title}
+        </h2>
+      ) : null}
       <div className="kabin-grouped">{children}</div>
     </section>
   );

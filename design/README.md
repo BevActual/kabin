@@ -27,7 +27,7 @@ Shared CSS variables live in [`tokens.css`](./tokens.css). The React app imports
 - **8pt grid**; tile gutters 16–24px (32–48px on wide/TV layouts).
 - **Aspect ratios:** games/mixed **2:3**, music **1:1**, movies **16:9**.
 - **Libraries** are Video, Books, Music, and Games. Video holds Movies and TV. Books holds books, audiobooks, comics, and PDFs. A books folder sorts those formats, and a video folder sorts movies from TV episodes.
-- **Liquid glass chrome** (the navigation layer only): the sidebar floats above the base with a 12px gutter and a blur material. Search, Settings, and the control that hides the sidebar live on that pane. A large title leads the page and joins a compact chip once the page scrolls. Space on a focused title opens a preview. Music, audiobooks, and an open book sit in a centered capsule at the bottom, the compact form of the full player or reader. Category cards on a library home open Movies, TV, books, audiobooks, comics, and PDFs. Player and reader stay full-bleed, with no glass frame.
+- **Liquid glass chrome** (the navigation layer only): the sidebar floats above the base with a 12px gutter and a blur material. In a library it holds search, the shelves, and the control that hides the pane. Downloads and Settings replace that list with their own sections, and the page shows the section you choose. A large title leads the page and joins a compact chip once the page scrolls. Space on a focused title opens a preview. Music, audiobooks, and an open book sit in a centered capsule at the bottom, the compact form of the full player or reader. Category cards on a library home open Movies, TV, books, audiobooks, comics, and PDFs. Player and reader stay full-bleed, with no glass frame.
 
 ## Components
 

@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Download, PanelLeft, Search, Settings, X } from "lucide-react";
-import type { CSSProperties, RefObject } from "react";
+import { ChevronLeft, Download, PanelLeft, Search, Settings, X } from "lucide-react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import { getDownloadStatus, scanLibrary } from "../lib/kabin-api";
 import type { CatalogTitle } from "../types/catalog";
 import {
@@ -10,6 +10,15 @@ import {
   isInProgress,
   modeIdFromPath,
 } from "../lib/modes";
+import {
+  downloadSections,
+  paneFromPath,
+  paneTitle,
+  sectionFromHash,
+  settingsSections,
+  type PaneId,
+  type PaneSection,
+} from "../lib/panes";
 import { useUiStore } from "../store/ui";
 
 type Props = {
@@ -18,6 +27,51 @@ type Props = {
 };
 
 export function Sidebar({ collapsed, searchRef }: Props) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const hash = useRouterState({ select: (s) => s.location.hash });
+  const storedMode = useUiStore((s) => s.contentMode);
+  const mode = getContentMode(modeIdFromPath(pathname) ?? storedMode);
+  const pane = paneFromPath(pathname);
+  const title = pane === "library" ? mode.label : paneTitle(pane);
+
+  return (
+    <aside className="kabin-glass kabin-floating-sidebar flex flex-col overflow-hidden py-3">
+      {collapsed ? (
+        <div className="mb-1 flex justify-center">
+          <SidebarToggle collapsed />
+        </div>
+      ) : (
+        <div className="flex items-center gap-1 px-3 pt-0.5 pb-3">
+          <div className="min-w-0 flex-1 pl-1">
+            <div className="text-[calc(11px*var(--kabin-type-scale))] font-medium tracking-wide text-kabin-tertiary">
+              Kabin
+            </div>
+            <div
+              key={title}
+              className="kabin-page-enter text-[calc(22px*var(--kabin-type-scale))] font-semibold tracking-tight text-[var(--kabin-mode)]"
+            >
+              {title}
+            </div>
+          </div>
+          <SidebarToggle collapsed={false} />
+        </div>
+      )}
+      {pane === "library" ? (
+        <LibraryPane collapsed={collapsed} searchRef={searchRef} />
+      ) : (
+        <UtilityPane pane={pane} hash={hash} collapsed={collapsed} />
+      )}
+    </aside>
+  );
+}
+
+function LibraryPane({
+  collapsed,
+  searchRef,
+}: {
+  collapsed: boolean;
+  searchRef: RefObject<HTMLInputElement | null>;
+}) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const storedMode = useUiStore((s) => s.contentMode);
   const searchQuery = useUiStore((s) => s.searchQuery);
@@ -42,27 +96,7 @@ export function Sidebar({ collapsed, searchRef }: Props) {
     ).length ?? 0;
 
   return (
-    <aside className="kabin-glass kabin-floating-sidebar flex flex-col overflow-hidden py-3">
-      {collapsed ? (
-        <div className="mb-1 flex justify-center">
-          <SidebarToggle collapsed />
-        </div>
-      ) : (
-        <div className="flex items-center gap-1 px-3 pt-0.5 pb-3">
-          <div className="min-w-0 flex-1 pl-1">
-            <div className="text-[calc(11px*var(--kabin-type-scale))] font-medium tracking-wide text-kabin-tertiary">
-              Kabin
-            </div>
-            <div
-              key={mode.id}
-              className="kabin-page-enter text-[calc(22px*var(--kabin-type-scale))] font-semibold tracking-tight text-[var(--kabin-mode)]"
-            >
-              {mode.label}
-            </div>
-          </div>
-          <SidebarToggle collapsed={false} />
-        </div>
-      )}
+    <>
       {collapsed ? (
         <button
           type="button"
@@ -164,18 +198,13 @@ export function Sidebar({ collapsed, searchRef }: Props) {
           );
         })}
       </nav>
-      <div className={collapsed ? "px-2 pt-2" : "px-2.5 pt-2"}>
-        {collapsed ? (
-          <div className="mx-auto mb-2 h-px w-6 bg-kabin-separator" />
-        ) : (
-          <div className="mx-3 mb-2 h-px bg-kabin-separator" />
-        )}
+      <SidebarFooter collapsed={collapsed}>
         <SidebarLink
           to="/downloads"
           label="Downloads"
           icon={Download}
           collapsed={collapsed}
-          active={pathname === "/downloads"}
+          active={false}
           badge={activeDownloads ? String(activeDownloads) : undefined}
           badgeAccent
         />
@@ -184,10 +213,126 @@ export function Sidebar({ collapsed, searchRef }: Props) {
           label="Settings"
           icon={Settings}
           collapsed={collapsed}
-          active={pathname === "/settings"}
+          active={false}
         />
-      </div>
-    </aside>
+      </SidebarFooter>
+    </>
+  );
+}
+
+function UtilityPane({
+  pane,
+  hash,
+  collapsed,
+}: {
+  pane: Exclude<PaneId, "library">;
+  hash: string;
+  collapsed: boolean;
+}) {
+  const storedMode = useUiStore((s) => s.contentMode);
+  const mode = getContentMode(storedMode);
+  const downloadsQuery = useQuery({
+    queryKey: ["downloads"],
+    queryFn: getDownloadStatus,
+    refetchInterval: 4000,
+  });
+  const activeDownloads =
+    downloadsQuery.data?.jobs.filter(
+      (job) => job.status === "downloading" || job.status === "queued",
+    ).length ?? 0;
+  const wantedCount = downloadsQuery.data?.wanted.length ?? 0;
+  const sections = pane === "downloads" ? downloadSections : settingsSections;
+  const current = sectionFromHash(sections, hash);
+
+  return (
+    <>
+      <nav
+        key={pane}
+        aria-label={paneTitle(pane)}
+        className={`kabin-page-enter flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto ${
+          collapsed ? "px-2" : "px-2.5"
+        }`}
+      >
+        <SidebarLink
+          to="/browse/$mode"
+          params={{ mode: mode.id }}
+          label={mode.label}
+          icon={collapsed ? mode.icon : ChevronLeft}
+          collapsed={collapsed}
+          active={false}
+          ariaLabel={`Back to ${mode.label}`}
+        />
+        <div className={collapsed ? "mx-auto my-2 h-px w-6 bg-kabin-separator" : "mx-3 my-2 h-px bg-kabin-separator"} />
+        {sections.map((section) => (
+          <SidebarLink
+            key={section.id}
+            to={pane === "downloads" ? "/downloads" : "/settings"}
+            hash={section.id}
+            label={section.label}
+            icon={section.icon}
+            collapsed={collapsed}
+            active={current.id === section.id}
+            badge={sectionBadge(pane, section, activeDownloads, wantedCount)}
+            badgeAccent={section.id === "activity"}
+          />
+        ))}
+      </nav>
+      <SidebarFooter collapsed={collapsed}>
+        {pane === "downloads" ? (
+          <SidebarLink
+            to="/settings"
+            label="Settings"
+            icon={Settings}
+            collapsed={collapsed}
+            active={false}
+          />
+        ) : (
+          <SidebarLink
+            to="/downloads"
+            label="Downloads"
+            icon={Download}
+            collapsed={collapsed}
+            active={false}
+            badge={activeDownloads ? String(activeDownloads) : undefined}
+            badgeAccent
+          />
+        )}
+      </SidebarFooter>
+    </>
+  );
+}
+
+function sectionBadge(
+  pane: PaneId,
+  section: PaneSection,
+  activeDownloads: number,
+  wantedCount: number,
+) {
+  if (pane === "downloads" && section.id === "activity" && activeDownloads > 0) {
+    return String(activeDownloads);
+  }
+  if (pane === "downloads" && section.id === "wanted" && wantedCount > 0) {
+    return String(wantedCount);
+  }
+  return undefined;
+}
+
+function SidebarFooter({
+  collapsed,
+  children,
+}: {
+  collapsed: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={collapsed ? "px-2 pt-2" : "px-2.5 pt-2"}>
+      {collapsed ? (
+        <div className="mx-auto mb-2 h-px w-6 bg-kabin-separator" />
+      ) : (
+        <div className="mx-3 mb-2 h-px bg-kabin-separator" />
+      )}
+      {children}
+    </div>
   );
 }
 
@@ -232,6 +377,8 @@ type SidebarLinkProps = {
   badge?: string;
   badgeAccent?: boolean;
   params?: { mode: string; section?: string };
+  hash?: string;
+  ariaLabel?: string;
 };
 
 function SidebarLink({
@@ -243,13 +390,18 @@ function SidebarLink({
   badge,
   badgeAccent,
   params,
+  hash,
+  ariaLabel,
 }: SidebarLinkProps) {
   return (
     <Link
       to={to}
       params={params}
-      title={label}
-      aria-label={badge ? `${label}, ${badge}` : label}
+      hash={hash}
+      activeOptions={hash ? { includeHash: true, exact: true } : undefined}
+      title={ariaLabel ?? label}
+      aria-label={ariaLabel ?? (badge ? `${label}, ${badge}` : label)}
+      aria-current={active ? "page" : undefined}
       className={`flex items-center rounded-[var(--kabin-radius-control)] text-[calc(15px*var(--kabin-type-scale))] font-medium transition-colors ${
         collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2"
       } ${
