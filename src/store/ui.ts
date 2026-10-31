@@ -5,6 +5,7 @@ export type LibrarySort = "title" | "recent" | "added" | "played";
 
 const THEME_KEY = "kabin-theme";
 const SORT_KEY = "kabin-library-sort";
+const SIDEBAR_KEY = "kabin-sidebar-collapsed";
 
 function readTheme(): ThemeMode {
   try {
@@ -31,13 +32,32 @@ function readSort(): LibrarySort {
   return "title";
 }
 
+function readSidebarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function persistSidebar(collapsed: boolean) {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
 type UiState = {
   theme: ThemeMode;
   librarySort: LibrarySort;
+  sidebarCollapsed: boolean;
   searchQuery: string;
   toast: string | null;
   setTheme: (theme: ThemeMode) => void;
   setLibrarySort: (sort: LibrarySort) => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  toggleSidebar: () => void;
   setSearchQuery: (q: string) => void;
   setToast: (toast: string | null) => void;
 };
@@ -45,6 +65,7 @@ type UiState = {
 export const useUiStore = create<UiState>((set) => ({
   theme: readTheme(),
   librarySort: readSort(),
+  sidebarCollapsed: readSidebarCollapsed(),
   searchQuery: "",
   toast: null,
   setTheme: (theme) => {
@@ -62,6 +83,17 @@ export const useUiStore = create<UiState>((set) => ({
       /* ignore */
     }
     set({ librarySort });
+  },
+  setSidebarCollapsed: (sidebarCollapsed) => {
+    persistSidebar(sidebarCollapsed);
+    set({ sidebarCollapsed });
+  },
+  toggleSidebar: () => {
+    set((state) => {
+      const sidebarCollapsed = !state.sidebarCollapsed;
+      persistSidebar(sidebarCollapsed);
+      return { sidebarCollapsed };
+    });
   },
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setToast: (toast) => set({ toast }),

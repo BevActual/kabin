@@ -72,11 +72,110 @@ input[type="search"]::-webkit-search-decoration {
   color: var(--kabin-label-primary);
 }
 
-.kabin-sidebar {
-  background: var(--kabin-bg-sidebar);
-  backdrop-filter: var(--kabin-material-blur);
-  -webkit-backdrop-filter: var(--kabin-material-blur);
-  border-right: 1px solid var(--kabin-separator);
+.kabin-shell {
+  --kabin-chrome-gutter: 12px;
+  --kabin-sidebar-width: 232px;
+}
+
+.kabin-shell[data-sidebar="collapsed"] {
+  --kabin-sidebar-width: 68px;
+}
+
+.kabin-floating-sidebar {
+  position: absolute;
+  z-index: 30;
+  top: var(--kabin-chrome-gutter);
+  bottom: var(--kabin-chrome-gutter);
+  left: var(--kabin-chrome-gutter);
+  width: var(--kabin-sidebar-width);
+  transition: width var(--kabin-motion-screen);
+}
+
+.kabin-content-pane {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: calc(
+    var(--kabin-chrome-gutter) + var(--kabin-sidebar-width) +
+      var(--kabin-chrome-gutter)
+  );
+  transition: left var(--kabin-motion-screen);
+}
+
+.kabin-glass {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white 14%, transparent),
+      transparent 46%
+    ),
+    color-mix(in srgb, var(--kabin-bg-elevated) 78%, transparent);
+  backdrop-filter: var(--kabin-glass-blur);
+  -webkit-backdrop-filter: var(--kabin-glass-blur);
+  border: 1px solid color-mix(in srgb, white 16%, transparent);
+  border-radius: var(--kabin-radius-chrome);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 22%, transparent),
+    0 12px 32px rgba(0, 0, 0, 0.22);
+}
+
+.kabin-glass-strong {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white 10%, transparent),
+      transparent 40%
+    ),
+    color-mix(in srgb, var(--kabin-bg-elevated) 94%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 18%, transparent),
+    0 14px 36px rgba(0, 0, 0, 0.32);
+}
+
+[data-theme="light"] .kabin-glass {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.55));
+  border-color: color-mix(in srgb, black 8%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 10px 28px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .kabin-glass-strong {
+  background: color-mix(in srgb, white 90%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+.kabin-activity-capsule {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--kabin-accent) 18%, transparent);
+  padding: 0 10px;
+  color: var(--kabin-accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.kabin-scroll-under-chrome {
+  padding-top: 4.75rem;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 0.75rem,
+    #000 4.75rem
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 0.75rem,
+    #000 4.75rem
+  );
 }
 
 .kabin-grouped {

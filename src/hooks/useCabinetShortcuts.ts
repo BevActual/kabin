@@ -7,6 +7,7 @@ export function useCabinetShortcuts(searchInputRef?: React.RefObject<HTMLInputEl
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const setSearchQuery = useUiStore((s) => s.setSearchQuery);
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -27,9 +28,14 @@ export function useCabinetShortcuts(searchInputRef?: React.RefObject<HTMLInputEl
         searchInputRef?.current?.focus();
         return;
       }
-      if (e.key === "," && e.ctrlKey) {
+      if (e.key === "," && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         void navigate({ to: "/settings" });
+        return;
+      }
+      if (e.key === "\\" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        toggleSidebar();
         return;
       }
       if (e.key === "ArrowLeft" && navigateCabinetTiles("left")) {
@@ -50,5 +56,5 @@ export function useCabinetShortcuts(searchInputRef?: React.RefObject<HTMLInputEl
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navigate, pathname, searchInputRef, setSearchQuery]);
+  }, [navigate, pathname, searchInputRef, setSearchQuery, toggleSidebar]);
 }

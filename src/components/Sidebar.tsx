@@ -20,7 +20,11 @@ const libraries = [
   { kind: "comic", label: "Comics", icon: Library },
 ] as const;
 
-export function Sidebar() {
+type Props = {
+  collapsed: boolean;
+};
+
+export function Sidebar({ collapsed }: Props) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const countsQuery = useQuery({
     queryKey: ["libraryCounts"],
@@ -38,17 +42,20 @@ export function Sidebar() {
     ).length ?? 0;
 
   return (
-    <aside className="kabin-sidebar flex w-[232px] shrink-0 flex-col px-3 py-4">
-      <div className="mb-5 px-3 pt-1">
-        <span className="text-[calc(17px*var(--kabin-type-scale))] font-semibold tracking-tight text-kabin-primary">
-          Kabin
-        </span>
-      </div>
-      <nav className="flex flex-col gap-1">
+    <aside className="kabin-glass kabin-floating-sidebar flex flex-col overflow-hidden py-3">
+      {collapsed ? null : (
+        <div className="mb-4 px-5 pt-1">
+          <span className="text-[calc(17px*var(--kabin-type-scale))] font-semibold tracking-tight text-kabin-primary">
+            Kabin
+          </span>
+        </div>
+      )}
+      <nav className={`flex flex-col gap-1 ${collapsed ? "px-2" : "px-2.5"}`}>
         <SidebarLink
           to="/"
           label="Home"
           icon={Home}
+          collapsed={collapsed}
           active={pathname === "/"}
         />
         <SidebarLink
@@ -56,22 +63,26 @@ export function Sidebar() {
           params={{ kind: "favorites" }}
           label="Favorites"
           icon={Heart}
-          badge={
-            counts.favorites ? String(counts.favorites) : undefined
-          }
+          collapsed={collapsed}
+          badge={counts.favorites ? String(counts.favorites) : undefined}
           active={pathname === "/library/favorites"}
         />
         <SidebarLink
           to="/downloads"
           label="Downloads"
           icon={Download}
+          collapsed={collapsed}
           badge={activeDownloads ? String(activeDownloads) : undefined}
           badgeAccent
           active={pathname === "/downloads"}
         />
-        <div className="mt-4 mb-2 px-3 text-[calc(12px*var(--kabin-type-scale))] font-medium text-kabin-tertiary">
-          Libraries
-        </div>
+        {collapsed ? (
+          <div className="mx-auto my-3 h-px w-6 bg-kabin-separator" />
+        ) : (
+          <div className="mt-4 mb-2 px-3 text-[calc(12px*var(--kabin-type-scale))] font-medium text-kabin-tertiary">
+            Libraries
+          </div>
+        )}
         {libraries.map(({ kind, label, icon: Icon }) => {
           const count = counts[kind];
           return (
@@ -80,6 +91,7 @@ export function Sidebar() {
               to="/library/$kind"
               params={{ kind }}
               label={label}
+              collapsed={collapsed}
               badge={count ? String(count) : undefined}
               icon={Icon}
               active={pathname === `/library/${kind}`}
@@ -96,6 +108,7 @@ type SidebarLinkProps = {
   label: string;
   icon: typeof Home;
   active: boolean;
+  collapsed: boolean;
   badge?: string;
   badgeAccent?: boolean;
   params?: { kind: string };
@@ -106,6 +119,7 @@ function SidebarLink({
   label,
   icon: Icon,
   active,
+  collapsed,
   badge,
   badgeAccent,
   params,
@@ -114,19 +128,34 @@ function SidebarLink({
     <Link
       to={to}
       params={params}
-      className={`flex items-center gap-3 rounded-[var(--kabin-radius-control)] px-3 py-2 text-[calc(15px*var(--kabin-type-scale))] font-medium transition-colors ${
+      title={label}
+      aria-label={badge ? `${label}, ${badge}` : label}
+      className={`flex items-center rounded-[var(--kabin-radius-control)] text-[calc(15px*var(--kabin-type-scale))] font-medium transition-colors ${
+        collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2"
+      } ${
         active
           ? "kabin-sidebar-active"
           : "text-kabin-secondary hover:bg-[color-mix(in_srgb,var(--kabin-label-primary)_6%,transparent)] hover:text-kabin-primary"
       }`}
     >
-      <Icon
-        size={20}
-        strokeWidth={1.5}
-        className={active ? "text-kabin-accent" : undefined}
-      />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {badge ? (
+      <span className="relative inline-flex">
+        <Icon
+          size={20}
+          strokeWidth={1.5}
+          className={active ? "text-kabin-accent" : undefined}
+        />
+        {collapsed && badge ? (
+          <span
+            className={`absolute -top-0.5 -right-1 h-1.5 w-1.5 rounded-full ${
+              badgeAccent ? "bg-kabin-accent" : "bg-kabin-tertiary"
+            }`}
+          />
+        ) : null}
+      </span>
+      {collapsed ? null : (
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+      )}
+      {!collapsed && badge ? (
         <span
           className={`text-[calc(12px*var(--kabin-type-scale))] tabular-nums ${
             badgeAccent ? "text-kabin-accent" : "text-kabin-tertiary"
