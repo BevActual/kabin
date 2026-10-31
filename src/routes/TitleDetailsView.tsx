@@ -1,5 +1,6 @@
 import { Link, getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Heart } from "lucide-react";
 import {
   coverUrl,
@@ -13,6 +14,8 @@ import {
   toggleFavorite,
 } from "../lib/kabin-api";
 import { MediaTile } from "../components/MediaTile";
+import { getContentMode, modeForKind } from "../lib/modes";
+import { useUiStore } from "../store/ui";
 
 const route = getRouteApi("/title/$titleId");
 
@@ -40,6 +43,12 @@ export function TitleDetailsView() {
 
   const details = titleQuery.data;
   const title = details?.title;
+  const contentMode = useUiStore((s) => s.contentMode);
+  const setContentMode = useUiStore((s) => s.setContentMode);
+  useEffect(() => {
+    if (!title) return;
+    setContentMode(modeForKind(title.kind).id);
+  }, [title, setContentMode]);
   const metaLines = details?.metaLines ?? [];
   const isFavorite = details?.isFavorite ?? false;
   const favorite = useMutation({
@@ -79,8 +88,12 @@ export function TitleDetailsView() {
     return (
       <div>
         <p className="text-kabin-secondary">Title not found.</p>
-        <Link to="/" className="mt-4 inline-block text-kabin-accent">
-          Back to Home
+        <Link
+          to="/browse/$mode"
+          params={{ mode: contentMode }}
+          className="mt-4 inline-block text-kabin-accent"
+        >
+          Back to {getContentMode(contentMode).label}
         </Link>
       </div>
     );

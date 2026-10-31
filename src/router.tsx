@@ -7,6 +7,8 @@ import {
 import { AppShell } from "./components/AppShell";
 import { HomeView } from "./routes/HomeView";
 import { LibraryView } from "./routes/LibraryView";
+import { ModeSectionView } from "./routes/ModeSectionView";
+import { OpenLastMode } from "./routes/OpenLastMode";
 import { DownloadsView } from "./routes/DownloadsView";
 import { SettingsView } from "./routes/SettingsView";
 import { PlayerView } from "./routes/PlayerView";
@@ -24,7 +26,19 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
+  component: OpenLastMode,
+});
+
+const browseRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/browse/$mode",
   component: HomeView,
+});
+
+const browseSectionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/browse/$mode/$section",
+  component: ModeSectionView,
 });
 
 const libraryRoute = createRoute({
@@ -65,6 +79,8 @@ const playerRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  browseRoute,
+  browseSectionRoute,
   libraryRoute,
   titleRoute,
   readRoute,

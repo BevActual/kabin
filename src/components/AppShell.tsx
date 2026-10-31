@@ -1,13 +1,18 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Download, PanelLeft, Search, Settings, X } from "lucide-react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useCabinetShortcuts } from "../hooks/useCabinetShortcuts";
 import { useGamepadCabinet } from "../hooks/useGamepadCabinet";
 import { useLaunchSessionEvents } from "../hooks/useLaunchSessionEvents";
 import { useToastAutoDismiss } from "../hooks/useToastAutoDismiss";
 import { getDownloadStatus } from "../lib/kabin-api";
+import {
+  getContentMode,
+  modeIdFromPath,
+  sectionForMode,
+} from "../lib/modes";
 import { useUiStore } from "../store/ui";
 import { SearchView } from "../routes/SearchView";
 import { Sidebar } from "./Sidebar";
@@ -22,8 +27,12 @@ export function AppShell({ children }: Props) {
   const setSearchQuery = useUiStore((s) => s.setSearchQuery);
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const contentMode = useUiStore((s) => s.contentMode);
+  const setContentMode = useUiStore((s) => s.setContentMode);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const mode = getContentMode(modeIdFromPath(pathname) ?? contentMode);
   const searchRef = useRef<HTMLInputElement>(null);
+  const previousMode = useRef(mode.id);
   const [chromeElevated, setChromeElevated] = useState(false);
   useCabinetShortcuts(searchRef);
   useGamepadCabinet(searchRef);
@@ -35,6 +44,15 @@ export function AppShell({ children }: Props) {
   useEffect(() => {
     setChromeElevated(false);
   }, [pathname]);
+  useEffect(() => {
+    const id = modeIdFromPath(pathname);
+    if (id) setContentMode(id);
+  }, [pathname, setContentMode]);
+  useEffect(() => {
+    if (previousMode.current === mode.id) return;
+    previousMode.current = mode.id;
+    setSearchQuery("");
+  }, [mode.id, setSearchQuery]);
   const toast = useUiStore((s) => s.toast);
   const setToast = useUiStore((s) => s.setToast);
   const downloadsQuery = useQuery({
@@ -50,23 +68,7 @@ export function AppShell({ children }: Props) {
   const immersive =
     pathname.startsWith("/player/") || pathname.startsWith("/read/");
 
-  const pageTitle = searchQuery.trim()
-    ? "Search"
-    : pathname === "/"
-      ? "Home"
-      : pathname.startsWith("/library/")
-        ? libraryLabel(pathname.split("/").pop() ?? "")
-        : pathname.startsWith("/title/")
-          ? "Details"
-          : pathname.startsWith("/player/")
-            ? "Now Playing"
-            : pathname.startsWith("/read/")
-              ? "Reader"
-              : pathname === "/downloads"
-                ? "Downloads"
-                : pathname === "/settings"
-                  ? "Settings"
-                  : "Kabin";
+  const pageTitle = titleForPath(pathname, searchQuery, mode);
 
   const toastBanner = toast ? (
     <div
@@ -104,7 +106,9 @@ export function AppShell({ children }: Props) {
     <div
       className="kabin-shell relative h-full min-h-0 bg-kabin-base text-kabin-primary"
       data-theme={theme}
+      data-mode={mode.id}
       data-sidebar={sidebarCollapsed ? "collapsed" : "expanded"}
+      style={{ "--kabin-mode-hue": String(mode.hue) } as CSSProperties}
     >
       <Sidebar collapsed={sidebarCollapsed} />
       <div className="kabin-content-pane min-w-0">
@@ -146,7 +150,7 @@ export function AppShell({ children }: Props) {
               <input
                 ref={searchRef}
                 type="search"
-                placeholder="Search"
+                placeholder={`Search ${mode.label}`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="kabin-search w-full py-1.5 pr-8 pl-9 text-[calc(14px*var(--kabin-type-scale))] text-kabin-primary placeholder:text-kabin-tertiary focus:shadow-[var(--kabin-focus-ring)] focus:outline-none"
@@ -194,14 +198,21 @@ export function AppShell({ children }: Props) {
   );
 }
 
-function libraryLabel(kind: string) {
-  const labels: Record<string, string> = {
-    game: "Games",
-    music: "Music",
-    video: "Movies",
-    book: "Books",
-    comic: "Comics",
-    favorites: "Favorites",
-  };
-  return labels[kind] ?? "Library";
+function titleForPath(
+  pathname: string,
+  searchQuery: string,
+  mode: ReturnType<typeof getContentMode>,
+) {
+  if (searchQuery.trim()) return "Search";
+  if (pathname === `/browse/${mode.id}`) return "Home";
+  const sectionId = pathname.match(/^\/browse\/[^/]+\/([^/]+)/)?.[1];
+  if (sectionId) {
+    return sectionForMode(mode, sectionId)?.label ?? mode.label;
+  }
+  if (pathname.startsWith("/title/")) return "Details";
+  if (pathname.startsWith("/player/")) return "Now Playing";
+  if (pathname.startsWith("/read/")) return "Reader";
+  if (pathname === "/downloads") return "Downloads";
+  if (pathname === "/settings") return "Settings";
+  return mode.label;
 }

@@ -75,6 +75,48 @@ input[type="search"]::-webkit-search-decoration {
 .kabin-shell {
   --kabin-chrome-gutter: 12px;
   --kabin-sidebar-width: 232px;
+  --kabin-mode: hsl(var(--kabin-mode-hue, 32) 68% 60%);
+}
+
+.kabin-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    90% 72% at 0% 0%,
+    color-mix(in srgb, var(--kabin-mode) 20%, transparent),
+    transparent 62%
+  );
+}
+
+[data-theme="light"].kabin-shell {
+  --kabin-mode: hsl(var(--kabin-mode-hue, 32) 62% 38%);
+}
+
+.kabin-mode-active {
+  background: color-mix(in srgb, var(--kabin-mode) 22%, transparent);
+  color: var(--kabin-label-primary);
+}
+
+.kabin-mode-active svg {
+  color: var(--kabin-mode);
+}
+
+.kabin-mode-swatch {
+  color: hsl(var(--kabin-mode-hue) 68% 60%);
+}
+
+.kabin-mode-swatch[aria-selected="true"] {
+  background: hsl(var(--kabin-mode-hue) 68% 60% / 0.22);
+}
+
+[data-theme="light"] .kabin-mode-swatch {
+  color: hsl(var(--kabin-mode-hue) 62% 38%);
+}
+
+[data-theme="light"] .kabin-mode-swatch[aria-selected="true"] {
+  background: hsl(var(--kabin-mode-hue) 62% 42% / 0.16);
 }
 
 .kabin-shell[data-sidebar="collapsed"] {

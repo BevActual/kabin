@@ -1,18 +1,31 @@
 import type { ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
+import { useEffect } from "react";
 import { ContinueHero } from "../components/ContinueHero";
 import { ShelfRow } from "../components/ShelfRow";
 import type { CatalogTitle, HomeShelf } from "../types/catalog";
 import { scanLibrary } from "../lib/kabin-api";
+import { getContentMode, isContentModeId, shelvesForMode } from "../lib/modes";
+
+const route = getRouteApi("/browse/$mode");
 
 export function HomeView() {
+  const { mode: modeId } = route.useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const mode = getContentMode(modeId);
   const scanQuery = useQuery({
     queryKey: ["libraryScan"],
     queryFn: () => scanLibrary(false),
   });
+
+  useEffect(() => {
+    if (!isContentModeId(modeId)) {
+      void navigate({ to: "/browse/$mode", params: { mode: "games" }, replace: true });
+    }
+  }, [modeId, navigate]);
 
   const refresh = () => {
     void queryClient.fetchQuery({
@@ -21,6 +34,10 @@ export function HomeView() {
     });
     void queryClient.invalidateQueries({ queryKey: ["libraryCounts"] });
   };
+
+  if (!isContentModeId(modeId)) {
+    return null;
+  }
 
   if (scanQuery.isLoading) {
     return <StatusMessage>Scanning your library…</StatusMessage>;
@@ -36,7 +53,16 @@ export function HomeView() {
   }
 
   const snapshot = scanQuery.data;
-  const shelves = snapshot?.shelves ?? [];
+  const shelves = shelvesForMode(snapshot?.shelves ?? [], mode);
+  const modeTitles = (snapshot?.titles ?? []).filter((title) =>
+    mode.kinds.includes(title.kind),
+  );
+  const shown =
+    shelves.length > 0
+      ? shelves
+      : modeTitles.length > 0
+        ? [{ id: "library", label: "Library", titles: modeTitles.slice(0, 18) }]
+        : [];
   const hero = pickContinueHero(shelves);
 
   return (
@@ -63,16 +89,16 @@ export function HomeView() {
 
       {hero ? <ContinueHero title={hero} /> : null}
 
-      {shelves.length === 0 ? (
+      {shown.length === 0 ? (
         <StatusMessage>
-          Nothing here yet.{" "}
+          {mode.emptyHint.split("Open Settings")[0]}
           <Link to="/settings" className="text-kabin-accent">
             Open Settings
-          </Link>{" "}
-          to add media folders, Steam, or a paired host, then refresh.
+          </Link>
+          {mode.emptyHint.split("Open Settings")[1]}
         </StatusMessage>
       ) : (
-        shelves.map((shelf) => <ShelfRow key={shelf.id} shelf={shelf} />)
+        shown.map((shelf) => <ShelfRow key={shelf.id} shelf={shelf} />)
       )}
     </div>
   );

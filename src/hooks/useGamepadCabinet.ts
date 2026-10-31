@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { navigateCabinetTiles } from "../lib/cabinetFocus";
 import { scanLibrary } from "../lib/kabin-api";
+import { isModeHome } from "../lib/modes";
 
 const DEADZONE = 0.45;
 const REPEAT_MS = 280;
@@ -35,7 +36,7 @@ export function useGamepadCabinet(searchInputRef?: React.RefObject<HTMLInputElem
         };
 
         press(1, () => {
-          if (pathname !== "/") window.history.back();
+          if (pathname !== "/" && !isModeHome(pathname)) window.history.back();
         });
         press(9, () => {
           void navigate({ to: "/settings" });

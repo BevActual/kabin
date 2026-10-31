@@ -1,24 +1,16 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { Download } from "lucide-react";
+import type { CSSProperties } from "react";
+import { getDownloadStatus, scanLibrary } from "../lib/kabin-api";
+import type { CatalogTitle } from "../types/catalog";
 import {
-  BookOpen,
-  Download,
-  Film,
-  Gamepad2,
-  Heart,
-  Home,
-  Library,
-  Music2,
-} from "lucide-react";
-import { getDownloadStatus, getLibraryCounts } from "../lib/kabin-api";
-
-const libraries = [
-  { kind: "game", label: "Games", icon: Gamepad2 },
-  { kind: "music", label: "Music", icon: Music2 },
-  { kind: "video", label: "Movies", icon: Film },
-  { kind: "book", label: "Books", icon: BookOpen },
-  { kind: "comic", label: "Comics", icon: Library },
-] as const;
+  contentModes,
+  getContentMode,
+  isInProgress,
+  modeIdFromPath,
+} from "../lib/modes";
+import { useUiStore } from "../store/ui";
 
 type Props = {
   collapsed: boolean;
@@ -26,16 +18,20 @@ type Props = {
 
 export function Sidebar({ collapsed }: Props) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const countsQuery = useQuery({
-    queryKey: ["libraryCounts"],
-    queryFn: getLibraryCounts,
+  const storedMode = useUiStore((s) => s.contentMode);
+  const mode = getContentMode(modeIdFromPath(pathname) ?? storedMode);
+  const scanQuery = useQuery({
+    queryKey: ["libraryScan"],
+    queryFn: () => scanLibrary(false),
   });
   const downloadsQuery = useQuery({
     queryKey: ["downloads"],
     queryFn: getDownloadStatus,
     refetchInterval: 4000,
   });
-  const counts = countsQuery.data ?? {};
+  const titles = (scanQuery.data?.titles ?? []).filter((title) =>
+    mode.kinds.includes(title.kind),
+  );
   const activeDownloads =
     downloadsQuery.data?.jobs.filter(
       (job) => job.status === "downloading" || job.status === "queued",
@@ -44,74 +40,123 @@ export function Sidebar({ collapsed }: Props) {
   return (
     <aside className="kabin-glass kabin-floating-sidebar flex flex-col overflow-hidden py-3">
       {collapsed ? null : (
-        <div className="mb-4 px-5 pt-1">
-          <span className="text-[calc(17px*var(--kabin-type-scale))] font-semibold tracking-tight text-kabin-primary">
+        <div className="px-4 pt-1 pb-3">
+          <div className="text-[calc(11px*var(--kabin-type-scale))] font-medium tracking-wide text-kabin-tertiary">
             Kabin
-          </span>
+          </div>
+          <div
+            key={mode.id}
+            className="kabin-page-enter text-[calc(22px*var(--kabin-type-scale))] font-semibold tracking-tight text-[var(--kabin-mode)]"
+          >
+            {mode.label}
+          </div>
         </div>
       )}
-      <nav className={`flex flex-col gap-1 ${collapsed ? "px-2" : "px-2.5"}`}>
-        <SidebarLink
-          to="/"
-          label="Home"
-          icon={Home}
-          collapsed={collapsed}
-          active={pathname === "/"}
-        />
-        <SidebarLink
-          to="/library/$kind"
-          params={{ kind: "favorites" }}
-          label="Favorites"
-          icon={Heart}
-          collapsed={collapsed}
-          badge={counts.favorites ? String(counts.favorites) : undefined}
-          active={pathname === "/library/favorites"}
-        />
+      <div
+        role="tablist"
+        aria-label="Media"
+        className={
+          collapsed
+            ? "flex flex-col items-center gap-1 px-2"
+            : "mx-3 mb-3 flex items-center gap-0.5 rounded-full bg-[color-mix(in_srgb,var(--kabin-label-primary)_8%,transparent)] p-1"
+        }
+      >
+        {contentModes.map((item) => {
+          const Icon = item.icon;
+          const selected = item.id === mode.id;
+          return (
+            <Link
+              key={item.id}
+              to="/browse/$mode"
+              params={{ mode: item.id }}
+              role="tab"
+              aria-selected={selected}
+              title={item.label}
+              aria-label={item.label}
+              style={{ "--kabin-mode-hue": String(item.hue) } as CSSProperties}
+              className={`kabin-mode-swatch inline-flex min-w-0 items-center justify-center rounded-full transition-opacity ${
+                collapsed ? "h-9 w-9" : "h-8 flex-1"
+              } ${selected ? "" : "opacity-70 hover:opacity-100"}`}
+            >
+              <Icon size={18} strokeWidth={1.5} />
+            </Link>
+          );
+        })}
+      </div>
+      <nav
+        key={mode.id}
+        className={`kabin-page-enter flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto ${
+          collapsed ? "px-2" : "px-2.5"
+        }`}
+      >
+        {mode.sections.map((section) => {
+          const active =
+            section.id === "home"
+              ? pathname === `/browse/${mode.id}`
+              : pathname === `/browse/${mode.id}/${section.id}`;
+          const count = sectionCount(section.id, section.kinds, titles);
+          const shown = count > 0 ? String(count) : undefined;
+          return (
+            <SidebarLink
+              key={section.id}
+              to={section.id === "home" ? "/browse/$mode" : "/browse/$mode/$section"}
+              params={
+                section.id === "home"
+                  ? { mode: mode.id }
+                  : { mode: mode.id, section: section.id }
+              }
+              label={section.label}
+              icon={section.icon}
+              collapsed={collapsed}
+              active={active}
+              badge={shown}
+            />
+          );
+        })}
+      </nav>
+      <div className={collapsed ? "px-2 pt-2" : "px-2.5 pt-2"}>
+        {collapsed ? (
+          <div className="mx-auto mb-2 h-px w-6 bg-kabin-separator" />
+        ) : (
+          <div className="mx-3 mb-2 h-px bg-kabin-separator" />
+        )}
         <SidebarLink
           to="/downloads"
           label="Downloads"
           icon={Download}
           collapsed={collapsed}
+          active={pathname === "/downloads"}
           badge={activeDownloads ? String(activeDownloads) : undefined}
           badgeAccent
-          active={pathname === "/downloads"}
         />
-        {collapsed ? (
-          <div className="mx-auto my-3 h-px w-6 bg-kabin-separator" />
-        ) : (
-          <div className="mt-4 mb-2 px-3 text-[calc(12px*var(--kabin-type-scale))] font-medium text-kabin-tertiary">
-            Libraries
-          </div>
-        )}
-        {libraries.map(({ kind, label, icon: Icon }) => {
-          const count = counts[kind];
-          return (
-            <SidebarLink
-              key={kind}
-              to="/library/$kind"
-              params={{ kind }}
-              label={label}
-              collapsed={collapsed}
-              badge={count ? String(count) : undefined}
-              icon={Icon}
-              active={pathname === `/library/${kind}`}
-            />
-          );
-        })}
-      </nav>
+      </div>
     </aside>
   );
 }
 
+function sectionCount(
+  id: string,
+  kinds: string[] | undefined,
+  titles: CatalogTitle[],
+) {
+  if (id === "home") return 0;
+  const scoped = kinds
+    ? titles.filter((title) => kinds.includes(title.kind))
+    : titles;
+  if (id === "favorites") return scoped.filter((title) => title.isFavorite).length;
+  if (id === "progress") return scoped.filter(isInProgress).length;
+  return scoped.length;
+}
+
 type SidebarLinkProps = {
-  to: string;
+  to: "/browse/$mode" | "/browse/$mode/$section" | "/downloads";
   label: string;
-  icon: typeof Home;
+  icon: typeof Download;
   active: boolean;
   collapsed: boolean;
   badge?: string;
   badgeAccent?: boolean;
-  params?: { kind: string };
+  params?: { mode: string; section?: string };
 };
 
 function SidebarLink({
@@ -134,20 +179,16 @@ function SidebarLink({
         collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2"
       } ${
         active
-          ? "kabin-sidebar-active"
+          ? "kabin-mode-active"
           : "text-kabin-secondary hover:bg-[color-mix(in_srgb,var(--kabin-label-primary)_6%,transparent)] hover:text-kabin-primary"
       }`}
     >
       <span className="relative inline-flex">
-        <Icon
-          size={20}
-          strokeWidth={1.5}
-          className={active ? "text-kabin-accent" : undefined}
-        />
+        <Icon size={20} strokeWidth={1.5} />
         {collapsed && badge ? (
           <span
             className={`absolute -top-0.5 -right-1 h-1.5 w-1.5 rounded-full ${
-              badgeAccent ? "bg-kabin-accent" : "bg-kabin-tertiary"
+              badgeAccent ? "bg-kabin-accent" : "bg-[var(--kabin-mode)]"
             }`}
           />
         ) : null}
@@ -158,7 +199,7 @@ function SidebarLink({
       {!collapsed && badge ? (
         <span
           className={`text-[calc(12px*var(--kabin-type-scale))] tabular-nums ${
-            badgeAccent ? "text-kabin-accent" : "text-kabin-tertiary"
+            badgeAccent ? "text-kabin-accent" : "text-[var(--kabin-mode)]"
           }`}
         >
           {badge}

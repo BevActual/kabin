@@ -26,7 +26,7 @@ Shared CSS variables live in [`tokens.css`](./tokens.css). The React app imports
 
 - **8pt grid**; tile gutters 16–24px (32–48px on wide/TV layouts).
 - **Aspect ratios:** games/mixed **2:3**, music **1:1**, movies **16:9**.
-- **Sidebar** for libraries; **horizontal shelves** on Home and details.
+- **Content modes** (Games, Music, Movies, Books, Comics) own the sidebar. Home, library, favorites, and in-progress rows change with the mode, and the chrome takes that mode’s hue. Search stays inside the current mode.
 - **Liquid glass chrome** (the navigation layer only): the sidebar and toolbar float above the base with a 12px gutter, concentric 22px corners (`--kabin-radius-chrome`), and a blur material. Content scrolls underneath the toolbar; the material gets more opaque once the scroll edge lifts. Related toolbar actions stay grouped. The sidebar collapses to an icon rail. Player and reader stay full-bleed, with no glass frame.
 
 ## Components
