@@ -210,11 +210,11 @@ export function PlayerView() {
             }}
             className="w-full accent-[var(--kabin-accent)]"
           />
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-[calc(12px*var(--kabin-type-scale))] tabular-nums text-kabin-secondary">
-              {formatClock(currentTime)} / {formatClock(duration)}
+          <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center">
+            <span className="text-left text-[calc(12px*var(--kabin-type-scale))] tabular-nums text-kabin-secondary">
+              {formatClock(currentTime)}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center gap-2">
               {session.tracks.length > 1 ? (
                 <>
                   <button
@@ -228,13 +228,13 @@ export function PlayerView() {
                   <button
                     type="button"
                     onClick={togglePlay}
-                    className="rounded-full bg-kabin-accent p-3 text-white"
+                    className="rounded-full bg-kabin-accent p-3.5 text-white"
                     aria-label={playing ? "Pause" : "Play"}
                   >
                     {playing ? (
-                      <Pause size={22} strokeWidth={1.5} />
+                      <Pause size={22} strokeWidth={1.5} className="fill-current" />
                     ) : (
-                      <Play size={22} strokeWidth={1.5} />
+                      <Play size={22} strokeWidth={1.5} className="fill-current" />
                     )}
                   </button>
                   <button
@@ -250,20 +250,21 @@ export function PlayerView() {
                 <button
                   type="button"
                   onClick={togglePlay}
-                  className="rounded-full bg-kabin-accent p-3 text-white"
+                  className="rounded-full bg-kabin-accent p-3.5 text-white"
+                  aria-label={playing ? "Pause" : "Play"}
                 >
                   {playing ? (
-                    <Pause size={22} strokeWidth={1.5} />
+                    <Pause size={22} strokeWidth={1.5} className="fill-current" />
                   ) : (
-                    <Play size={22} strokeWidth={1.5} />
+                    <Play size={22} strokeWidth={1.5} className="fill-current" />
                   )}
                 </button>
               )}
             </div>
-            <span className="w-24 text-right text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
-              {session.tracks.length > 1
-                ? `${trackIndex + 1} / ${session.tracks.length}`
-                : ""}
+            <span className="text-right text-[calc(12px*var(--kabin-type-scale))] tabular-nums text-kabin-secondary">
+              {duration > 0
+                ? `-${formatClock(Math.max(0, duration - currentTime))}`
+                : "--:--"}
             </span>
           </div>
         </div>

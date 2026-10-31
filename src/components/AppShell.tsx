@@ -53,7 +53,7 @@ export function AppShell({ children }: Props) {
   const toastBanner = toast ? (
     <div
       role="status"
-      className="kabin-toast fixed bottom-6 left-1/2 z-50 max-w-lg -translate-x-1/2 rounded-[var(--kabin-radius-sheet)] border border-kabin-separator bg-kabin-elevated px-4 py-3 text-[calc(14px*var(--kabin-type-scale))] text-kabin-primary shadow-[var(--kabin-shadow-tile-focus)]"
+      className="kabin-toast kabin-material-bar fixed bottom-6 left-1/2 z-50 max-w-lg -translate-x-1/2 rounded-[var(--kabin-radius-sheet)] border border-kabin-separator px-4 py-3 text-[calc(14px*var(--kabin-type-scale))] text-kabin-primary shadow-[var(--kabin-shadow-tile)]"
     >
       <div className="flex items-start gap-3">
         <p className="flex-1">{toast}</p>
@@ -105,7 +105,7 @@ export function AppShell({ children }: Props) {
               placeholder="Search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-[var(--kabin-radius-control)] border border-kabin-separator bg-kabin-elevated py-2 pr-9 pl-10 text-[calc(15px*var(--kabin-type-scale))] text-kabin-primary placeholder:text-kabin-tertiary focus:shadow-[var(--kabin-focus-ring)] focus:outline-none"
+              className="kabin-search w-full py-2 pr-9 pl-10 text-[calc(15px*var(--kabin-type-scale))] text-kabin-primary placeholder:text-kabin-tertiary focus:shadow-[var(--kabin-focus-ring)] focus:outline-none"
             />
             {searchQuery ? (
               <button
@@ -120,8 +120,13 @@ export function AppShell({ children }: Props) {
           </label>
           <Link
             to="/settings"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--kabin-radius-control)] text-kabin-secondary transition-colors hover:bg-kabin-grouped hover:text-kabin-primary"
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+              pathname === "/settings"
+                ? "kabin-sidebar-active text-kabin-accent"
+                : "text-kabin-secondary hover:bg-[color-mix(in_srgb,var(--kabin-label-primary)_8%,transparent)] hover:text-kabin-primary"
+            }`}
             aria-label="Settings"
+            aria-current={pathname === "/settings" ? "page" : undefined}
           >
             <Settings size={20} strokeWidth={1.5} />
           </Link>

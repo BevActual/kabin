@@ -18,10 +18,9 @@ const ratioClass: Record<TileAspect, string> = {
 
 type Props = {
   title: CatalogTitle;
-  scale?: number;
 };
 
-export function MediaTile({ title, scale = 1 }: Props) {
+export function MediaTile({ title }: Props) {
   const art = coverUrl(title.coverPath);
   const reduceMotion = useReducedMotion();
   const progress =
@@ -37,13 +36,7 @@ export function MediaTile({ title, scale = 1 }: Props) {
       data-cabinet-tile=""
       tabIndex={0}
     >
-      <div
-        style={
-          scale === 1
-            ? undefined
-            : { transform: `scale(${scale})`, transformOrigin: "bottom center" }
-        }
-      >
+      <div>
         <motion.article
           whileHover={reduceMotion ? undefined : { scale: 1.02 }}
           transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}

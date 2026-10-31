@@ -10,7 +10,7 @@ import {
   Library,
   Music2,
 } from "lucide-react";
-import { getLibraryCounts } from "../lib/kabin-api";
+import { getDownloadStatus, getLibraryCounts } from "../lib/kabin-api";
 
 const libraries = [
   { kind: "game", label: "Games", icon: Gamepad2 },
@@ -26,12 +26,21 @@ export function Sidebar() {
     queryKey: ["libraryCounts"],
     queryFn: getLibraryCounts,
   });
+  const downloadsQuery = useQuery({
+    queryKey: ["downloads"],
+    queryFn: getDownloadStatus,
+    refetchInterval: 4000,
+  });
   const counts = countsQuery.data ?? {};
+  const activeDownloads =
+    downloadsQuery.data?.jobs.filter(
+      (job) => job.status === "downloading" || job.status === "queued",
+    ).length ?? 0;
 
   return (
-    <aside className="kabin-sidebar flex w-[220px] shrink-0 flex-col px-3 py-4">
-      <div className="mb-6 px-3">
-        <span className="text-[calc(13px*var(--kabin-type-scale))] font-semibold tracking-wide text-kabin-secondary uppercase">
+    <aside className="kabin-sidebar flex w-[232px] shrink-0 flex-col px-3 py-4">
+      <div className="mb-5 px-3 pt-1">
+        <span className="text-[calc(17px*var(--kabin-type-scale))] font-semibold tracking-tight text-kabin-primary">
           Kabin
         </span>
       </div>
@@ -56,6 +65,8 @@ export function Sidebar() {
           to="/downloads"
           label="Downloads"
           icon={Download}
+          badge={activeDownloads ? String(activeDownloads) : undefined}
+          badgeAccent
           active={pathname === "/downloads"}
         />
         <div className="mt-4 mb-2 px-3 text-[calc(12px*var(--kabin-type-scale))] font-medium text-kabin-tertiary">
@@ -86,6 +97,7 @@ type SidebarLinkProps = {
   icon: typeof Home;
   active: boolean;
   badge?: string;
+  badgeAccent?: boolean;
   params?: { kind: string };
 };
 
@@ -95,6 +107,7 @@ function SidebarLink({
   icon: Icon,
   active,
   badge,
+  badgeAccent,
   params,
 }: SidebarLinkProps) {
   return (
@@ -103,14 +116,22 @@ function SidebarLink({
       params={params}
       className={`flex items-center gap-3 rounded-[var(--kabin-radius-control)] px-3 py-2 text-[calc(15px*var(--kabin-type-scale))] font-medium transition-colors ${
         active
-          ? "bg-kabin-accent/15 text-kabin-accent"
-          : "text-kabin-secondary hover:bg-kabin-grouped hover:text-kabin-primary"
+          ? "kabin-sidebar-active"
+          : "text-kabin-secondary hover:bg-[color-mix(in_srgb,var(--kabin-label-primary)_6%,transparent)] hover:text-kabin-primary"
       }`}
     >
-      <Icon size={20} strokeWidth={1.5} />
+      <Icon
+        size={20}
+        strokeWidth={1.5}
+        className={active ? "text-kabin-accent" : undefined}
+      />
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {badge ? (
-        <span className="text-[calc(12px*var(--kabin-type-scale))] tabular-nums text-kabin-tertiary">
+        <span
+          className={`text-[calc(12px*var(--kabin-type-scale))] tabular-nums ${
+            badgeAccent ? "text-kabin-accent" : "text-kabin-tertiary"
+          }`}
+        >
           {badge}
         </span>
       ) : null}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check } from "lucide-react";
 import { SegmentedControl } from "../components/SegmentedControl";
 import {
   addDownload,
@@ -117,46 +118,112 @@ export function DownloadsView() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-10">
-      <p className="max-w-xl text-[calc(15px*var(--kabin-type-scale))] text-kabin-secondary">
-        Kabin downloads torrents and Usenet posts itself, then files finished
-        videos into your library.
-      </p>
-
       {message ? (
         <p className="text-[calc(14px*var(--kabin-type-scale))] text-kabin-accent">
           {message}
         </p>
       ) : null}
 
-      <section className="space-y-3">
-        <h2 className="px-1 text-[calc(13px*var(--kabin-type-scale))] font-medium text-kabin-secondary uppercase">
-          Add a link
+      <section>
+        <h2 className="mb-4 text-[calc(22px*var(--kabin-type-scale))] font-semibold tracking-tight">
+          Activity
         </h2>
-        <form
-          className="flex flex-col gap-2 sm:flex-row"
-          onSubmit={(event) => {
-            event.preventDefault();
-            addLink.mutate();
-          }}
-        >
-          <input
-            value={link}
-            onChange={(event) => setLink(event.target.value)}
-            placeholder="Magnet link or NZB address"
-            className="kabin-field min-w-0 flex-1"
-          />
-          <button
-            type="submit"
-            disabled={addLink.isPending || link.trim() === ""}
-            className="kabin-primary-button"
+        <div className="kabin-grouped">
+          <form
+            className="flex items-center gap-3 border-b border-kabin-separator px-4 py-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              addLink.mutate();
+            }}
           >
-            Download
-          </button>
-        </form>
+            <input
+              value={link}
+              onChange={(event) => setLink(event.target.value)}
+              placeholder="Magnet link or NZB address"
+              aria-label="Magnet link or NZB address"
+              className="kabin-field-plain min-w-0 flex-1"
+            />
+            <button
+              type="submit"
+              disabled={addLink.isPending || link.trim() === ""}
+              className={`shrink-0 text-[calc(15px*var(--kabin-type-scale))] font-semibold ${
+                link.trim() ? "text-kabin-accent" : "text-kabin-tertiary"
+              }`}
+            >
+              Download
+            </button>
+          </form>
+          {(data?.jobs ?? []).length === 0 ? (
+            <p className="px-4 py-4 text-[calc(15px*var(--kabin-type-scale))] text-kabin-secondary">
+              Nothing is downloading.
+            </p>
+          ) : (
+            data?.jobs.map((job) => {
+              const amount =
+                job.bytesTotal > 0
+                  ? `${formatBytes(job.bytesDone)} of ${formatBytes(job.bytesTotal)}`
+                  : "";
+              const finished = job.status === "complete" || job.imported;
+              return (
+                <div
+                  key={job.id}
+                  className="flex items-center gap-3 border-b border-kabin-separator px-4 py-3 last:border-b-0"
+                >
+                  <ProgressMark progress={job.progress} complete={finished} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[calc(16px*var(--kabin-type-scale))] text-kabin-primary">
+                      {job.name}
+                    </p>
+                    <p className="truncate text-[calc(13px*var(--kabin-type-scale))] text-kabin-tertiary">
+                      {statusLabel(job)}
+                      {amount ? ` · ${amount}` : ""}
+                    </p>
+                    {job.error ? (
+                      <p className="mt-1 text-[calc(13px*var(--kabin-type-scale))] text-kabin-secondary">
+                        {job.error}
+                      </p>
+                    ) : null}
+                  </div>
+                  {job.status === "downloading" || job.status === "queued" ? (
+                    <button
+                      type="button"
+                      className="text-[calc(15px*var(--kabin-type-scale))] font-medium text-kabin-accent"
+                      onClick={() =>
+                        mutateJob.mutate({ id: job.id, action: "pause" })
+                      }
+                    >
+                      Pause
+                    </button>
+                  ) : null}
+                  {job.status === "paused" || job.status === "error" ? (
+                    <button
+                      type="button"
+                      className="text-[calc(15px*var(--kabin-type-scale))] font-medium text-kabin-accent"
+                      onClick={() =>
+                        mutateJob.mutate({ id: job.id, action: "resume" })
+                      }
+                    >
+                      Resume
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="text-[calc(15px*var(--kabin-type-scale))] text-kabin-secondary"
+                    onClick={() =>
+                      mutateJob.mutate({ id: job.id, action: "remove" })
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="px-1 text-[calc(13px*var(--kabin-type-scale))] font-medium text-kabin-secondary uppercase">
+      <section className="space-y-4">
+        <h2 className="text-[calc(22px*var(--kabin-type-scale))] font-semibold tracking-tight">
           Wanted
         </h2>
         <form
@@ -269,83 +336,55 @@ export function DownloadsView() {
           )}
         </div>
       </section>
-
-      <section className="space-y-3">
-        <h2 className="px-1 text-[calc(13px*var(--kabin-type-scale))] font-medium text-kabin-secondary uppercase">
-          Activity
-        </h2>
-        <div className="kabin-grouped">
-          {(data?.jobs ?? []).length === 0 ? (
-            <p className="px-4 py-4 text-[calc(15px*var(--kabin-type-scale))] text-kabin-secondary">
-              Nothing is downloading.
-            </p>
-          ) : (
-            data?.jobs.map((job) => {
-              const amount =
-                job.bytesTotal > 0
-                  ? `${formatBytes(job.bytesDone)} of ${formatBytes(job.bytesTotal)}`
-                  : "";
-              return (
-                <div key={job.id} className="space-y-2 px-4 py-3">
-                  <div className="flex items-start gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[calc(16px*var(--kabin-type-scale))] text-kabin-primary">
-                        {job.name}
-                      </p>
-                      <p className="text-[calc(13px*var(--kabin-type-scale))] text-kabin-tertiary">
-                        {statusLabel(job)}
-                        {amount ? ` · ${amount}` : ""}
-                      </p>
-                    </div>
-                    {job.status === "downloading" || job.status === "queued" ? (
-                      <button
-                        type="button"
-                        className="text-[calc(15px*var(--kabin-type-scale))] text-kabin-accent"
-                        onClick={() =>
-                          mutateJob.mutate({ id: job.id, action: "pause" })
-                        }
-                      >
-                        Pause
-                      </button>
-                    ) : null}
-                    {job.status === "paused" || job.status === "error" ? (
-                      <button
-                        type="button"
-                        className="text-[calc(15px*var(--kabin-type-scale))] text-kabin-accent"
-                        onClick={() =>
-                          mutateJob.mutate({ id: job.id, action: "resume" })
-                        }
-                      >
-                        Resume
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="text-[calc(15px*var(--kabin-type-scale))] text-kabin-secondary"
-                      onClick={() =>
-                        mutateJob.mutate({ id: job.id, action: "remove" })
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
-                  <div className="h-1 overflow-hidden rounded-full bg-kabin-separator">
-                    <div
-                      className="h-full bg-kabin-accent"
-                      style={{ width: `${Math.round(job.progress * 100)}%` }}
-                    />
-                  </div>
-                  {job.error ? (
-                    <p className="text-[calc(13px*var(--kabin-type-scale))] text-kabin-secondary">
-                      {job.error}
-                    </p>
-                  ) : null}
-                </div>
-              );
-            })
-          )}
-        </div>
-      </section>
     </div>
+  );
+}
+
+function ProgressMark({
+  progress,
+  complete,
+}: {
+  progress: number;
+  complete: boolean;
+}) {
+  const radius = 15;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - Math.min(1, Math.max(0, progress)));
+  if (complete) {
+    return (
+      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-kabin-accent text-white">
+        <Check size={16} strokeWidth={2.25} />
+      </span>
+    );
+  }
+  return (
+    <svg
+      width="36"
+      height="36"
+      viewBox="0 0 36 36"
+      className="shrink-0"
+      aria-hidden
+    >
+      <circle
+        cx="18"
+        cy="18"
+        r={radius}
+        fill="none"
+        stroke="var(--kabin-separator)"
+        strokeWidth="2.5"
+      />
+      <circle
+        cx="18"
+        cy="18"
+        r={radius}
+        fill="none"
+        stroke="var(--kabin-accent)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        transform="rotate(-90 18 18)"
+      />
+    </svg>
   );
 }

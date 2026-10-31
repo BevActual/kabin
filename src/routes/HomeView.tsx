@@ -41,14 +41,11 @@ export function HomeView() {
 
   return (
     <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <p className="max-w-xl text-[calc(15px*var(--kabin-type-scale))] text-kabin-secondary">
-          Pick up where you left off, or browse your shelves.
-        </p>
+      <div className="mb-6 flex justify-end">
         <button
           type="button"
           onClick={refresh}
-          className="inline-flex items-center gap-2 rounded-[var(--kabin-radius-control)] border border-kabin-separator bg-kabin-elevated px-3 py-2 text-[calc(14px*var(--kabin-type-scale))] font-medium text-kabin-primary transition-colors hover:bg-kabin-grouped"
+          className="inline-flex items-center gap-1.5 text-[calc(15px*var(--kabin-type-scale))] font-medium text-kabin-accent"
         >
           <RefreshCw size={16} strokeWidth={1.5} />
           Refresh
