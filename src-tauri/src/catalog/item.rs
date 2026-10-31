@@ -73,6 +73,30 @@ pub struct CatalogTitle {
     pub series: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub series_index: Option<f64>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub creators: Vec<String>,
+    #[serde(skip_serializing_if = "skip_track_count")]
+    pub track_count: u32,
+    #[serde(skip_serializing_if = "is_false")]
+    pub album: bool,
+}
+
+fn skip_track_count(count: &u32) -> bool {
+    *count <= 1
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+fn is_music_album(item: &LibraryItem) -> bool {
+    if item.kind_id != "music" {
+        return false;
+    }
+    if item.track_count > 1 {
+        return true;
+    }
+    matches!(&item.launch, LaunchPlan::OpenPath { path } if path.is_dir())
 }
 
 impl CatalogTitle {
@@ -115,6 +139,9 @@ impl CatalogTitle {
             recent_at: config.and_then(|cfg| cfg.recent_timestamp(&item.id)),
             series: item.series.clone(),
             series_index: item.series_index,
+            creators: item.creators.clone(),
+            track_count: item.track_count,
+            album: is_music_album(item),
         }
     }
 

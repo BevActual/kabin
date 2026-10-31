@@ -47,8 +47,8 @@ function seeAllTarget(shelf: HomeShelf) {
       section: shelf.id === "favorites" ? "favorites" : played ? "played" : "progress",
     };
   }
-  if (shelf.id.startsWith("added-") && title.kind === "game") {
-    return { mode: "games", section: "added" };
+  if (shelf.id.startsWith("added-") && (title.kind === "game" || title.kind === "music")) {
+    return { mode: title.kind === "game" ? "games" : "music", section: "added" };
   }
   if (shelf.id.startsWith("added-") || shelf.id === "library") {
     if (shelf.id === "library" && title.kind === "game") return null;

@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { gameSource } from "../lib/games";
+import { musicCount } from "../lib/music";
 import type { ContentMode } from "../lib/modes";
 import { collapseShows } from "../lib/shows";
 import type { CatalogTitle } from "../types/catalog";
@@ -11,30 +12,44 @@ type Props = {
 
 export function LibraryCategories({ mode, titles }: Props) {
   const categories = mode.sections.filter(
-    (section) => section.kinds?.length || section.gameSource,
+    (section) => section.kinds?.length || section.gameSource || section.musicShelf,
   );
   if (categories.length < 2) return null;
 
   return (
     <div className="kabin-category-row mb-8">
       {categories.map((section) => {
-        const count = section.gameSource
-          ? titles.filter((title) => gameSource(title) === section.gameSource).length
-          : collapseShows(titles.filter((title) => section.kinds?.includes(title.kind))).length;
+        const count = section.musicShelf
+          ? musicCount(titles, section.musicShelf)
+          : section.gameSource
+            ? titles.filter((title) => gameSource(title) === section.gameSource).length
+            : collapseShows(titles.filter((title) => section.kinds?.includes(title.kind))).length;
         const detail =
           count === 0
             ? "None yet"
-            : section.id === "tv"
+            : section.musicShelf === "albums"
               ? count === 1
-                ? "1 show"
-                : `${count} shows`
-              : section.gameSource
+                ? "1 album"
+                : `${count} albums`
+              : section.musicShelf === "artists"
                 ? count === 1
-                  ? "1 game"
-                  : `${count} games`
-                : count === 1
-                  ? "1 title"
-                  : `${count} titles`;
+                  ? "1 artist"
+                  : `${count} artists`
+                : section.musicShelf === "songs"
+                  ? count === 1
+                    ? "1 song"
+                    : `${count} songs`
+                  : section.id === "tv"
+                    ? count === 1
+                      ? "1 show"
+                      : `${count} shows`
+                    : section.gameSource
+                      ? count === 1
+                        ? "1 game"
+                        : `${count} games`
+                      : count === 1
+                        ? "1 title"
+                        : `${count} titles`;
         const Icon = section.icon;
         return (
           <Link

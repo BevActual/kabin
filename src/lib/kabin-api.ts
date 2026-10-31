@@ -1,5 +1,6 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { browserSampleSnapshot } from "./browser-preview";
+import { browserSampleSnapshot, previewAlbumTracks } from "./browser-preview";
+import { artistFromLibrary, isAlbum, isArtistId } from "./music";
 import { episodesForShow, isShowId, showTile } from "./shows";
 import type {
   AppInfo,
@@ -69,12 +70,17 @@ function previewPlayback(titleId: string): PlaybackSession | null {
   const title = previewTitle(titleId);
   if (!title) return null;
   if (title.kind !== "music" && title.kind !== "audiobook") return null;
+  const labels = title.kind === "music" && isAlbum(title) ? previewAlbumTracks(titleId) : [];
+  const tracks =
+    labels.length > 0
+      ? labels.map((label, index) => ({ path: `preview:${titleId}:${index}`, label }))
+      : [{ path: `preview:${titleId}`, label: title.title }];
   return {
     titleId,
     title: title.title,
     subtitle: title.subtitle,
     kind: title.kind,
-    tracks: [{ path: `preview:${titleId}`, label: title.title }],
+    tracks,
     initialTrack: 0,
     initialPosition: 2,
   };
@@ -155,6 +161,10 @@ export async function getTitle(titleId: string) {
     const episodes = episodesForShow(titles, titleId);
     return episodes.length ? showTile(episodes) : null;
   }
+  if (isArtistId(titleId)) {
+    const titles = await getLibraryTitles("music");
+    return artistFromLibrary(titles, titleId);
+  }
   return invokeOrMock<CatalogTitle | null>(
     "get_title",
     { titleId },
@@ -193,7 +203,7 @@ export function searchLibrary(query: string, limit?: number) {
     const needle = query.trim().toLowerCase();
     if (!needle) return Promise.resolve([]);
     const hits = previewTitles().filter((title) =>
-      [title.title, title.subtitle, title.series, title.kind, title.id]
+      [title.title, title.subtitle, title.series, title.kind, title.id, ...(title.creators ?? [])]
         .filter((part): part is string => !!part)
         .join(" ")
         .toLowerCase()

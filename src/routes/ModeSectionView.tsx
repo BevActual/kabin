@@ -9,6 +9,7 @@ import {
 } from "../lib/modes";
 import { MediaTile } from "../components/MediaTile";
 import { consoleGroups, gamesInSection } from "../lib/games";
+import { musicEntries } from "../lib/music";
 import { libraryEntries } from "../lib/shows";
 import { SegmentedControl } from "../components/SegmentedControl";
 import type { CatalogTitle } from "../types/catalog";
@@ -62,6 +63,7 @@ export function ModeSectionView() {
   }
   titles = libraryEntries(titles, section.id);
   titles = gamesInSection(titles, section.id);
+  titles = musicEntries(titles, section.id);
   const sortMode = section.id === "added" ? "added" : section.id === "played" ? "recent" : librarySort;
   const sorted = sortTitles(titles, sortMode);
   const systems = section.id === "consoles" ? consoleGroups(sorted) : [];
@@ -181,6 +183,9 @@ function EmptySection({
 
 function countLabel(modeId: string, sectionId: string, count: number) {
   if (sectionId === "tv") return count === 1 ? "1 show" : `${count} shows`;
+  if (sectionId === "albums") return count === 1 ? "1 album" : `${count} albums`;
+  if (sectionId === "artists") return count === 1 ? "1 artist" : `${count} artists`;
+  if (sectionId === "songs") return count === 1 ? "1 song" : `${count} songs`;
   if (modeId === "games") return count === 1 ? "1 game" : `${count} games`;
   return count === 1 ? "1 title" : `${count} titles`;
 }

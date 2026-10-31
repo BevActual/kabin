@@ -17,6 +17,9 @@ export type CatalogTitle = {
   recentAt?: number | null;
   series?: string | null;
   seriesIndex?: number | null;
+  creators?: string[] | null;
+  trackCount?: number | null;
+  album?: boolean | null;
 };
 
 export type HomeShelf = {

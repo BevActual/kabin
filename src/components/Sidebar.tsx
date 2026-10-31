@@ -12,6 +12,7 @@ import {
   sectionGroup,
 } from "../lib/modes";
 import { gamesInSection } from "../lib/games";
+import { musicCount, type MusicShelf } from "../lib/music";
 import { collapseShows, isUnwatched } from "../lib/shows";
 import {
   downloadSections,
@@ -184,7 +185,7 @@ function LibraryPane({
             section.id === "home"
               ? pathname === `/browse/${mode.id}`
               : pathname === `/browse/${mode.id}/${section.id}`;
-          const count = sectionCount(section.id, section.kinds, titles);
+          const count = sectionCount(section.id, section.kinds, titles, section.musicShelf);
           const shown = count > 0 ? String(count) : undefined;
           return (
             <Fragment key={section.id}>
@@ -378,8 +379,10 @@ function sectionCount(
   id: string,
   kinds: string[] | undefined,
   titles: CatalogTitle[],
+  shelf?: MusicShelf,
 ) {
   if (id === "home" || id === "added") return 0;
+  if (shelf) return musicCount(titles, shelf);
   const scoped = kinds
     ? titles.filter((title) => kinds.includes(title.kind))
     : titles;

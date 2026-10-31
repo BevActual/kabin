@@ -77,7 +77,9 @@ export function ContinueHero({ title }: Props) {
             params={target.params}
             className="mt-6 inline-flex rounded-[var(--kabin-radius-control)] bg-kabin-accent px-5 py-2.5 text-[calc(17px*var(--kabin-type-scale))] font-semibold text-white transition-opacity hover:opacity-90"
           >
-            {resumeActionLabel(title.kind)}
+            {(title.progress ?? 0) > 0.02 && (title.progress ?? 0) < 0.98
+              ? "Continue"
+              : resumeActionLabel(title.kind)}
           </Link>
         </div>
       </div>

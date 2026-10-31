@@ -17,8 +17,11 @@ import {
 import { MediaTile } from "../components/MediaTile";
 import { getContentMode, modeForKind } from "../lib/modes";
 import { resumeActionLabel } from "../lib/resumeRoute";
+import { isAlbum, isArtistId } from "../lib/music";
 import { isShowId, nextEpisode, seriesLabel, showIdFor, showKey } from "../lib/shows";
 import { useUiStore } from "../store/ui";
+import { AlbumDetails } from "./AlbumDetails";
+import { ArtistDetails } from "./ArtistDetails";
 import { ShowDetails } from "./ShowDetails";
 
 const route = getRouteApi("/title/$titleId");
@@ -26,17 +29,18 @@ const route = getRouteApi("/title/$titleId");
 export function TitleDetailsView() {
   const { titleId } = route.useParams();
   const show = isShowId(titleId);
+  const artist = isArtistId(titleId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const titleQuery = useQuery({
     queryKey: ["title", titleId],
     queryFn: () => getTitleDetails(titleId),
-    enabled: !show,
+    enabled: !show && !artist,
   });
   const relatedQuery = useQuery({
     queryKey: ["related", titleId],
     queryFn: () => getRelatedTitles(titleId),
-    enabled: !show,
+    enabled: !show && !artist,
   });
   const episodesQuery = useQuery({
     queryKey: ["library", "tv"],
@@ -62,9 +66,13 @@ export function TitleDetailsView() {
       setContentMode("video");
       return;
     }
+    if (artist) {
+      setContentMode("music");
+      return;
+    }
     if (!title) return;
     setContentMode(modeForKind(title.kind).id);
-  }, [show, title, setContentMode]);
+  }, [show, artist, title, setContentMode]);
   const metaLines = details?.metaLines ?? [];
   const isFavorite = details?.isFavorite ?? false;
   const favorite = useMutation({
@@ -101,6 +109,10 @@ export function TitleDetailsView() {
     return <ShowDetails showId={titleId} />;
   }
 
+  if (artist) {
+    return <ArtistDetails artistId={titleId} />;
+  }
+
   if (titleQuery.isLoading) {
     return <p className="text-kabin-secondary">Loading…</p>;
   }
@@ -118,6 +130,10 @@ export function TitleDetailsView() {
         </Link>
       </div>
     );
+  }
+
+  if (isAlbum(title)) {
+    return <AlbumDetails title={{ ...title, isFavorite }} />;
   }
 
   const art = coverUrl(title.coverPath);

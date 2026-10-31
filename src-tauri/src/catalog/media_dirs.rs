@@ -126,7 +126,16 @@ fn album_item(
         } else {
             parsed.title
         },
-        subtitle: kind.label.to_string(),
+        subtitle: if kind.id == "music" {
+            parsed
+                .creators
+                .iter()
+                .find(|name| !name.trim().is_empty())
+                .cloned()
+                .unwrap_or_else(|| "Album".to_string())
+        } else {
+            kind.label.to_string()
+        },
         kind_id: kind.id.to_string(),
         source: folder_type.to_string(),
         cover_path: cover.map(|p| p.to_string_lossy().into_owned()),
@@ -149,6 +158,12 @@ fn display_subtitle(kind: &MediaKind, parsed: &super::parse_name::ParsedName) ->
                 return label;
             }
         }
+    }
+    if kind.id == "music" {
+        if let Some(artist) = parsed.creators.iter().find(|name| !name.trim().is_empty()) {
+            return artist.clone();
+        }
+        return "Song".to_string();
     }
     kind.label.to_string()
 }

@@ -11,16 +11,19 @@ import {
   Gamepad2,
   Headphones,
   Heart,
+  Disc,
   History,
   Home,
   Joystick,
-  Library,
+  ListMusic,
+  Mic,
   Music2,
   Tv,
   type LucideIcon,
 } from "lucide-react";
 import type { CatalogTitle, HomeShelf } from "../types/catalog";
 import { gameHomeSubtitle, type GameSource } from "./games";
+import { musicHomeSubtitle, type MusicShelf } from "./music";
 import { collapseShows } from "./shows";
 
 export type ContentModeId = "video" | "books" | "music" | "games";
@@ -31,6 +34,7 @@ export type ModeSection = {
   icon: LucideIcon;
   kinds?: string[];
   gameSource?: GameSource;
+  musicShelf?: MusicShelf;
   emptyHint?: string;
 };
 
@@ -151,7 +155,27 @@ export const contentModes: ContentMode[] = [
     emptyHint: "No music yet. Open Settings to add a music folder, then refresh.",
     sections: [
       { id: "home", label: "Home", icon: Home },
-      { id: "library", label: "Library", icon: Library },
+      {
+        id: "albums",
+        label: "Albums",
+        icon: Disc,
+        musicShelf: "albums",
+        emptyHint: "No albums yet. Open Settings to add a music folder, then refresh.",
+      },
+      {
+        id: "artists",
+        label: "Artists",
+        icon: Mic,
+        musicShelf: "artists",
+        emptyHint: "No artists yet. Open Settings to add a music folder, then refresh.",
+      },
+      {
+        id: "songs",
+        label: "Songs",
+        icon: ListMusic,
+        musicShelf: "songs",
+        emptyHint: "No songs yet. Open Settings to add a music folder, then refresh.",
+      },
       {
         id: "added",
         label: "Recently added",
@@ -253,7 +277,8 @@ export function sectionGroup(section: ModeSection): "library" | "personal" {
     section.id === "home" ||
     section.id === "library" ||
     section.kinds?.length ||
-    section.gameSource
+    section.gameSource ||
+    section.musicShelf
   ) {
     return "library";
   }
@@ -303,13 +328,10 @@ export function shelvesForMode(shelves: HomeShelf[], mode: ContentMode): HomeShe
 
 export function homeSubtitle(mode: ContentMode, titles: CatalogTitle[]) {
   if (mode.id === "games") return gameHomeSubtitle(titles);
+  if (mode.id === "music") return musicHomeSubtitle(titles);
   const categories = mode.sections.filter((section) => section.kinds?.length);
   if (categories.length === 0) {
-    if (titles.length === 0) {
-      return mode.id === "music"
-        ? "Albums and songs"
-        : "Steam, installed apps, and ROMs";
-    }
+    if (titles.length === 0) return mode.label;
     return titles.length === 1 ? "1 title" : `${titles.length} titles`;
   }
   const parts = categories
@@ -346,7 +368,7 @@ export function legacyLibraryTarget(
     case "game":
       return { mode: "games", section: "home" };
     case "music":
-      return { mode: "music", section: "library" };
+      return { mode: "music", section: "albums" };
     case "video":
       return { mode: "video", section: "movies" };
     case "tv":

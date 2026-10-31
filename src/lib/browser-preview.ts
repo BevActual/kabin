@@ -158,6 +158,63 @@ const titles: CatalogTitle[] = [
     accentHue: 140,
     addedAt: 5,
   },
+  {
+    id: "music:low-tide",
+    title: "Low Tide",
+    subtitle: "North Line",
+    kind: "music",
+    aspect: "square",
+    album: true,
+    trackCount: 4,
+    progress: 0.35,
+    accentHue: 145,
+    recentAt: 9,
+    addedAt: 14,
+    creators: ["North Line"],
+  },
+  {
+    id: "music:glass-room",
+    title: "Glass Room",
+    subtitle: "North Line",
+    kind: "music",
+    aspect: "square",
+    album: true,
+    trackCount: 3,
+    accentHue: 160,
+    addedAt: 13,
+    creators: ["North Line"],
+  },
+  {
+    id: "music:field-notes",
+    title: "Field Notes",
+    subtitle: "Dock Choir",
+    kind: "music",
+    aspect: "square",
+    album: true,
+    trackCount: 2,
+    accentHue: 130,
+    addedAt: 12,
+    creators: ["Dock Choir"],
+  },
+  {
+    id: "music:river-whistle",
+    title: "River Whistle",
+    subtitle: "Dock Choir",
+    kind: "music",
+    aspect: "square",
+    accentHue: 120,
+    addedAt: 11,
+    creators: ["Dock Choir"],
+  },
+  {
+    id: "music:night-market",
+    title: "Night Market",
+    subtitle: "Song",
+    kind: "music",
+    aspect: "square",
+    accentHue: 100,
+    addedAt: 10,
+  },
 ];
 
 let sample: LibrarySnapshot | null = null;
@@ -174,6 +231,8 @@ function sampleSnapshot(): LibrarySnapshot {
         { id: "added-book", label: "Recently added", titles: [titles[5]] },
         { id: "continue-game", label: "Continue", titles: [titles[9]] },
         { id: "added-game", label: "Recently added", titles: [titles[9], titles[10], titles[11]] },
+        { id: "continue-music", label: "Continue", titles: [titles[15]] },
+        { id: "added-music", label: "Recently added", titles: [titles[15], titles[16], titles[17]] },
       ],
       titles,
       counts: {},
@@ -195,4 +254,14 @@ export function browserSampleSnapshot() {
     return null;
   }
   return sampleSnapshot();
+}
+
+const albumTracks: Record<string, string[]> = {
+  "music:low-tide": ["Hull", "Keel", "Wake", "Harbor"],
+  "music:glass-room": ["North Window", "South Window", "Atrium"],
+  "music:field-notes": ["Moss", "Fence"],
+};
+
+export function previewAlbumTracks(titleId: string) {
+  return albumTracks[titleId] ?? [];
 }
