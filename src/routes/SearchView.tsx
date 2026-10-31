@@ -23,9 +23,9 @@ export function SearchView() {
 
   return (
     <div>
-      <h2 className="mb-4 text-[calc(22px*var(--kabin-type-scale))] font-semibold tracking-tight">
-        Search
-      </h2>
+      <p className="mb-4 text-[calc(13px*var(--kabin-type-scale))] text-kabin-tertiary">
+        {results.length} {results.length === 1 ? "result" : "results"}
+      </p>
       {results.length === 0 ? (
         <div className="max-w-lg space-y-2">
           <p className="text-[calc(17px*var(--kabin-type-scale))] text-kabin-secondary">
@@ -40,7 +40,7 @@ export function SearchView() {
           </button>
         </div>
       ) : (
-        <div className="flex flex-wrap gap-4">
+        <div className="kabin-library-grid">
           {results.map((title) => (
             <MediaTile
               key={title.id}

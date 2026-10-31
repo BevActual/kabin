@@ -65,6 +65,10 @@ pub struct CatalogTitle {
     pub play_time_label: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_favorite: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub added_at: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recent_at: Option<f64>,
 }
 
 impl CatalogTitle {
@@ -103,6 +107,8 @@ impl CatalogTitle {
             play_count,
             play_time_label,
             is_favorite: config.map(|cfg| cfg.is_favorite(&item.id)).filter(|f| *f),
+            added_at: (item.added_at > 0.0).then_some(item.added_at),
+            recent_at: config.and_then(|cfg| cfg.recent_timestamp(&item.id)),
         }
     }
 

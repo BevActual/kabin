@@ -157,9 +157,16 @@ export function PlayerView() {
           />
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
+        <div className="relative flex min-h-[62vh] flex-col items-center justify-center px-4 text-center">
+          {art ? (
+            <img
+              src={art}
+              alt=""
+              className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-3xl"
+            />
+          ) : null}
           <div
-            className="aspect-square w-full max-w-xs overflow-hidden rounded-[var(--kabin-radius-sheet)] shadow-[var(--kabin-shadow-tile-focus)]"
+            className="relative aspect-square w-full max-w-sm overflow-hidden rounded-[var(--kabin-radius-sheet)] shadow-[var(--kabin-shadow-tile-focus)]"
             style={
               art
                 ? undefined
@@ -173,21 +180,19 @@ export function PlayerView() {
               <img src={art} alt="" className="h-full w-full object-cover" />
             ) : null}
           </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-[calc(28px*var(--kabin-type-scale))] font-semibold tracking-tight">
-              {track.label}
-            </h2>
-            <p className="mt-1 text-kabin-secondary">{session.title}</p>
-            <audio
-              ref={mediaRef as React.RefObject<HTMLAudioElement>}
-              key={track.path}
-              src={mediaSrc ?? undefined}
-              autoPlay
-              className="hidden"
-              onPlay={() => setPlaying(true)}
-              onPause={() => setPlaying(false)}
-            />
-          </div>
+          <h2 className="relative mt-8 text-[calc(28px*var(--kabin-type-scale))] font-semibold tracking-tight">
+            {track.label}
+          </h2>
+          <p className="relative mt-1 text-kabin-secondary">{session.title}</p>
+          <audio
+            ref={mediaRef as React.RefObject<HTMLAudioElement>}
+            key={track.path}
+            src={mediaSrc ?? undefined}
+            autoPlay
+            className="hidden"
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+          />
         </div>
       )}
 

@@ -26,6 +26,9 @@ import {
   type SystemInfo,
 } from "../lib/kabin-api";
 import { useState } from "react";
+import { ChevronRight } from "lucide-react";
+import { SegmentedControl } from "../components/SegmentedControl";
+import { Switch } from "../components/Switch";
 import { useUiStore, type ThemeMode } from "../store/ui";
 
 const SOURCE_ROWS: { key: string; label: string }[] = [
@@ -87,27 +90,26 @@ export function SettingsView() {
     <div className="mx-auto max-w-xl space-y-8">
       <SettingsGroup title="Appearance">
         <SettingsRow label="Theme">
-          <select
+          <SegmentedControl
+            label="Theme"
             value={theme}
-            onChange={(e) => setTheme(e.target.value as ThemeMode)}
-            className="rounded-[var(--kabin-radius-control)] border border-kabin-separator bg-kabin-grouped px-3 py-1.5 text-kabin-primary"
-          >
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
+            onChange={(value) => setTheme(value as ThemeMode)}
+            options={[
+              { id: "dark", label: "Dark" },
+              { id: "light", label: "Light" },
+            ]}
+          />
         </SettingsRow>
       </SettingsGroup>
 
       <SettingsGroup title="Sources">
         {SOURCE_ROWS.map(({ key, label }) => (
           <SettingsRow key={key} label={label}>
-            <input
-              type="checkbox"
+            <Switch
+              label={label}
               checked={Boolean(sources[key] ?? true)}
-              onChange={(e) =>
-                toggleSource.mutate({ key, enabled: e.target.checked })
-              }
-              className="h-4 w-4 accent-[var(--kabin-accent)]"
+              disabled={toggleSource.isPending}
+              onChange={(enabled) => toggleSource.mutate({ key, enabled })}
             />
           </SettingsRow>
         ))}
@@ -127,18 +129,17 @@ export function SettingsView() {
             </span>
           </div>
         ))}
-        <div className="flex flex-wrap gap-2 p-4 pt-2">
-          {MEDIA_KINDS.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => addFolder.mutate(id)}
-              className="rounded-[var(--kabin-radius-control)] bg-kabin-accent px-3 py-2 text-[calc(14px*var(--kabin-type-scale))] font-medium text-white"
-            >
-              Add {label} folder…
-            </button>
-          ))}
-        </div>
+        {MEDIA_KINDS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => addFolder.mutate(id)}
+            className="kabin-grouped-row w-full text-left text-[calc(15px*var(--kabin-type-scale))] text-kabin-primary hover:bg-kabin-grouped"
+          >
+            <span>Add {label} folder</span>
+            <ChevronRight size={16} strokeWidth={1.5} className="text-kabin-tertiary" />
+          </button>
+        ))}
       </SettingsGroup>
 
       <KabinHostPanel />

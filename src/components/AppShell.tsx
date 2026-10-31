@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Search, Settings } from "lucide-react";
+import { Search, Settings, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useCabinetShortcuts } from "../hooks/useCabinetShortcuts";
 import { useGamepadCabinet } from "../hooks/useGamepadCabinet";
 import { useLaunchSessionEvents } from "../hooks/useLaunchSessionEvents";
@@ -24,6 +24,9 @@ export function AppShell({ children }: Props) {
   useGamepadCabinet(searchRef);
   useLaunchSessionEvents();
   useToastAutoDismiss();
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
   const toast = useUiStore((s) => s.toast);
   const setToast = useUiStore((s) => s.setToast);
 
@@ -88,7 +91,7 @@ export function AppShell({ children }: Props) {
           <h1 className="min-w-0 flex-1 truncate text-[calc(28px*var(--kabin-type-scale))] font-semibold tracking-tight">
             {pageTitle}
           </h1>
-          <label className="relative hidden max-w-md flex-1 sm:block">
+          <label className="relative min-w-[8rem] max-w-md flex-1">
             <Search
               className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-kabin-secondary"
               size={18}
@@ -100,8 +103,18 @@ export function AppShell({ children }: Props) {
               placeholder="Search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-[var(--kabin-radius-control)] border border-kabin-separator bg-kabin-elevated py-2 pr-3 pl-10 text-[calc(15px*var(--kabin-type-scale))] text-kabin-primary placeholder:text-kabin-tertiary focus:shadow-[var(--kabin-focus-ring)] focus:outline-none"
+              className="w-full rounded-[var(--kabin-radius-control)] border border-kabin-separator bg-kabin-elevated py-2 pr-9 pl-10 text-[calc(15px*var(--kabin-type-scale))] text-kabin-primary placeholder:text-kabin-tertiary focus:shadow-[var(--kabin-focus-ring)] focus:outline-none"
             />
+            {searchQuery ? (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearchQuery("")}
+                className="absolute top-1/2 right-2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-kabin-secondary hover:bg-kabin-grouped hover:text-kabin-primary"
+              >
+                <X size={14} strokeWidth={1.75} />
+              </button>
+            ) : null}
           </label>
           <Link
             to="/settings"

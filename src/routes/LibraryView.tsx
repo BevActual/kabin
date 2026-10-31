@@ -1,9 +1,10 @@
-import { Link } from "@tanstack/react-router";
+import { Link, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { MediaTile } from "../components/MediaTile";
+import { SegmentedControl } from "../components/SegmentedControl";
 import { getLibraryTitles } from "../lib/kabin-api";
-import { useUiStore } from "../store/ui";
+import type { CatalogTitle } from "../types/catalog";
+import { useUiStore, type LibrarySort } from "../store/ui";
 
 const route = getRouteApi("/library/$kind");
 
@@ -26,6 +27,8 @@ function libraryTileScale(count: number) {
 export function LibraryView() {
   const { kind } = route.useParams();
   const searchQuery = useUiStore((s) => s.searchQuery.trim());
+  const librarySort = useUiStore((s) => s.librarySort);
+  const setLibrarySort = useUiStore((s) => s.setLibrarySort);
   const titlesQuery = useQuery({
     queryKey: ["library", kind],
     queryFn: () => getLibraryTitles(kind),
@@ -70,15 +73,57 @@ export function LibraryView() {
     );
   }
 
+  const sorted = sortTitles(titles, librarySort);
+
   return (
-    <div className="flex flex-wrap gap-4">
-      {titles.map((title) => (
-        <MediaTile
-          key={title.id}
-          title={title}
-          scale={libraryTileScale(titles.length)}
+    <div>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[calc(13px*var(--kabin-type-scale))] text-kabin-tertiary">
+          {sorted.length} {sorted.length === 1 ? "title" : "titles"}
+        </p>
+        <SegmentedControl
+          label="Sort library"
+          value={librarySort}
+          onChange={setLibrarySort}
+          options={[
+            { id: "title", label: "Title" },
+            { id: "recent", label: "Recent" },
+            { id: "added", label: "Added" },
+            { id: "played", label: "Played" },
+          ]}
         />
-      ))}
+      </div>
+      <div className="kabin-library-grid">
+        {sorted.map((title) => (
+          <MediaTile
+            key={title.id}
+            title={title}
+            scale={libraryTileScale(sorted.length)}
+          />
+        ))}
+      </div>
     </div>
   );
+}
+
+function sortTitles(titles: CatalogTitle[], mode: LibrarySort) {
+  const byTitle = (a: CatalogTitle, b: CatalogTitle) =>
+    a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+  const copy = [...titles];
+  if (mode === "recent") {
+    return copy.sort(
+      (a, b) => (b.recentAt ?? 0) - (a.recentAt ?? 0) || byTitle(a, b),
+    );
+  }
+  if (mode === "added") {
+    return copy.sort(
+      (a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0) || byTitle(a, b),
+    );
+  }
+  if (mode === "played") {
+    return copy.sort(
+      (a, b) => (b.playCount ?? 0) - (a.playCount ?? 0) || byTitle(a, b),
+    );
+  }
+  return copy.sort(byTitle);
 }

@@ -43,6 +43,12 @@ body {
   box-shadow: var(--kabin-focus-ring);
 }
 
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 .kabin-material-bar {
   background: var(--kabin-bg-sidebar);
   backdrop-filter: var(--kabin-material-blur);
@@ -110,6 +116,53 @@ body {
 .kabin-continue-hero {
   border: 1px solid var(--kabin-separator);
   box-shadow: var(--kabin-shadow-tile);
+}
+
+.kabin-shelf-track {
+  display: flex;
+  gap: 20px;
+}
+
+.kabin-library-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 16px;
+}
+
+@media (min-width: 1800px) {
+  .kabin-shelf-track,
+  .kabin-library-grid {
+    gap: 32px;
+  }
+}
+
+@media (min-width: 2600px) {
+  .kabin-shelf-track,
+  .kabin-library-grid {
+    gap: 48px;
+  }
+}
+
+.kabin-switch {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+[data-theme="light"] .kabin-switch {
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.kabin-switch.kabin-switch-on {
+  background: var(--kabin-accent);
+}
+
+.kabin-segment-selected {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="light"] .kabin-segment-selected {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {

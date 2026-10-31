@@ -98,47 +98,67 @@ export function TitleDetailsView() {
   const related = relatedQuery.data;
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <div
-        className="mb-8 aspect-[2/3] max-w-xs overflow-hidden rounded-[var(--kabin-radius-sheet)] shadow-[var(--kabin-shadow-tile-focus)]"
-        style={
-          art
-            ? undefined
-            : {
-                background: `linear-gradient(145deg, hsl(${title.accentHue} 42% 38%), hsl(${title.accentHue} 28% 18%))`,
-              }
-        }
-      >
+    <div className="-mx-6">
+      <section className="relative mb-10 overflow-hidden">
         {art ? (
-          <img src={art} alt="" className="h-full w-full object-cover" />
-        ) : null}
-      </div>
-      <div className="flex items-start gap-3">
-        <h2 className="min-w-0 flex-1 text-[calc(34px*var(--kabin-type-scale))] font-semibold tracking-tight">
-          {title.title}
-        </h2>
-        <button
-          type="button"
-          disabled={favorite.isPending}
-          onClick={() => favorite.mutate()}
-          aria-label={isFavorite ? "Remove from Favorites" : "Add to Favorites"}
-          aria-pressed={isFavorite}
-          className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${
-            isFavorite
-              ? "bg-kabin-accent/20 text-kabin-accent"
-              : "text-kabin-secondary hover:bg-kabin-grouped hover:text-kabin-primary"
-          }`}
-        >
-          <Heart
-            size={22}
-            strokeWidth={1.5}
-            className={isFavorite ? "fill-current" : undefined}
+          <img
+            src={art}
+            alt=""
+            className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-3xl"
           />
-        </button>
-      </div>
-      <p className="mt-1 text-[calc(17px*var(--kabin-type-scale))] text-kabin-secondary">
-        {title.subtitle}
-      </p>
+        ) : (
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background: `linear-gradient(180deg, hsl(${title.accentHue} 36% 28%), transparent)`,
+            }}
+          />
+        )}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-[color-mix(in_srgb,var(--kabin-bg-base)_35%,transparent)] to-[var(--kabin-bg-base)]" />
+        <div className="relative mx-auto flex max-w-4xl flex-col gap-6 px-6 pt-6 pb-2 sm:flex-row sm:items-end">
+          <div
+            className="aspect-[2/3] w-40 shrink-0 overflow-hidden rounded-[var(--kabin-radius-sheet)] shadow-[var(--kabin-shadow-tile-focus)] sm:w-52"
+            style={
+              art
+                ? undefined
+                : {
+                    background: `linear-gradient(145deg, hsl(${title.accentHue} 42% 38%), hsl(${title.accentHue} 28% 18%))`,
+                  }
+            }
+          >
+            {art ? (
+              <img src={art} alt="" className="h-full w-full object-cover" />
+            ) : null}
+          </div>
+          <div className="min-w-0 flex-1 pb-1">
+            <div className="flex items-start gap-3">
+              <h2 className="min-w-0 flex-1 text-[calc(34px*var(--kabin-type-scale))] font-semibold tracking-tight">
+                {title.title}
+              </h2>
+              <button
+                type="button"
+                disabled={favorite.isPending}
+                onClick={() => favorite.mutate()}
+                aria-label={
+                  isFavorite ? "Remove from Favorites" : "Add to Favorites"
+                }
+                aria-pressed={isFavorite}
+                className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${
+                  isFavorite
+                    ? "bg-kabin-accent/20 text-kabin-accent"
+                    : "text-kabin-secondary hover:bg-kabin-grouped hover:text-kabin-primary"
+                }`}
+              >
+                <Heart
+                  size={22}
+                  strokeWidth={1.5}
+                  className={isFavorite ? "fill-current" : undefined}
+                />
+              </button>
+            </div>
+            <p className="mt-1 text-[calc(17px*var(--kabin-type-scale))] text-kabin-secondary">
+              {title.subtitle}
+            </p>
       {metaLines.length > 0 ? (
         <p className="mt-2 text-[calc(14px*var(--kabin-type-scale))] text-kabin-tertiary">
           {metaLines.join(" · ")}
@@ -224,15 +244,12 @@ export function TitleDetailsView() {
               : "Stream failed"}
           </p>
         ) : null}
-        <Link
-          to="/"
-          className="rounded-[var(--kabin-radius-control)] px-5 py-2.5 text-[calc(17px*var(--kabin-type-scale))] font-medium text-kabin-accent"
-        >
-          Done
-        </Link>
       </div>
+          </div>
+        </div>
+      </section>
       {related && related.titles.length > 0 ? (
-        <section className="mt-12">
+        <section className="mx-auto mt-4 max-w-4xl px-6">
           <h3 className="mb-4 text-[calc(22px*var(--kabin-type-scale))] font-semibold">
             {related.heading || "Up next"}
           </h3>

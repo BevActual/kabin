@@ -12,6 +12,9 @@ export type CatalogTitle = {
   canLaunch?: boolean;
   playCount?: number | null;
   playTimeLabel?: string | null;
+  isFavorite?: boolean | null;
+  addedAt?: number | null;
+  recentAt?: number | null;
 };
 
 export type HomeShelf = {

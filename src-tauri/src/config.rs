@@ -143,6 +143,14 @@ impl KabinConfig {
             .unwrap_or_default()
     }
 
+    pub fn recent_timestamp(&self, title_id: &str) -> Option<f64> {
+        self.data
+            .get("recent")
+            .and_then(|v| v.get(title_id))
+            .and_then(|v| v.as_f64())
+            .filter(|ts| *ts > 0.0)
+    }
+
     pub fn recent_ordered(&self) -> Vec<String> {
         let Some(map) = self.data.get("recent").and_then(|v| v.as_object()) else {
             return Vec::new();
