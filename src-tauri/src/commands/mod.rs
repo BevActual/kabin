@@ -1,3 +1,4 @@
+pub mod downloads;
 pub mod host;
 pub mod open;
 pub mod playback;

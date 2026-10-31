@@ -1,6 +1,7 @@
 mod catalog;
 mod commands;
 mod config;
+mod downloads;
 mod platform;
 mod emulators;
 mod host;
@@ -29,10 +30,15 @@ pub fn run() {
         .manage(LaunchSessionState::default())
         .manage(RemoteGameStreamState::default())
         .manage(HostHandle(Mutex::new(HostController::default())))
+        .manage(downloads::DownloadEngine::new())
         .setup(|app| {
             let state = app.state::<AppState>().inner().clone();
             let host = app.state::<HostHandle>();
             host::sync_host(&state, &host.0);
+            let engine = app.state::<downloads::DownloadEngine>().inner().clone();
+            tauri::async_runtime::spawn(async move {
+                engine.resume().await;
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -78,6 +84,20 @@ pub fn run() {
             commands::remote::stop_remote_game_stream,
             commands::remote::remote_game_stream_status,
             commands::get_related_titles,
+            commands::downloads::get_download_status,
+            commands::downloads::set_download_quality,
+            commands::downloads::set_download_import_dir,
+            commands::downloads::set_download_folder,
+            commands::downloads::set_usenet_connections,
+            commands::downloads::save_usenet_server,
+            commands::downloads::test_usenet_server,
+            commands::downloads::save_indexer,
+            commands::downloads::remove_indexer,
+            commands::downloads::add_wanted,
+            commands::downloads::remove_wanted,
+            commands::downloads::search_wanted,
+            commands::downloads::add_download,
+            commands::downloads::download_action,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

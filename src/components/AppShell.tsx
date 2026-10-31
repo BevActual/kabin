@@ -44,9 +44,11 @@ export function AppShell({ children }: Props) {
             ? "Now Playing"
             : pathname.startsWith("/read/")
               ? "Reader"
-              : pathname === "/settings"
-                ? "Settings"
-                : "Kabin";
+              : pathname === "/downloads"
+                ? "Downloads"
+                : pathname === "/settings"
+                  ? "Settings"
+                  : "Kabin";
 
   const toastBanner = toast ? (
     <div

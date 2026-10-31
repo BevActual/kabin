@@ -397,6 +397,161 @@ export function addRomDirCustom(
   });
 }
 
+export type DownloadJob = {
+  id: string;
+  name: string;
+  protocol: string;
+  status: string;
+  error: string;
+  progress: number;
+  bytesDone: number;
+  bytesTotal: number;
+  outputPath: string;
+  imported: boolean;
+};
+
+export type WantedTitle = {
+  id: string;
+  title: string;
+  year: string;
+  kind: string;
+  quality: string;
+};
+
+export type IndexerSummary = {
+  id: string;
+  name: string;
+  url: string;
+  kind: string;
+  hasApiKey: boolean;
+};
+
+export type DownloadStatus = {
+  quality: string;
+  importDir: string;
+  downloadDir: string;
+  connections: number;
+  usenet: {
+    host: string;
+    port: number;
+    ssl: boolean;
+    username: string;
+    hasPassword: boolean;
+  };
+  indexers: IndexerSummary[];
+  wanted: WantedTitle[];
+  jobs: DownloadJob[];
+};
+
+export type ReleaseHit = {
+  title: string;
+  sizeBytes: number;
+  sizeLabel: string;
+  link: string;
+  protocol: string;
+  indexer: string;
+  seeders: number | null;
+};
+
+const emptyDownloads: DownloadStatus = {
+  quality: "1080p",
+  importDir: "",
+  downloadDir: "",
+  connections: 4,
+  usenet: {
+    host: "",
+    port: 563,
+    ssl: true,
+    username: "",
+    hasPassword: false,
+  },
+  indexers: [],
+  wanted: [],
+  jobs: [],
+};
+
+export function getDownloadStatus() {
+  return invokeOrMock<DownloadStatus>(
+    "get_download_status",
+    undefined,
+    emptyDownloads,
+  );
+}
+
+export function setDownloadQuality(quality: string) {
+  return invokeOrMock<void>("set_download_quality", { quality });
+}
+
+export function setDownloadImportDir(path: string) {
+  return invokeOrMock<void>("set_download_import_dir", { path });
+}
+
+export function setDownloadFolder(path: string) {
+  return invokeOrMock<void>("set_download_folder", { path });
+}
+
+export function setUsenetConnections(connections: number) {
+  return invokeOrMock<void>("set_usenet_connections", { connections });
+}
+
+export function saveUsenetServer(server: {
+  host: string;
+  port: number;
+  ssl: boolean;
+  username: string;
+  password: string;
+}) {
+  return invokeOrMock<void>("save_usenet_server", { server });
+}
+
+export function testUsenetServer() {
+  return invokeOrMock<string>("test_usenet_server");
+}
+
+export function saveIndexer(indexer: {
+  id?: string;
+  name: string;
+  url: string;
+  apiKey: string;
+  kind: string;
+}) {
+  return invokeOrMock<void>("save_indexer", { indexer });
+}
+
+export function removeIndexer(id: string) {
+  return invokeOrMock<void>("remove_indexer", { id });
+}
+
+export function addWanted(title: string, year: string, kind: string) {
+  return invokeOrMock<WantedTitle>("add_wanted", { title, year, kind });
+}
+
+export function removeWanted(id: string) {
+  return invokeOrMock<void>("remove_wanted", { id });
+}
+
+export function searchWanted(id: string) {
+  return invokeOrMock<ReleaseHit[]>("search_wanted", { id }, []);
+}
+
+export function addDownload(
+  link: string,
+  name: string,
+  protocol: string,
+  wantedId = "",
+) {
+  return invokeOrMock<string>("add_download", {
+    link,
+    name,
+    protocol,
+    wantedId,
+  });
+}
+
+export function downloadAction(id: string, action: string) {
+  return invokeOrMock<void>("download_action", { id, action });
+}
+
 export function coverUrl(coverPath?: string | null) {
   if (!coverPath) return null;
   if (!isTauri()) return null;

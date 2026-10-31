@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
+  Download,
   Film,
   Gamepad2,
   Heart,
@@ -50,6 +51,12 @@ export function Sidebar() {
             counts.favorites ? String(counts.favorites) : undefined
           }
           active={pathname === "/library/favorites"}
+        />
+        <SidebarLink
+          to="/downloads"
+          label="Downloads"
+          icon={Download}
+          active={pathname === "/downloads"}
         />
         <div className="mt-4 mb-2 px-3 text-[calc(12px*var(--kabin-type-scale))] font-medium text-kabin-tertiary">
           Libraries

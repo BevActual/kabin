@@ -7,6 +7,7 @@ import {
 import { AppShell } from "./components/AppShell";
 import { HomeView } from "./routes/HomeView";
 import { LibraryView } from "./routes/LibraryView";
+import { DownloadsView } from "./routes/DownloadsView";
 import { SettingsView } from "./routes/SettingsView";
 import { PlayerView } from "./routes/PlayerView";
 import { ReaderView } from "./routes/ReaderView";
@@ -38,6 +39,12 @@ const titleRoute = createRoute({
   component: TitleDetailsView,
 });
 
+const downloadsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/downloads",
+  component: DownloadsView,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -62,6 +69,7 @@ const routeTree = rootRoute.addChildren([
   titleRoute,
   readRoute,
   playerRoute,
+  downloadsRoute,
   settingsRoute,
 ]);
 

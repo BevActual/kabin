@@ -83,6 +83,33 @@ input[type="search"]::-webkit-search-decoration {
   border-bottom: none;
 }
 
+.kabin-field {
+  border-radius: var(--kabin-radius-control);
+  border: 1px solid var(--kabin-separator);
+  background: var(--kabin-bg-grouped);
+  padding: 0.5rem 0.75rem;
+  color: var(--kabin-label-primary);
+  font-size: calc(15px * var(--kabin-type-scale));
+}
+
+.kabin-field:focus {
+  outline: none;
+  box-shadow: var(--kabin-focus-ring);
+}
+
+.kabin-primary-button {
+  border-radius: 10px;
+  background: var(--kabin-accent);
+  color: white;
+  font-weight: 600;
+  font-size: calc(15px * var(--kabin-type-scale));
+  padding: 0.5rem 1rem;
+}
+
+.kabin-primary-button:disabled {
+  opacity: 0.4;
+}
+
 .kabin-page-enter {
   animation: kabin-page-enter var(--kabin-motion-screen) both;
 }

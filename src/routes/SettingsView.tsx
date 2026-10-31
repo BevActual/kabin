@@ -29,6 +29,7 @@ import {
 } from "../lib/kabin-api";
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
+import { DownloadsSettings } from "../components/DownloadsSettings";
 import { SegmentedControl } from "../components/SegmentedControl";
 import { Switch } from "../components/Switch";
 import { useUiStore, type ThemeMode } from "../store/ui";
@@ -167,6 +168,8 @@ export function SettingsView() {
           </button>
         ))}
       </SettingsGroup>
+
+      <DownloadsSettings />
 
       <KabinHostPanel />
 
