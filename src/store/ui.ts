@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { isContentModeId, type ContentModeId } from "../lib/modes";
+import { normalizeContentMode, type ContentModeId } from "../lib/modes";
 
 export type ThemeMode = "dark" | "light";
 export type LibrarySort = "title" | "recent" | "added" | "played";
@@ -44,12 +44,11 @@ function readSidebarCollapsed(): boolean {
 
 function readContentMode(): ContentModeId {
   try {
-    const value = localStorage.getItem(MODE_KEY);
-    if (isContentModeId(value)) return value;
+    return normalizeContentMode(localStorage.getItem(MODE_KEY));
   } catch {
     /* ignore */
   }
-  return "games";
+  return "video";
 }
 
 function persistContentMode(mode: ContentModeId) {

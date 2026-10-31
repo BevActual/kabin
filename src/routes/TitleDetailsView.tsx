@@ -77,8 +77,9 @@ export function TitleDetailsView() {
   });
 
   const playsInKabin = (kind: string) =>
-    kind === "music" || kind === "video" || kind === "tv";
-  const readsInKabin = (kind: string) => kind === "book" || kind === "comic";
+    kind === "music" || kind === "audiobook" || kind === "video" || kind === "tv";
+  const readsInKabin = (kind: string) =>
+    kind === "book" || kind === "comic" || kind === "pdf";
 
   if (titleQuery.isLoading) {
     return <p className="text-kabin-secondary">Loading…</p>;

@@ -4,10 +4,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { useEffect } from "react";
 import { ContinueHero } from "../components/ContinueHero";
+import { LibraryCategories } from "../components/LibraryCategories";
 import { ShelfRow } from "../components/ShelfRow";
 import type { CatalogTitle, HomeShelf } from "../types/catalog";
 import { scanLibrary } from "../lib/kabin-api";
-import { getContentMode, isContentModeId, shelvesForMode } from "../lib/modes";
+import {
+  getContentMode,
+  homeSubtitle,
+  isContentModeId,
+  normalizeContentMode,
+  shelvesForMode,
+} from "../lib/modes";
 
 const route = getRouteApi("/browse/$mode");
 
@@ -23,7 +30,11 @@ export function HomeView() {
 
   useEffect(() => {
     if (!isContentModeId(modeId)) {
-      void navigate({ to: "/browse/$mode", params: { mode: "games" }, replace: true });
+      void navigate({
+        to: "/browse/$mode",
+        params: { mode: normalizeContentMode(modeId) },
+        replace: true,
+      });
     }
   }, [modeId, navigate]);
 
@@ -67,16 +78,21 @@ export function HomeView() {
 
   return (
     <div>
-      <div className="mb-6 flex justify-end">
+      <div className="mb-6 flex items-end justify-between gap-4">
+        <p className="text-[calc(15px*var(--kabin-type-scale))] text-kabin-secondary">
+          {homeSubtitle(mode, modeTitles)}
+        </p>
         <button
           type="button"
           onClick={refresh}
-          className="inline-flex items-center gap-1.5 text-[calc(15px*var(--kabin-type-scale))] font-medium text-kabin-accent"
+          className="inline-flex shrink-0 items-center gap-1.5 text-[calc(15px*var(--kabin-type-scale))] font-medium text-kabin-accent"
         >
           <RefreshCw size={16} strokeWidth={1.5} />
           Refresh
         </button>
       </div>
+
+      <LibraryCategories mode={mode} titles={modeTitles} />
 
       {snapshot?.errors.map((err) => (
         <p

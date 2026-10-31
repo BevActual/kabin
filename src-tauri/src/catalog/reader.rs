@@ -102,7 +102,7 @@ fn extract_cbz(archive: &Path, title_id: &str) -> Result<Vec<PathBuf>, String> {
 }
 
 pub fn build_reader_session(item: &LibraryItem, config: &KabinConfig) -> Option<ReaderSession> {
-    if item.kind_id != "book" && item.kind_id != "comic" {
+    if !matches!(item.kind_id.as_str(), "book" | "comic" | "pdf") {
         return None;
     }
     let file = if matches!(

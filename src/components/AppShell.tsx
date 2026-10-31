@@ -128,9 +128,14 @@ export function AppShell({ children }: Props) {
             >
               <PanelLeft size={20} strokeWidth={1.5} />
             </button>
-            <h1 className="min-w-0 flex-1 truncate text-[calc(22px*var(--kabin-type-scale))] font-semibold tracking-tight">
+            <span
+              className={`min-w-0 flex-1 truncate text-[calc(17px*var(--kabin-type-scale))] font-semibold tracking-tight transition-opacity duration-200 ${
+                chromeElevated ? "opacity-100" : "opacity-0"
+              }`}
+              aria-hidden={!chromeElevated}
+            >
               {pageTitle}
-            </h1>
+            </span>
             {activeDownloads > 0 ? (
               <Link
                 to="/downloads"
@@ -183,13 +188,14 @@ export function AppShell({ children }: Props) {
         <main
           key={pathname}
           onScroll={(event) => {
-            const elevated = event.currentTarget.scrollTop > 8;
+            const elevated = event.currentTarget.scrollTop > 36;
             setChromeElevated((current) =>
               current === elevated ? current : elevated,
             );
           }}
           className="kabin-page-enter kabin-scroll-under-chrome h-full min-h-0 overflow-auto px-6 pb-10"
         >
+          <h1 className="kabin-large-title">{pageTitle}</h1>
           {searchQuery.trim() ? <SearchView /> : children}
         </main>
         {toastBanner}
@@ -204,7 +210,7 @@ function titleForPath(
   mode: ReturnType<typeof getContentMode>,
 ) {
   if (searchQuery.trim()) return "Search";
-  if (pathname === `/browse/${mode.id}`) return "Home";
+  if (pathname === `/browse/${mode.id}`) return mode.label;
   const sectionId = pathname.match(/^\/browse\/[^/]+\/([^/]+)/)?.[1];
   if (sectionId) {
     return sectionForMode(mode, sectionId)?.label ?? mode.label;

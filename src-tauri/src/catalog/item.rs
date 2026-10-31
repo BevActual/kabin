@@ -42,7 +42,7 @@ impl LibraryItem {
     pub fn supports_in_app_playback(&self) -> bool {
         matches!(
             self.kind_id.as_str(),
-            "music" | "video" | "tv" | "book" | "comic"
+            "music" | "audiobook" | "video" | "tv" | "book" | "comic" | "pdf"
         )
     }
 }

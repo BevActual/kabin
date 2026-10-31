@@ -75,7 +75,7 @@ fn clean_track_label(filename: &str, album: &str) -> String {
 
 pub fn playable_tracks(item: &LibraryItem, config: &KabinConfig) -> Vec<PathBuf> {
     let kind = kind_by_id(&item.kind_id);
-    if !matches!(kind.id, "music" | "video" | "tv") {
+    if !matches!(kind.id, "music" | "audiobook" | "video" | "tv") {
         return Vec::new();
     }
     let path = match &item.launch {

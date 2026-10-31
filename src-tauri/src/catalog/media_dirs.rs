@@ -67,12 +67,13 @@ fn walk_files(base: &Path, visit: &mut dyn FnMut(&Path)) {
 }
 
 fn file_item(
+    folder_type: &str,
     kind: &MediaKind,
     base: &Path,
     path: &Path,
     hidden: &HashSet<String>,
 ) -> Option<LibraryItem> {
-    let id = item_id(kind.id, base, path);
+    let id = item_id(folder_type, base, path);
     if hidden.contains(&id) {
         return None;
     }
@@ -88,7 +89,7 @@ fn file_item(
         },
         subtitle: kind.label.to_string(),
         kind_id: kind.id.to_string(),
-        source: kind.id.to_string(),
+        source: folder_type.to_string(),
         cover_path: cover.map(|p| p.to_string_lossy().into_owned()),
         added_at: safe_mtime(path),
         track_count: 1,
@@ -103,13 +104,14 @@ fn file_item(
 }
 
 fn album_item(
+    folder_type: &str,
     kind: &MediaKind,
     base: &Path,
     folder: &Path,
     tracks: &[PathBuf],
     hidden: &HashSet<String>,
 ) -> Option<LibraryItem> {
-    let id = item_id(kind.id, base, folder);
+    let id = item_id(folder_type, base, folder);
     if hidden.contains(&id) {
         return None;
     }
@@ -123,9 +125,9 @@ fn album_item(
         } else {
             parsed.title
         },
-        subtitle: kind.plural.to_string(),
+        subtitle: kind.label.to_string(),
         kind_id: kind.id.to_string(),
-        source: kind.id.to_string(),
+        source: folder_type.to_string(),
         cover_path: cover.map(|p| p.to_string_lossy().into_owned()),
         added_at: safe_mtime(folder),
         track_count: tracks.len() as u32,
@@ -139,18 +141,30 @@ fn album_item(
     })
 }
 
-fn scan_kind(kind: &MediaKind, base: &Path, hidden: &HashSet<String>) -> Vec<LibraryItem> {
-    if kind.id == "music" {
+fn file_ext(path: &Path) -> String {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| format!(".{e}"))
+        .unwrap_or_default()
+        .to_lowercase()
+}
+
+fn scan_folder(
+    folder_type: &str,
+    base: &Path,
+    hidden: &HashSet<String>,
+    enabled: &HashSet<String>,
+) -> Vec<LibraryItem> {
+    if folder_type == "music" || folder_type == "audiobook" {
+        let kind = kinds::kind_by_id(folder_type);
+        if !enabled.contains(kind.id) {
+            return Vec::new();
+        }
         let mut albums: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
         let mut loose: Vec<PathBuf> = Vec::new();
         walk_files(base, &mut |path| {
-            let ext = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| format!(".{e}"))
-                .unwrap_or_default()
-                .to_lowercase();
-            if !kinds::extension_matches(kind, &ext) {
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if kinds::classify_file(folder_type, &file_ext(path), name).is_none() {
                 return;
             }
             if path.parent() == Some(base) {
@@ -163,13 +177,13 @@ fn scan_kind(kind: &MediaKind, base: &Path, hidden: &HashSet<String>) -> Vec<Lib
         let mut album_pairs: Vec<_> = albums.into_iter().collect();
         album_pairs.sort_by_key(|(folder, _)| folder.clone());
         for (folder, tracks) in album_pairs {
-            if let Some(item) = album_item(kind, base, &folder, &tracks, hidden) {
+            if let Some(item) = album_item(folder_type, kind, base, &folder, &tracks, hidden) {
                 items.push(item);
             }
         }
         loose.sort();
         for path in loose {
-            if let Some(item) = file_item(kind, base, &path, hidden) {
+            if let Some(item) = file_item(folder_type, kind, base, &path, hidden) {
                 items.push(item);
             }
         }
@@ -178,20 +192,33 @@ fn scan_kind(kind: &MediaKind, base: &Path, hidden: &HashSet<String>) -> Vec<Lib
 
     let mut items = Vec::new();
     walk_files(base, &mut |path| {
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| format!(".{e}"))
-            .unwrap_or_default()
-            .to_lowercase();
-        if !kinds::extension_matches(kind, &ext) {
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        let Some(kind_id) = kinds::classify_file(folder_type, &file_ext(path), name) else {
+            return;
+        };
+        if !enabled.contains(kind_id) {
             return;
         }
-        if let Some(item) = file_item(kind, base, path, hidden) {
+        let kind = kinds::kind_by_id(kind_id);
+        if let Some(item) = file_item(folder_type, kind, base, path, hidden) {
             items.push(item);
         }
     });
     items
+}
+
+fn folder_allowed(folder_type: &str, enabled: &HashSet<String>) -> bool {
+    match folder_type {
+        "screen" => enabled.contains("video") || enabled.contains("tv"),
+        "book" => {
+            enabled.contains("book")
+                || enabled.contains("pdf")
+                || enabled.contains("audiobook")
+                || enabled.contains("comic")
+        }
+        "video" | "tv" | "music" | "audiobook" | "comic" | "pdf" => enabled.contains(folder_type),
+        _ => false,
+    }
 }
 
 pub fn scan_media_dirs(
@@ -201,14 +228,18 @@ pub fn scan_media_dirs(
 ) -> Vec<LibraryItem> {
     let mut items = Vec::new();
     for entry in entries {
-        let kind = kinds::kind_by_id(&entry.media_type);
-        if !enabled_kinds.contains(kind.id) {
+        if !folder_allowed(&entry.media_type, enabled_kinds) {
             continue;
         }
         if !entry.path.is_dir() {
             continue;
         }
-        items.extend(scan_kind(kind, &entry.path, hidden));
+        items.extend(scan_folder(
+            &entry.media_type,
+            &entry.path,
+            hidden,
+            enabled_kinds,
+        ));
     }
     items
 }

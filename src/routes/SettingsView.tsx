@@ -32,26 +32,52 @@ import { ChevronRight } from "lucide-react";
 import { DownloadsSettings } from "../components/DownloadsSettings";
 import { SegmentedControl } from "../components/SegmentedControl";
 import { Switch } from "../components/Switch";
+import { folderTypeLabel } from "../lib/modes";
 import { useUiStore, type ThemeMode } from "../store/ui";
 
-const SOURCE_ROWS: { key: string; label: string }[] = [
-  { key: "steam", label: "Steam" },
-  { key: "desktop", label: "Installed apps" },
-  { key: "roms", label: "Console ROMs" },
-  { key: "book", label: "Books" },
-  { key: "comic", label: "Comics" },
-  { key: "music", label: "Music" },
-  { key: "video", label: "Movies" },
-  { key: "tv", label: "TV" },
-  { key: "remote", label: "Remote hosts" },
+const SOURCE_GROUPS: { title: string; rows: { key: string; label: string }[] }[] = [
+  {
+    title: "Games",
+    rows: [
+      { key: "steam", label: "Steam" },
+      { key: "desktop", label: "Installed apps" },
+      { key: "roms", label: "Console ROMs" },
+    ],
+  },
+  {
+    title: "Video",
+    rows: [
+      { key: "video", label: "Movies" },
+      { key: "tv", label: "TV" },
+    ],
+  },
+  {
+    title: "Books",
+    rows: [
+      { key: "book", label: "Books" },
+      { key: "audiobook", label: "Audiobooks" },
+      { key: "comic", label: "Comics" },
+      { key: "pdf", label: "PDFs" },
+    ],
+  },
+  {
+    title: "Music",
+    rows: [{ key: "music", label: "Music" }],
+  },
+  {
+    title: "Sharing",
+    rows: [{ key: "remote", label: "Remote hosts" }],
+  },
 ];
 
 const MEDIA_KINDS = [
-  { id: "book", label: "Books" },
-  { id: "comic", label: "Comics" },
-  { id: "music", label: "Music" },
-  { id: "video", label: "Movies" },
-  { id: "tv", label: "TV" },
+  { id: "screen", label: "Video folder" },
+  { id: "video", label: "Movies folder" },
+  { id: "tv", label: "TV folder" },
+  { id: "book", label: "Books folder" },
+  { id: "audiobook", label: "Audiobooks folder" },
+  { id: "comic", label: "Comics folder" },
+  { id: "music", label: "Music folder" },
 ];
 
 export function SettingsView() {
@@ -114,28 +140,46 @@ export function SettingsView() {
         </SettingsRow>
       </SettingsGroup>
 
-      <SettingsGroup title="Sources">
-        {SOURCE_ROWS.map(({ key, label }) => (
-          <SettingsRow key={key} label={label}>
-            <Switch
-              label={label}
-              checked={Boolean(sources[key] ?? true)}
-              disabled={toggleSource.isPending}
-              onChange={(enabled) => toggleSource.mutate({ key, enabled })}
-            />
-          </SettingsRow>
-        ))}
-        <p className="px-4 pb-3 text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
-          Toggles are saved to your config and apply on the next library refresh.
-          Installed apps are desktop games on Linux and Start Menu game shortcuts
-          on Windows. Steam games stay under Steam.
-        </p>
-      </SettingsGroup>
+      {SOURCE_GROUPS.map((group) => (
+        <SettingsGroup key={group.title} title={group.title}>
+          {group.rows.map(({ key, label }) => (
+            <SettingsRow key={key} label={label}>
+              <Switch
+                label={label}
+                checked={Boolean(sources[key] ?? true)}
+                disabled={toggleSource.isPending}
+                onChange={(enabled) => toggleSource.mutate({ key, enabled })}
+              />
+            </SettingsRow>
+          ))}
+          {group.title === "Games" ? (
+            <p className="px-4 pb-3 text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
+              Installed apps are desktop games on Linux and Start Menu game
+              shortcuts on Windows. Steam games stay under Steam.
+            </p>
+          ) : null}
+          {group.title === "Books" ? (
+            <p className="px-4 pb-3 text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
+              A books folder sorts epub and similar files, audiobooks, comics,
+              and PDFs into their own shelves.
+            </p>
+          ) : null}
+          {group.title === "Video" ? (
+            <p className="px-4 pb-3 text-[calc(12px*var(--kabin-type-scale))] text-kabin-tertiary">
+              A video folder sorts episode names into TV and everything else
+              into Movies. Movies and TV folders stay in that category.
+            </p>
+          ) : null}
+        </SettingsGroup>
+      ))}
 
       <SettingsGroup title="Media folders">
         {(settings?.mediaDirs ?? []).map((entry, index) => {
           const path = (entry as { path?: string }).path ?? "";
-          const kind = (entry as { mediaType?: string }).mediaType ?? "media";
+          const kind =
+            folderTypeLabel[(entry as { mediaType?: string }).mediaType ?? ""] ??
+            (entry as { mediaType?: string }).mediaType ??
+            "Media";
           return (
             <div
               key={`${path}-${index}`}

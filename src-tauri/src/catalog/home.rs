@@ -24,7 +24,7 @@ fn kind_order(items: &[LibraryItem], recent_ids: &[String]) -> Vec<String> {
             }
         }
     }
-    for kind_id in ["game", "book", "comic", "music", "video", "tv"] {
+    for kind_id in ["game", "book", "audiobook", "comic", "pdf", "music", "video", "tv"] {
         if seen.insert(kind_id.to_string()) {
             order.push(kind_id.to_string());
         }

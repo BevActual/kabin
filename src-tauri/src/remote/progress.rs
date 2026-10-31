@@ -60,7 +60,7 @@ pub fn sync_progress_from_remote(items: &[LibraryItem], config: &mut KabinConfig
         if item.source == "remote" {
             continue;
         }
-        if !matches!(item.kind_id.as_str(), "book" | "comic") {
+        if !matches!(item.kind_id.as_str(), "book" | "comic" | "pdf") {
             continue;
         }
         if let Some(size) = local_file_size(item) {
@@ -69,7 +69,7 @@ pub fn sync_progress_from_remote(items: &[LibraryItem], config: &mut KabinConfig
     }
     let mut adopted = false;
     for item in items {
-        if item.source != "remote" || !matches!(item.kind_id.as_str(), "book" | "comic") {
+        if item.source != "remote" || !matches!(item.kind_id.as_str(), "book" | "comic" | "pdf") {
             continue;
         }
         let LaunchPlan::RemoteStream { remote_id, size, .. } = &item.launch else {

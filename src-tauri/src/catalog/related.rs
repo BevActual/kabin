@@ -159,7 +159,9 @@ fn kind_label(kind_id: &str) -> &'static str {
         "video" => "movies",
         "tv" => "TV",
         "book" => "books",
+        "audiobook" => "audiobooks",
         "comic" => "comics",
+        "pdf" => "PDFs",
         _ => "titles",
     }
 }

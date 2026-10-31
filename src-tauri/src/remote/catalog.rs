@@ -144,7 +144,7 @@ fn item_from_remote(
         .unwrap_or("game");
     let kind_id = kind_by_id(media_type).id.to_string();
     let mut playable = remote.get("playable").and_then(|v| v.as_bool()).unwrap_or(false);
-    if matches!(kind_id.as_str(), "book" | "comic") {
+    if matches!(kind_id.as_str(), "book" | "comic" | "pdf") {
         playable = playable && reader_supported(remote_id);
     }
     let track_count = remote

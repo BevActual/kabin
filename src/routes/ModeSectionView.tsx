@@ -5,6 +5,7 @@ import {
   getContentMode,
   isContentModeId,
   isInProgress,
+  normalizeContentMode,
   sectionForMode,
 } from "../lib/modes";
 import { MediaTile } from "../components/MediaTile";
@@ -30,7 +31,7 @@ export function ModeSectionView() {
     if (!isContentModeId(modeId) || !section) {
       void navigate({
         to: "/browse/$mode",
-        params: { mode: isContentModeId(modeId) ? modeId : "games" },
+        params: { mode: normalizeContentMode(modeId) },
         replace: true,
       });
     }
@@ -84,7 +85,11 @@ export function ModeSectionView() {
         </div>
       ) : null}
       {sorted.length === 0 ? (
-        <EmptySection modeLabel={mode.label} sectionId={section.id} hint={mode.emptyHint} />
+        <EmptySection
+          modeLabel={mode.label}
+          sectionId={section.id}
+          hint={section.emptyHint ?? mode.emptyHint}
+        />
       ) : (
         <div className="kabin-library-grid">
           {sorted.map((title) => (
@@ -113,19 +118,6 @@ function EmptySection({
         </p>
         <p className="mt-2 text-[calc(15px*var(--kabin-type-scale))] text-kabin-tertiary">
           Open a title and tap the heart to save it here.
-        </p>
-      </div>
-    );
-  }
-  if (sectionId === "shows") {
-    return (
-      <div className="max-w-lg">
-        <p className="text-[calc(17px*var(--kabin-type-scale))] text-kabin-secondary">
-          No TV shows yet.{" "}
-          <Link to="/settings" className="text-kabin-accent">
-            Open Settings
-          </Link>{" "}
-          to add a TV folder, then refresh.
         </p>
       </div>
     );

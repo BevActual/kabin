@@ -1,9 +1,12 @@
 import {
   BookOpen,
   CirclePlay,
+  Clapperboard,
+  FileText,
   Film,
   GalleryVertical,
   Gamepad2,
+  Headphones,
   Heart,
   Home,
   Library,
@@ -13,13 +16,14 @@ import {
 } from "lucide-react";
 import type { CatalogTitle, HomeShelf } from "../types/catalog";
 
-export type ContentModeId = "games" | "music" | "movies" | "books" | "comics";
+export type ContentModeId = "video" | "books" | "music" | "games";
 
 export type ModeSection = {
   id: string;
   label: string;
   icon: LucideIcon;
   kinds?: string[];
+  emptyHint?: string;
 };
 
 export type ContentMode = {
@@ -34,15 +38,73 @@ export type ContentMode = {
 
 export const contentModes: ContentMode[] = [
   {
-    id: "games",
-    label: "Games",
-    kinds: ["game"],
-    hue: 32,
-    icon: Gamepad2,
-    emptyHint: "No games yet. Open Settings to enable Steam or installed apps, then refresh.",
+    id: "video",
+    label: "Video",
+    kinds: ["video", "tv"],
+    hue: 208,
+    icon: Clapperboard,
+    emptyHint:
+      "Nothing to watch yet. Open Settings to add a video, movies, or TV folder, then refresh.",
     sections: [
       { id: "home", label: "Home", icon: Home },
-      { id: "library", label: "All Games", icon: Library },
+      {
+        id: "movies",
+        label: "Movies",
+        icon: Film,
+        kinds: ["video"],
+        emptyHint:
+          "No movies yet. Open Settings to add a movies or video folder, then refresh.",
+      },
+      {
+        id: "tv",
+        label: "TV",
+        icon: Tv,
+        kinds: ["tv"],
+        emptyHint: "No TV yet. Open Settings to add a TV or video folder, then refresh.",
+      },
+      { id: "favorites", label: "Favorites", icon: Heart },
+      { id: "progress", label: "In progress", icon: CirclePlay },
+    ],
+  },
+  {
+    id: "books",
+    label: "Books",
+    kinds: ["book", "audiobook", "comic", "pdf"],
+    hue: 38,
+    icon: BookOpen,
+    emptyHint:
+      "Nothing to read yet. Open Settings to add a books folder, then refresh.",
+    sections: [
+      { id: "home", label: "Home", icon: Home },
+      {
+        id: "books",
+        label: "Books",
+        icon: BookOpen,
+        kinds: ["book"],
+        emptyHint: "No books yet. Open Settings to add a books folder, then refresh.",
+      },
+      {
+        id: "audiobooks",
+        label: "Audiobooks",
+        icon: Headphones,
+        kinds: ["audiobook"],
+        emptyHint:
+          "No audiobooks yet. Open Settings to add an audiobooks or books folder, then refresh.",
+      },
+      {
+        id: "comics",
+        label: "Comics",
+        icon: GalleryVertical,
+        kinds: ["comic"],
+        emptyHint: "No comics yet. Open Settings to add a comics or books folder, then refresh.",
+      },
+      {
+        id: "pdfs",
+        label: "PDFs",
+        icon: FileText,
+        kinds: ["pdf"],
+        emptyHint: "No PDFs yet. Open Settings to add a books folder, then refresh.",
+      },
       { id: "favorites", label: "Favorites", icon: Heart },
       { id: "progress", label: "In progress", icon: CirclePlay },
     ],
@@ -62,44 +124,16 @@ export const contentModes: ContentMode[] = [
     ],
   },
   {
-    id: "movies",
-    label: "Movies",
-    kinds: ["video", "tv"],
-    hue: 208,
-    icon: Film,
-    emptyHint: "No movies yet. Open Settings to add a movies or TV folder, then refresh.",
+    id: "games",
+    label: "Games",
+    kinds: ["game"],
+    hue: 32,
+    icon: Gamepad2,
+    emptyHint:
+      "No games yet. Open Settings to enable Steam or installed apps, then refresh.",
     sections: [
       { id: "home", label: "Home", icon: Home },
-      { id: "library", label: "Movies", icon: Film, kinds: ["video"] },
-      { id: "shows", label: "TV Shows", icon: Tv, kinds: ["tv"] },
-      { id: "favorites", label: "Favorites", icon: Heart },
-      { id: "progress", label: "In progress", icon: CirclePlay },
-    ],
-  },
-  {
-    id: "books",
-    label: "Books",
-    kinds: ["book"],
-    hue: 38,
-    icon: BookOpen,
-    emptyHint: "No books yet. Open Settings to add a books folder, then refresh.",
-    sections: [
-      { id: "home", label: "Home", icon: Home },
-      { id: "library", label: "Library", icon: Library },
-      { id: "favorites", label: "Favorites", icon: Heart },
-      { id: "progress", label: "In progress", icon: CirclePlay },
-    ],
-  },
-  {
-    id: "comics",
-    label: "Comics",
-    kinds: ["comic"],
-    hue: 14,
-    icon: GalleryVertical,
-    emptyHint: "No comics yet. Open Settings to add a comics folder, then refresh.",
-    sections: [
-      { id: "home", label: "Home", icon: Home },
-      { id: "library", label: "Library", icon: Library },
+      { id: "library", label: "All Games", icon: Library },
       { id: "favorites", label: "Favorites", icon: Heart },
       { id: "progress", label: "In progress", icon: CirclePlay },
     ],
@@ -112,8 +146,14 @@ export function isContentModeId(value: string | null | undefined): value is Cont
   return !!value && modeIds.has(value);
 }
 
+export function normalizeContentMode(value: string | null | undefined): ContentModeId {
+  if (value === "movies") return "video";
+  if (value === "comics") return "books";
+  return isContentModeId(value) ? value : "video";
+}
+
 export function getContentMode(id: string | null | undefined): ContentMode {
-  return contentModes.find((mode) => mode.id === id) ?? contentModes[0];
+  return contentModes.find((mode) => mode.id === normalizeContentMode(id)) ?? contentModes[0];
 }
 
 export function modeForKind(kind: string): ContentMode {
@@ -126,7 +166,7 @@ export function modeIdFromPath(pathname: string): ContentModeId | null {
 }
 
 export function isModeHome(pathname: string): boolean {
-  return /^\/browse\/(games|music|movies|books|comics)$/.test(pathname);
+  return /^\/browse\/(video|books|music|games)$/.test(pathname);
 }
 
 export function sectionForMode(mode: ContentMode, sectionId: string): ModeSection | null {
@@ -141,7 +181,9 @@ const kindLabel: Record<string, string> = {
   game: "Games",
   music: "Music",
   book: "Books",
+  audiobook: "Audiobooks",
   comic: "Comics",
+  pdf: "PDFs",
 };
 
 function shelfKind(id: string): string | null {
@@ -169,6 +211,37 @@ export function shelvesForMode(shelves: HomeShelf[], mode: ContentMode): HomeShe
   });
 }
 
+export function homeSubtitle(mode: ContentMode, titles: CatalogTitle[]) {
+  const categories = mode.sections.filter((section) => section.kinds?.length);
+  if (categories.length === 0) {
+    if (titles.length === 0) {
+      return mode.id === "music"
+        ? "Albums and songs"
+        : "Steam, installed apps, and ROMs";
+    }
+    return titles.length === 1 ? "1 title" : `${titles.length} titles`;
+  }
+  const parts = categories
+    .map((section) => {
+      const count = titles.filter((title) =>
+        section.kinds?.includes(title.kind),
+      ).length;
+      return count > 0 ? countPhrase(count, section.label) : null;
+    })
+    .filter((part): part is string => !!part);
+  if (parts.length > 0) return parts.join(" · ");
+  const labels = categories.map((section) => section.label);
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+}
+
+function countPhrase(count: number, label: string) {
+  if (label === "TV") return count === 1 ? "1 show" : `${count} shows`;
+  if (count === 1 && label.endsWith("s")) return `1 ${label.slice(0, -1)}`;
+  return `${count} ${label}`;
+}
+
 export function isInProgress(title: CatalogTitle) {
   const progress = title.progress ?? 0;
   return progress > 0.01 && progress < 0.98;
@@ -184,16 +257,31 @@ export function legacyLibraryTarget(
     case "music":
       return { mode: "music", section: "library" };
     case "video":
-      return { mode: "movies", section: "library" };
+      return { mode: "video", section: "movies" };
     case "tv":
-      return { mode: "movies", section: "shows" };
+      return { mode: "video", section: "tv" };
     case "book":
-      return { mode: "books", section: "library" };
+      return { mode: "books", section: "books" };
+    case "audiobook":
+      return { mode: "books", section: "audiobooks" };
     case "comic":
-      return { mode: "comics", section: "library" };
+      return { mode: "books", section: "comics" };
+    case "pdf":
+      return { mode: "books", section: "pdfs" };
     case "favorites":
-      return { mode: fallback, section: "favorites" };
+      return { mode: normalizeContentMode(fallback), section: "favorites" };
     default:
-      return { mode: fallback, section: "library" };
+      return { mode: normalizeContentMode(fallback), section: "library" };
   }
 }
+
+export const folderTypeLabel: Record<string, string> = {
+  screen: "Video",
+  video: "Movies",
+  tv: "TV",
+  book: "Books",
+  audiobook: "Audiobooks",
+  comic: "Comics",
+  pdf: "PDFs",
+  music: "Music",
+};

@@ -73,7 +73,16 @@ pub fn discover_local(config: &KabinConfig) -> (Vec<LibraryItem>, Vec<ScanError>
         ));
     }
 
-    let folder_kinds: HashSet<String> = ["book", "comic", "music", "video", "tv"]
+    let folder_kinds: HashSet<String> = [
+        "book",
+        "pdf",
+        "audiobook",
+        "comic",
+        "music",
+        "video",
+        "tv",
+        "screen",
+    ]
         .into_iter()
         .filter(|kind| config.source_enabled(kind))
         .map(str::to_string)
