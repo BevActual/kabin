@@ -69,6 +69,10 @@ pub struct CatalogTitle {
     pub added_at: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recent_at: Option<f64>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub series: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_index: Option<f64>,
 }
 
 impl CatalogTitle {
@@ -109,6 +113,8 @@ impl CatalogTitle {
             is_favorite: config.map(|cfg| cfg.is_favorite(&item.id)).filter(|f| *f),
             added_at: (item.added_at > 0.0).then_some(item.added_at),
             recent_at: config.and_then(|cfg| cfg.recent_timestamp(&item.id)),
+            series: item.series.clone(),
+            series_index: item.series_index,
         }
     }
 

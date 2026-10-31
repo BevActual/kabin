@@ -15,6 +15,8 @@ export type CatalogTitle = {
   isFavorite?: boolean | null;
   addedAt?: number | null;
   recentAt?: number | null;
+  series?: string | null;
+  seriesIndex?: number | null;
 };
 
 export type HomeShelf = {

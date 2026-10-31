@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ContentMode } from "../lib/modes";
+import { collapseShows } from "../lib/shows";
 import type { CatalogTitle } from "../types/catalog";
 
 type Props = {
@@ -14,9 +15,19 @@ export function LibraryCategories({ mode, titles }: Props) {
   return (
     <div className="kabin-category-row mb-8">
       {categories.map((section) => {
-        const count = titles.filter((title) =>
-          section.kinds?.includes(title.kind),
+        const count = collapseShows(
+          titles.filter((title) => section.kinds?.includes(title.kind)),
         ).length;
+        const detail =
+          count === 0
+            ? "None yet"
+            : section.id === "tv"
+              ? count === 1
+                ? "1 show"
+                : `${count} shows`
+              : count === 1
+                ? "1 title"
+                : `${count} titles`;
         const Icon = section.icon;
         return (
           <Link
@@ -33,7 +44,7 @@ export function LibraryCategories({ mode, titles }: Props) {
                 {section.label}
               </span>
               <span className="block text-[calc(13px*var(--kabin-type-scale))] text-kabin-tertiary tabular-nums">
-                {count === 0 ? "None yet" : count === 1 ? "1 title" : `${count} titles`}
+                {detail}
               </span>
             </span>
           </Link>

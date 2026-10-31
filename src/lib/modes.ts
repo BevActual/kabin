@@ -2,6 +2,8 @@ import {
   BookOpen,
   CirclePlay,
   Clapperboard,
+  Clock,
+  EyeOff,
   FileText,
   Film,
   GalleryVertical,
@@ -15,6 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { CatalogTitle, HomeShelf } from "../types/catalog";
+import { collapseShows } from "./shows";
 
 export type ContentModeId = "video" | "books" | "music" | "games";
 
@@ -62,6 +65,19 @@ export const contentModes: ContentMode[] = [
         kinds: ["tv"],
         emptyHint: "No TV yet. Open Settings to add a TV or video folder, then refresh.",
       },
+      {
+        id: "added",
+        label: "Recently added",
+        icon: Clock,
+        emptyHint:
+          "Nothing added yet. Open Settings to add a video, movies, or TV folder, then refresh.",
+      },
+      {
+        id: "unwatched",
+        label: "Unwatched",
+        icon: EyeOff,
+        emptyHint: "Nothing waiting. Movies and shows you have not started show up here.",
+      },
       { id: "favorites", label: "Favorites", icon: Heart },
       { id: "progress", label: "In progress", icon: CirclePlay },
     ],
@@ -105,6 +121,18 @@ export const contentModes: ContentMode[] = [
         kinds: ["pdf"],
         emptyHint: "No PDFs yet. Open Settings to add a books folder, then refresh.",
       },
+      {
+        id: "added",
+        label: "Recently added",
+        icon: Clock,
+        emptyHint: "Nothing added yet. Open Settings to add a books folder, then refresh.",
+      },
+      {
+        id: "unwatched",
+        label: "Unread",
+        icon: EyeOff,
+        emptyHint: "Nothing waiting. Books you have not started show up here.",
+      },
       { id: "favorites", label: "Favorites", icon: Heart },
       { id: "progress", label: "In progress", icon: CirclePlay },
     ],
@@ -119,6 +147,12 @@ export const contentModes: ContentMode[] = [
     sections: [
       { id: "home", label: "Home", icon: Home },
       { id: "library", label: "Library", icon: Library },
+      {
+        id: "added",
+        label: "Recently added",
+        icon: Clock,
+        emptyHint: "Nothing added yet. Open Settings to add a music folder, then refresh.",
+      },
       { id: "favorites", label: "Favorites", icon: Heart },
       { id: "progress", label: "In progress", icon: CirclePlay },
     ],
@@ -134,6 +168,13 @@ export const contentModes: ContentMode[] = [
     sections: [
       { id: "home", label: "Home", icon: Home },
       { id: "library", label: "All Games", icon: Library },
+      {
+        id: "added",
+        label: "Recently added",
+        icon: Clock,
+        emptyHint:
+          "Nothing added yet. Open Settings to enable Steam or installed apps, then refresh.",
+      },
       { id: "favorites", label: "Favorites", icon: Heart },
       { id: "progress", label: "In progress", icon: CirclePlay },
     ],
@@ -204,6 +245,7 @@ export function shelvesForMode(shelves: HomeShelf[], mode: ContentMode): HomeShe
     }
     const kind = shelfKind(shelf.id);
     if (!kind || !mode.kinds.includes(kind)) return [];
+    const titles = shelf.id.startsWith("added-") ? collapseShows(shelf.titles) : shelf.titles;
     const primary = kind === mode.kinds[0];
     const suffix = primary ? "" : ` · ${kindLabel[kind] ?? kind}`;
     const label = shelf.id.startsWith("continue-")
@@ -211,7 +253,7 @@ export function shelvesForMode(shelves: HomeShelf[], mode: ContentMode): HomeShe
       : shelf.id.startsWith("added-")
         ? `Recently added${suffix}`
         : shelf.label;
-    return [{ ...shelf, label }];
+    return [{ ...shelf, label, titles }];
   });
 }
 
@@ -227,8 +269,8 @@ export function homeSubtitle(mode: ContentMode, titles: CatalogTitle[]) {
   }
   const parts = categories
     .map((section) => {
-      const count = titles.filter((title) =>
-        section.kinds?.includes(title.kind),
+      const count = collapseShows(
+        titles.filter((title) => section.kinds?.includes(title.kind)),
       ).length;
       return count > 0 ? countPhrase(count, section.label) : null;
     })

@@ -5,6 +5,9 @@ export function resumeTarget(title: CatalogTitle): {
   params: { titleId: string };
 } {
   const params = { titleId: title.id };
+  if (title.id.startsWith("show:")) {
+    return { to: "/title/$titleId", params };
+  }
   if (
     (title.kind === "music" ||
       title.kind === "audiobook" ||

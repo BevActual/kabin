@@ -4,11 +4,11 @@ import { getLibraryTitles } from "../lib/kabin-api";
 import {
   getContentMode,
   isContentModeId,
-  isInProgress,
   normalizeContentMode,
   sectionForMode,
 } from "../lib/modes";
 import { MediaTile } from "../components/MediaTile";
+import { libraryEntries } from "../lib/shows";
 import { SegmentedControl } from "../components/SegmentedControl";
 import type { CatalogTitle } from "../types/catalog";
 import { useUiStore, type LibrarySort } from "../store/ui";
@@ -59,18 +59,17 @@ export function ModeSectionView() {
     const allowed = section.kinds ?? mode.kinds;
     titles = titles.filter((title) => allowed.includes(title.kind));
   }
-  if (section.id === "progress") {
-    titles = titles.filter(isInProgress);
-  }
-  const sorted = sortTitles(titles, librarySort);
+  titles = libraryEntries(titles, section.id);
+  const sorted = sortTitles(titles, section.id === "added" ? "added" : librarySort);
 
   return (
     <div>
       {sorted.length > 0 ? (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <p className="text-[calc(13px*var(--kabin-type-scale))] text-kabin-tertiary">
-            {sorted.length} {sorted.length === 1 ? "title" : "titles"}
+            {countLabel(section.id, sorted.length)}
           </p>
+          {section.id === "added" ? null : (
           <SegmentedControl
             label="Sort library"
             value={librarySort}
@@ -82,6 +81,7 @@ export function ModeSectionView() {
               { id: "played", label: "Played" },
             ]}
           />
+          )}
         </div>
       ) : null}
       {sorted.length === 0 ? (
@@ -134,6 +134,13 @@ function EmptySection({
       </div>
     );
   }
+  if (!hint.includes("Open Settings")) {
+    return (
+      <div className="max-w-lg">
+        <p className="text-[calc(17px*var(--kabin-type-scale))] text-kabin-secondary">{hint}</p>
+      </div>
+    );
+  }
   const [before, after] = hint.split("Open Settings");
   return (
     <div className="max-w-lg">
@@ -146,6 +153,11 @@ function EmptySection({
       </p>
     </div>
   );
+}
+
+function countLabel(sectionId: string, count: number) {
+  if (sectionId === "tv") return count === 1 ? "1 show" : `${count} shows`;
+  return count === 1 ? "1 title" : `${count} titles`;
 }
 
 function sortTitles(titles: CatalogTitle[], mode: LibrarySort) {

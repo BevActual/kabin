@@ -98,7 +98,7 @@ export function QuickLook() {
               onClick={() => setPreviewTitleId(null)}
               className="rounded-[var(--kabin-radius-control)] bg-kabin-accent px-5 py-2.5 text-[calc(17px*var(--kabin-type-scale))] font-semibold text-white"
             >
-              {resumeActionLabel(title.kind)}
+              {direct ? resumeActionLabel(title.kind) : "Open"}
             </Link>
             {direct ? (
               <Link
@@ -110,7 +110,7 @@ export function QuickLook() {
                 Details
               </Link>
             ) : null}
-            <FavoriteButton title={title} />
+            {title.id.startsWith("show:") ? null : <FavoriteButton title={title} />}
           </div>
         </div>
       </div>

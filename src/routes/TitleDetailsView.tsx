@@ -16,21 +16,26 @@ import {
 import { MediaTile } from "../components/MediaTile";
 import { getContentMode, modeForKind } from "../lib/modes";
 import { resumeActionLabel } from "../lib/resumeRoute";
+import { isShowId } from "../lib/shows";
 import { useUiStore } from "../store/ui";
+import { ShowDetails } from "./ShowDetails";
 
 const route = getRouteApi("/title/$titleId");
 
 export function TitleDetailsView() {
   const { titleId } = route.useParams();
+  const show = isShowId(titleId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const titleQuery = useQuery({
     queryKey: ["title", titleId],
     queryFn: () => getTitleDetails(titleId),
+    enabled: !show,
   });
   const relatedQuery = useQuery({
     queryKey: ["related", titleId],
     queryFn: () => getRelatedTitles(titleId),
+    enabled: !show,
   });
   const streamAvailableQuery = useQuery({
     queryKey: ["remoteStreamAvailable"],
@@ -81,6 +86,10 @@ export function TitleDetailsView() {
     kind === "music" || kind === "audiobook" || kind === "video" || kind === "tv";
   const readsInKabin = (kind: string) =>
     kind === "book" || kind === "comic" || kind === "pdf";
+
+  if (show) {
+    return <ShowDetails showId={titleId} />;
+  }
 
   if (titleQuery.isLoading) {
     return <p className="text-kabin-secondary">Loading…</p>;

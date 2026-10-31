@@ -6,7 +6,7 @@ use super::artwork::{folder_cover, local_cover};
 use super::item::LibraryItem;
 use super::launch::LaunchPlan;
 use super::kinds::{self, MediaKind};
-use super::parse_name::parse_media_name;
+use super::parse_name::{episode_label, parse_media_name};
 use super::titles::tidy_filename;
 
 const SKIP_DIRS: [&str; 6] = ["covers", "media", "images", "manuals", "videos", ".git"];
@@ -80,6 +80,7 @@ fn file_item(
     let cover = local_cover(path).or_else(|| folder_cover(path.parent()?));
     let file_name = path.file_name()?.to_string_lossy();
     let parsed = parse_media_name(&file_name, kind.id);
+    let subtitle = display_subtitle(kind, &parsed);
     Some(LibraryItem {
         id,
         title: if parsed.title.is_empty() {
@@ -87,7 +88,7 @@ fn file_item(
         } else {
             parsed.title
         },
-        subtitle: kind.label.to_string(),
+        subtitle,
         kind_id: kind.id.to_string(),
         source: folder_type.to_string(),
         cover_path: cover.map(|p| p.to_string_lossy().into_owned()),
@@ -139,6 +140,17 @@ fn album_item(
         series_index: parsed.series_index,
         creators: parsed.creators,
     })
+}
+
+fn display_subtitle(kind: &MediaKind, parsed: &super::parse_name::ParsedName) -> String {
+    if kind.id == "tv" {
+        if let Some(index) = parsed.series_index {
+            if let Some(label) = episode_label(index) {
+                return label;
+            }
+        }
+    }
+    kind.label.to_string()
 }
 
 fn file_ext(path: &Path) -> String {

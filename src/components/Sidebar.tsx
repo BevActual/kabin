@@ -10,6 +10,7 @@ import {
   isInProgress,
   modeIdFromPath,
 } from "../lib/modes";
+import { collapseShows, isUnwatched } from "../lib/shows";
 import {
   downloadSections,
   paneFromPath,
@@ -359,13 +360,15 @@ function sectionCount(
   kinds: string[] | undefined,
   titles: CatalogTitle[],
 ) {
-  if (id === "home") return 0;
+  if (id === "home" || id === "added") return 0;
   const scoped = kinds
     ? titles.filter((title) => kinds.includes(title.kind))
     : titles;
   if (id === "favorites") return scoped.filter((title) => title.isFavorite).length;
-  if (id === "progress") return scoped.filter(isInProgress).length;
-  return scoped.length;
+  const presented = collapseShows(scoped);
+  if (id === "unwatched") return presented.filter(isUnwatched).length;
+  if (id === "progress") return presented.filter(isInProgress).length;
+  return presented.length;
 }
 
 type SidebarLinkProps = {

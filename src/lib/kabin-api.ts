@@ -1,5 +1,6 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { browserSampleSnapshot } from "./browser-preview";
+import { episodesForShow, isShowId, showTile } from "./shows";
 import type {
   AppInfo,
   CatalogTitle,
@@ -148,7 +149,12 @@ export function getLibraryTitles(kind: string) {
   );
 }
 
-export function getTitle(titleId: string) {
+export async function getTitle(titleId: string) {
+  if (isShowId(titleId)) {
+    const titles = await getLibraryTitles("tv");
+    const episodes = episodesForShow(titles, titleId);
+    return episodes.length ? showTile(episodes) : null;
+  }
   return invokeOrMock<CatalogTitle | null>(
     "get_title",
     { titleId },
