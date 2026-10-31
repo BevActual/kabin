@@ -17,13 +17,6 @@ const libraryLabels: Record<string, string> = {
   favorites: "Favorites",
 };
 
-function libraryTileScale(count: number) {
-  if (count <= 1) return 1.7;
-  if (count <= 3) return 1.5;
-  if (count <= 6) return 1.18;
-  return 1;
-}
-
 export function LibraryView() {
   const { kind } = route.useParams();
   const searchQuery = useUiStore((s) => s.searchQuery.trim());
@@ -95,11 +88,7 @@ export function LibraryView() {
       </div>
       <div className="kabin-library-grid">
         {sorted.map((title) => (
-          <MediaTile
-            key={title.id}
-            title={title}
-            scale={libraryTileScale(sorted.length)}
-          />
+          <MediaTile key={title.id} title={title} />
         ))}
       </div>
     </div>

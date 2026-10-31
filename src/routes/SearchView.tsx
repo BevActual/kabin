@@ -42,21 +42,10 @@ export function SearchView() {
       ) : (
         <div className="kabin-library-grid">
           {results.map((title) => (
-            <MediaTile
-              key={title.id}
-              title={title}
-              scale={libraryTileScale(results.length)}
-            />
+            <MediaTile key={title.id} title={title} />
           ))}
         </div>
       )}
     </div>
   );
-}
-
-function libraryTileScale(count: number) {
-  if (count <= 1) return 1.7;
-  if (count <= 3) return 1.5;
-  if (count <= 6) return 1.18;
-  return 1;
 }
