@@ -112,7 +112,8 @@ export function QuickLook() {
             ) : null}
             {title.id.startsWith("show:") ||
             title.id.startsWith("artist:") ||
-            title.id.startsWith("series:") ? null : (
+            title.id.startsWith("series:") ||
+            title.id.startsWith("author:") ? null : (
               <FavoriteButton title={title} />
             )}
           </div>

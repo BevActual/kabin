@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { gameSource } from "../lib/games";
 import { musicCount } from "../lib/music";
 import { seriesTiles } from "../lib/series";
+import { authorTiles } from "../lib/authors";
 import type { ContentMode } from "../lib/modes";
 import { collapseShows } from "../lib/shows";
 import type { CatalogTitle } from "../types/catalog";
@@ -23,7 +24,9 @@ export function LibraryCategories({ mode, titles }: Props) {
         const count =
           section.id === "series"
             ? seriesTiles(titles).length
-            : section.musicShelf
+            : section.id === "authors"
+              ? authorTiles(titles).length
+              : section.musicShelf
               ? musicCount(titles, section.musicShelf)
               : section.gameSource
                 ? titles.filter((title) => gameSource(title) === section.gameSource).length
@@ -36,7 +39,11 @@ export function LibraryCategories({ mode, titles }: Props) {
               ? count === 1
                 ? "1 series"
                 : `${count} series`
-              : section.musicShelf === "albums"
+              : section.id === "authors"
+                ? count === 1
+                  ? "1 author"
+                  : `${count} authors`
+                : section.musicShelf === "albums"
               ? count === 1
                 ? "1 album"
                 : `${count} albums`

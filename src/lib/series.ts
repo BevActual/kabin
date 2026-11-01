@@ -1,3 +1,4 @@
+import { authorTiles } from "./authors";
 import type { CatalogTitle } from "../types/catalog";
 
 const SERIES_PREFIX = "series:";
@@ -150,12 +151,14 @@ export function booksHomeSubtitle(titles: CatalogTitle[]) {
   const comics = titles.filter((title) => title.kind === "comic").length;
   const pdfs = titles.filter((title) => title.kind === "pdf").length;
   const series = seriesTiles(titles).length;
+  const authors = authorTiles(titles).length;
   const parts = [
     books > 0 ? (books === 1 ? "1 book" : `${books} books`) : null,
     audiobooks > 0 ? (audiobooks === 1 ? "1 audiobook" : `${audiobooks} audiobooks`) : null,
     comics > 0 ? (comics === 1 ? "1 comic" : `${comics} comics`) : null,
     pdfs > 0 ? (pdfs === 1 ? "1 PDF" : `${pdfs} PDFs`) : null,
     series > 0 ? (series === 1 ? "1 series" : `${series} series`) : null,
+    authors > 0 ? (authors === 1 ? "1 author" : `${authors} authors`) : null,
   ].filter((part): part is string => !!part);
   if (parts.length > 0) return parts.join(" · ");
   return "Books, audiobooks, comics, and PDFs";

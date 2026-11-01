@@ -1,5 +1,6 @@
 import type { CatalogTitle } from "../types/catalog";
 import { seriesTiles } from "./series";
+import { authorTiles } from "./authors";
 
 const SHOW_PREFIX = "show:";
 
@@ -51,6 +52,7 @@ export function collapseShows(titles: CatalogTitle[]) {
 
 export function libraryEntries(titles: CatalogTitle[], sectionId: string) {
   if (sectionId === "series") return seriesTiles(titles);
+  if (sectionId === "authors") return authorTiles(titles);
   const presented = sectionId === "favorites" ? titles : collapseShows(titles);
   if (sectionId === "unwatched") return presented.filter(isUnwatched);
   if (sectionId === "progress") return presented.filter(isInProgress);

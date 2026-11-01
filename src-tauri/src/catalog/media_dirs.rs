@@ -174,6 +174,9 @@ fn display_subtitle(kind: &MediaKind, parsed: &super::parse_name::ParsedName) ->
                 }
             }
         }
+        if let Some(author) = parsed.creators.iter().find(|name| !name.trim().is_empty()) {
+            return author.clone();
+        }
         let series = parsed.series.trim();
         if !series.is_empty() {
             return series.to_string();

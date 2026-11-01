@@ -65,30 +65,33 @@ const titles: CatalogTitle[] = [
   {
     id: "book:field-atlas",
     title: "Field Atlas",
-    subtitle: "Book",
+    subtitle: "Mara Ell",
     kind: "book",
     aspect: "poster",
     accentHue: 38,
     addedAt: 4,
+    creators: ["Mara Ell"],
   },
   {
     id: "audiobook:river-notes",
     title: "River Notes",
-    subtitle: "Audiobook",
+    subtitle: "Jonah Pike",
     kind: "audiobook",
     aspect: "square",
     progress: 0.55,
     accentHue: 32,
     addedAt: 3,
+    creators: ["Jonah Pike"],
   },
   {
     id: "comic:dockside",
     title: "Dockside",
-    subtitle: "Comic",
+    subtitle: "Ivo Marsh",
     kind: "comic",
     aspect: "poster",
     accentHue: 28,
     addedAt: 2,
+    creators: ["Ivo Marsh"],
   },
   {
     id: "pdf:workshop-manual",
@@ -225,6 +228,7 @@ const titles: CatalogTitle[] = [
     addedAt: 15,
     series: "Paper Harbor",
     seriesIndex: 1,
+    creators: ["Mara Ell"],
   },
   {
     id: "book:paper-harbor-2",
@@ -238,6 +242,7 @@ const titles: CatalogTitle[] = [
     recentAt: 4,
     series: "Paper Harbor",
     seriesIndex: 2,
+    creators: ["Mara Ell"],
   },
   {
     id: "book:paper-harbor-3",
@@ -249,6 +254,7 @@ const titles: CatalogTitle[] = [
     addedAt: 17,
     series: "Paper Harbor",
     seriesIndex: 3,
+    creators: ["Mara Ell"],
   },
   {
     id: "comic:tide-glass-1",
@@ -260,6 +266,7 @@ const titles: CatalogTitle[] = [
     addedAt: 18,
     series: "Tide Glass",
     seriesIndex: 1,
+    creators: ["Ivo Marsh"],
   },
   {
     id: "comic:tide-glass-2",
@@ -271,6 +278,7 @@ const titles: CatalogTitle[] = [
     addedAt: 19,
     series: "Tide Glass",
     seriesIndex: 2,
+    creators: ["Ivo Marsh"],
   },
 ];
 

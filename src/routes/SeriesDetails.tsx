@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Headphones } from "lucide-react";
 import { coverUrl, getLibraryTitles } from "../lib/kabin-api";
+import { authorIdFor, sharedAuthor } from "../lib/authors";
 import {
   isSeriesId,
   resumeVolume,
@@ -26,6 +27,7 @@ export function SeriesDetails({ seriesId }: Props) {
   const volumes = volumesForSeries(query.data ?? [], seriesId);
   const series = volumes.length ? seriesFromLibrary(query.data ?? [], seriesId) : null;
   const next = resumeVolume(volumes);
+  const author = sharedAuthor(volumes);
 
   if (query.isLoading) {
     return <p className="text-kabin-secondary">Loading…</p>;
@@ -77,9 +79,19 @@ export function SeriesDetails({ seriesId }: Props) {
             {art ? <img src={art} alt="" className="h-full w-full object-cover" /> : null}
           </div>
           <div className="relative min-w-0 flex-1 pb-1 text-white">
-            <p className="text-[calc(13px*var(--kabin-type-scale))] font-semibold tracking-wide text-white/70 uppercase">
-              Series
-            </p>
+            {author ? (
+              <Link
+                to="/title/$titleId"
+                params={{ titleId: authorIdFor(author) }}
+                className="text-[calc(13px*var(--kabin-type-scale))] font-semibold tracking-wide text-white/70 uppercase hover:text-white"
+              >
+                {author}
+              </Link>
+            ) : (
+              <p className="text-[calc(13px*var(--kabin-type-scale))] font-semibold tracking-wide text-white/70 uppercase">
+                Series
+              </p>
+            )}
             <h1 className="mt-1 text-[calc(34px*var(--kabin-type-scale))] font-semibold tracking-tight">
               {series.title}
             </h1>

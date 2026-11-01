@@ -5,7 +5,7 @@ export function resumeTarget(title: CatalogTitle): {
   params: { titleId: string };
 } {
   const params = { titleId: title.id };
-  if (title.id.startsWith("show:") || title.id.startsWith("artist:") || title.id.startsWith("series:")) {
+  if (title.id.startsWith("show:") || title.id.startsWith("artist:") || title.id.startsWith("series:") || title.id.startsWith("author:")) {
     return { to: "/title/$titleId", params };
   }
   if (

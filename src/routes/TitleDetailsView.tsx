@@ -18,11 +18,13 @@ import { MediaTile } from "../components/MediaTile";
 import { getContentMode, modeForKind } from "../lib/modes";
 import { resumeActionLabel } from "../lib/resumeRoute";
 import { isAlbum, isArtistId } from "../lib/music";
+import { authorIdFor, authorNames, isAuthorId } from "../lib/authors";
 import { isSeriesId, nextVolume, seriesIdFor, seriesKey } from "../lib/series";
 import { isShowId, nextEpisode, seriesLabel, showIdFor, showKey } from "../lib/shows";
 import { useUiStore } from "../store/ui";
 import { AlbumDetails } from "./AlbumDetails";
 import { ArtistDetails } from "./ArtistDetails";
+import { AuthorDetails } from "./AuthorDetails";
 import { SeriesDetails } from "./SeriesDetails";
 import { ShowDetails } from "./ShowDetails";
 
@@ -33,17 +35,18 @@ export function TitleDetailsView() {
   const show = isShowId(titleId);
   const artist = isArtistId(titleId);
   const seriesPage = isSeriesId(titleId);
+  const authorPage = isAuthorId(titleId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const titleQuery = useQuery({
     queryKey: ["title", titleId],
     queryFn: () => getTitleDetails(titleId),
-    enabled: !show && !artist && !seriesPage,
+    enabled: !show && !artist && !seriesPage && !authorPage,
   });
   const relatedQuery = useQuery({
     queryKey: ["related", titleId],
     queryFn: () => getRelatedTitles(titleId),
-    enabled: !show && !artist && !seriesPage,
+    enabled: !show && !artist && !seriesPage && !authorPage,
   });
   const episodesQuery = useQuery({
     queryKey: ["library", "tv"],
@@ -58,6 +61,7 @@ export function TitleDetailsView() {
       !show &&
       !artist &&
       !seriesPage &&
+      !authorPage &&
       !!volumeKind &&
       !!titleQuery.data?.title.series?.trim() &&
       (volumeKind === "book" ||
@@ -92,9 +96,13 @@ export function TitleDetailsView() {
       setContentMode("books");
       return;
     }
+    if (authorPage) {
+      setContentMode("books");
+      return;
+    }
     if (!title) return;
     setContentMode(modeForKind(title.kind).id);
-  }, [show, artist, seriesPage, title, setContentMode]);
+  }, [show, artist, seriesPage, authorPage, title, setContentMode]);
   const metaLines = details?.metaLines ?? [];
   const isFavorite = details?.isFavorite ?? false;
   const favorite = useMutation({
@@ -139,6 +147,10 @@ export function TitleDetailsView() {
     return <SeriesDetails seriesId={titleId} />;
   }
 
+  if (authorPage) {
+    return <AuthorDetails authorId={titleId} />;
+  }
+
   if (titleQuery.isLoading) {
     return <p className="text-kabin-secondary">Loading…</p>;
   }
@@ -169,6 +181,8 @@ export function TitleDetailsView() {
     ? (volumesQuery.data ?? []).filter((item) => seriesKey(item) === seriesKey(title))
     : [];
   const bookSeriesId = volumeMates.length >= 2 ? seriesIdFor(title) : null;
+  const author = authorNames(title)[0] ?? "";
+  const authorPageId = author ? authorIdFor(author) : null;
   const upcoming = episodeKey
     ? nextEpisode(
         (episodesQuery.data ?? []).filter((item) => showKey(item) === episodeKey),
@@ -227,11 +241,22 @@ export function TitleDetailsView() {
             ) : null}
           </div>
           <div className="min-w-0 flex-1 pb-1">
+            {authorPageId ? (
+              <Link
+                to="/title/$titleId"
+                params={{ titleId: authorPageId }}
+                className="text-[calc(13px*var(--kabin-type-scale))] font-semibold tracking-wide text-kabin-secondary uppercase hover:text-kabin-primary"
+              >
+                {author}
+              </Link>
+            ) : null}
             {showPageId ? (
               <Link
                 to="/title/$titleId"
                 params={{ titleId: showPageId }}
-                className="text-[calc(13px*var(--kabin-type-scale))] font-semibold tracking-wide text-kabin-secondary uppercase hover:text-kabin-primary"
+                className={`block text-[calc(13px*var(--kabin-type-scale))] font-semibold tracking-wide text-kabin-secondary uppercase hover:text-kabin-primary ${
+                  authorPageId ? "mt-1" : ""
+                }`}
               >
                 {seriesLabel(title)}
               </Link>
@@ -239,12 +264,18 @@ export function TitleDetailsView() {
               <Link
                 to="/title/$titleId"
                 params={{ titleId: bookSeriesId }}
-                className="text-[calc(13px*var(--kabin-type-scale))] font-semibold tracking-wide text-kabin-secondary uppercase hover:text-kabin-primary"
+                className={`block text-[calc(13px*var(--kabin-type-scale))] font-semibold tracking-wide text-kabin-secondary uppercase hover:text-kabin-primary ${
+                  authorPageId ? "mt-1" : ""
+                }`}
               >
                 {title.series}
               </Link>
             ) : null}
-            <div className={`flex items-start gap-3 ${showPageId || bookSeriesId ? "mt-1" : ""}`}>
+            <div
+              className={`flex items-start gap-3 ${
+                showPageId || bookSeriesId || authorPageId ? "mt-1" : ""
+              }`}
+            >
               <h1 className="min-w-0 flex-1 text-[calc(34px*var(--kabin-type-scale))] font-semibold tracking-tight">
                 {title.title}
               </h1>
@@ -269,9 +300,11 @@ export function TitleDetailsView() {
                 />
               </button>
             </div>
-            <p className="mt-1 text-[calc(17px*var(--kabin-type-scale))] text-kabin-secondary">
-              {title.subtitle}
-            </p>
+            {title.subtitle && title.subtitle !== author ? (
+              <p className="mt-1 text-[calc(17px*var(--kabin-type-scale))] text-kabin-secondary">
+                {title.subtitle}
+              </p>
+            ) : null}
       {metaLines.length > 0 ? (
         <p className="mt-2 text-[calc(14px*var(--kabin-type-scale))] text-kabin-tertiary">
           {metaLines.join(" · ")}

@@ -1,5 +1,6 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { browserSampleSnapshot, previewAlbumTracks } from "./browser-preview";
+import { authorFromLibrary, isAuthorId } from "./authors";
 import { artistFromLibrary, isAlbum, isArtistId } from "./music";
 import { isSeriesId, seriesFromLibrary } from "./series";
 import { episodesForShow, isShowId, showTile } from "./shows";
@@ -171,6 +172,12 @@ export async function getTitle(titleId: string) {
     if (!kind) return null;
     const titles = await getLibraryTitles(kind);
     return seriesFromLibrary(titles, titleId);
+  }
+  if (isAuthorId(titleId)) {
+    const lists = await Promise.all(
+      ["book", "audiobook", "comic", "pdf"].map((kind) => getLibraryTitles(kind)),
+    );
+    return authorFromLibrary(lists.flat(), titleId);
   }
   return invokeOrMock<CatalogTitle | null>(
     "get_title",

@@ -187,6 +187,7 @@ function countLabel(modeId: string, sectionId: string, count: number) {
   if (sectionId === "artists") return count === 1 ? "1 artist" : `${count} artists`;
   if (sectionId === "songs") return count === 1 ? "1 song" : `${count} songs`;
   if (sectionId === "series") return count === 1 ? "1 series" : `${count} series`;
+  if (sectionId === "authors") return count === 1 ? "1 author" : `${count} authors`;
   if (modeId === "games") return count === 1 ? "1 game" : `${count} games`;
   return count === 1 ? "1 title" : `${count} titles`;
 }

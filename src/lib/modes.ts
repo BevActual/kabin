@@ -20,6 +20,7 @@ import {
   Mic,
   Music2,
   Tv,
+  User,
   type LucideIcon,
 } from "lucide-react";
 import type { CatalogTitle, HomeShelf } from "../types/catalog";
@@ -138,6 +139,13 @@ export const contentModes: ContentMode[] = [
         icon: Library,
         kinds: ["book", "audiobook", "comic", "pdf"],
         emptyHint: "No series yet. Volumes named like “Saga, Vol. 2” show up here.",
+      },
+      {
+        id: "authors",
+        label: "Authors",
+        icon: User,
+        kinds: ["book", "audiobook", "comic", "pdf"],
+        emptyHint: "No authors yet. Name a file like “Dune -- Frank Herbert”, then refresh.",
       },
       {
         id: "added",
